@@ -20,6 +20,13 @@ fi
 echo $$ > "$LOCK_FILE"
 cd "$REPO_DIR" || exit 1
 
+# Set up environment for cron (cron has minimal PATH)
+export PATH="/usr/bin:/bin:/usr/local/bin:$PATH"
+export HOME="$HOME"
+
+# Ensure git credential helper is configured
+git config credential.helper store
+
 # Function to log messages
 log() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >> "$LOG_FILE"
