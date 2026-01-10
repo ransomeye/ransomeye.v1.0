@@ -4,9 +4,10 @@
 
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
-use reqwest::Client;
-use serde::{Deserialize, Serialize, Clone};
+use reqwest::blocking::Client;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use std::clone::Clone;
 use std::env;
 use std::process;
 use uuid::Uuid;
