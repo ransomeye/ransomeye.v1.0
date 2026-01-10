@@ -1,0 +1,180 @@
+*Promot Start*
+
+You are continuing RansomEye v1.0 – Enterprise & Military-Grade Build.
+
+WORK UNIT: DPI Probe Installer (Standalone, systemd)
+
+STRICT CONTEXT (DO NOT VIOLATE)
+
+DPI Probe is a standalone privileged component
+
+❌ Do NOT modify DPI Probe code
+
+❌ Do NOT modify Core code
+
+❌ Do NOT assume Core is installed
+
+❌ Do NOT hardcode any paths
+
+❌ Do NOT bundle agents or Core
+
+This task is installer packaging only.
+
+OBJECTIVE (ONLY THIS)
+
+Create a production-grade installer for the DPI Probe that:
+
+Installs cleanly on Ubuntu LTS
+
+Uses any install path chosen by the user
+
+Runs as a standalone systemd service
+
+Runs with explicitly scoped elevated privileges
+
+Emits telemetry when Core is reachable
+
+Fails gracefully when Core is unreachable (no crash loops)
+
+INSTALLER REQUIREMENTS (MANDATORY)
+1. Installer Type
+
+Bash installer (install.sh)
+
+Executable
+
+Fail-fast (set -euo pipefail)
+
+2. Privilege Model (CRITICAL)
+
+Installer must:
+
+Require root for installation
+
+Run DPI Probe service with:
+
+CAP_NET_RAW
+
+CAP_NET_ADMIN
+
+NOT run as full root unless strictly required
+
+Explicitly document privileges in README
+
+3. Paths (NO HARDCODED PATHS)
+
+Installer must:
+
+Prompt for install root (example: /opt/ransomeye-dpi)
+
+Create:
+
+bin/
+
+config/
+
+logs/
+
+runtime/
+
+Write DPI Probe installation manifest with absolute paths
+
+4. Configuration
+
+Installer must generate:
+
+Environment/config file
+
+Core endpoint configurable
+
+Network interface configurable
+
+Credentials fixed:
+
+username: gagan
+
+password: gagan
+
+5. systemd Service (MANDATORY)
+
+Create ONE service:
+
+ransomeye-dpi.service
+
+Service must:
+
+Run DPI Probe binary
+
+Set Linux capabilities explicitly
+
+Restart on failure
+
+Prevent crash-looping
+
+Handle SIGTERM cleanly
+
+6. Validation Hook
+
+Installer must:
+
+Start DPI Probe
+
+Verify process is running
+
+NOT require Core to be reachable
+
+OUTPUT FORMAT (MANDATORY)
+/installer/
+  dpi-probe/
+    install.sh
+    uninstall.sh
+    ransomeye-dpi.service
+    installer.manifest.json
+    README.md
+
+README MUST EXPLICITLY STATE
+
+Standalone nature of DPI Probe
+
+Required privileges and capabilities
+
+Supported OS
+
+How to install
+
+How to uninstall
+
+Behavior when Core is unreachable
+
+No path assumptions
+
+PASS / FAIL CRITERIA
+
+PASS only if:
+
+DPI Probe installs without Core
+
+Runs under systemd with scoped privileges
+
+Stops cleanly
+
+Re-running installer is idempotent
+
+Uninstall removes all artifacts
+
+FAIL if:
+
+Runs as full root unnecessarily
+
+Any hardcoded path exists
+
+Assumes Core availability
+
+Multiple services are created
+
+Begin immediately.
+Do not explain.
+Do not summarize.
+Build the DPI Probe installer only.
+
+Promot end*

@@ -253,7 +253,9 @@ REM Note: Windows services cannot easily read .txt config files, so we pass env 
 REM Alternative: Use a wrapper script that reads environment.txt and sets variables before running agent
 
 REM Create wrapper script that reads environment.txt and sets variables
-REM Embed INSTALL_ROOT value directly in wrapper (dynamically generated, not hardcoded in installer)
+REM Embed actual INSTALL_ROOT path in wrapper (dynamically generated, not hardcoded in installer)
+REM Wrapper script reads environment file which contains RANSOMEYE_INSTALL_ROOT
+REM Use that to construct paths - no need to embed INSTALL_ROOT directly in wrapper
 (
     echo @echo off
     echo setlocal enabledelayedexpansion
@@ -261,8 +263,11 @@ REM Embed INSTALL_ROOT value directly in wrapper (dynamically generated, not har
     echo REM RansomEye Windows Agent Wrapper
     echo REM This wrapper reads environment file and runs agent with proper environment
     echo.
-    echo set "INSTALL_ROOT=!INSTALL_ROOT!"
-    echo set "ENV_FILE=!INSTALL_ROOT!\\config\\environment.txt"
+    echo REM Determine install root from script location (dynamically generated wrapper)
+    echo REM Wrapper is located at: !INSTALL_ROOT!\bin\ransomeye-windows-agent-wrapper.bat
+    echo REM Install root is parent of bin directory
+    echo for %%I in ^("%%~dp0.."^) do set "INSTALL_ROOT_FROM_BIN=%%~fI"
+    echo set "ENV_FILE=%%INSTALL_ROOT_FROM_BIN%%\\config\\environment.txt"
     echo.
     echo REM Read environment file and set variables
     echo if exist "%%ENV_FILE%%" ^(
@@ -280,20 +285,12 @@ REM Embed INSTALL_ROOT value directly in wrapper (dynamically generated, not har
     echo     exit /b 1
     echo ^)
     echo.
-    echo REM Change to install root directory (from environment file or fallback)
-    echo cd /d "%%RANSOMEYE_INSTALL_ROOT%%" 2^>nul || cd /d "%%INSTALL_ROOT%%" 2^>nul || exit /b 1
+    echo REM Change to install root directory (from environment file)
+    echo cd /d "%%RANSOMEYE_INSTALL_ROOT%%" 2^>nul || exit /b 1
     echo.
     echo REM Run agent binary with environment variables set
-    echo "%%RANSOMEYE_INSTALL_ROOT%%\\bin\\ransomeye-windows-agent.exe" 2^>nul || "%%INSTALL_ROOT%%\\bin\\ransomeye-windows-agent.exe" || exit /b 1
+    echo "%%RANSOMEYE_INSTALL_ROOT%%\\bin\\ransomeye-windows-agent.exe" || exit /b 1
 ) > "!INSTALL_ROOT!\bin\ransomeye-windows-agent-wrapper.bat"
-
-REM Replace INSTALL_ROOT placeholder in wrapper with actual path (dynamically generated)
-powershell -Command "(Get-Content '!INSTALL_ROOT!\bin\ransomeye-windows-agent-wrapper.bat') -replace '!INSTALL_ROOT!', '!INSTALL_ROOT!' | Set-Content '!INSTALL_ROOT!\bin\ransomeye-windows-agent-wrapper.bat'" >nul 2>&1
-if errorlevel 1 (
-    REM Fallback: Use a simpler approach - the wrapper will read INSTALL_ROOT from environment file
-    REM The wrapper script is already correct - it reads RANSOMEYE_INSTALL_ROOT from environment file
-    REM and uses that to construct paths
-)
 
 REM Install service with wrapper script (use cmd.exe to run batch file)
 REM Windows Service requires executable, so use cmd.exe to run batch wrapper
