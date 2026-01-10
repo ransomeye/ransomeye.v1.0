@@ -379,7 +379,13 @@ def run_ai_core():
                    features_stored=stored_features, shap_stored=stored_shap)
         
     except Exception as e:
-        logger.fatal(f"Fatal error in AI Core: {e}")
+        # Security: Sanitize exception message before logging
+        try:
+            from common.security.redaction import sanitize_exception
+            safe_error = sanitize_exception(e)
+        except ImportError:
+            safe_error = str(e)
+        logger.fatal(f"Fatal error in AI Core: {safe_error}")
         raise
     finally:
         if read_conn:
@@ -404,5 +410,11 @@ if __name__ == "__main__":
         logger.config_error(str(e))
         sys.exit(ExitCode.CONFIG_ERROR)
     except Exception as e:
-        logger.fatal(f"Fatal error: {e}")
+        # Security: Sanitize exception message before logging
+        try:
+            from common.security.redaction import sanitize_exception
+            safe_error = sanitize_exception(e)
+        except ImportError:
+            safe_error = str(e)
+        logger.fatal(f"Fatal error: {safe_error}")
         sys.exit(ExitCode.FATAL_ERROR)
