@@ -1,0 +1,95 @@
+1. Core Engine & Installer — Unified Deployment & Infrastructure
+Audit Ledger (append-only, signed system actions)
+
+2. AI Core & Model Registry — Model Management & Explainability
+Full model registry lifecycle (promote / deprecate / revoke)
+Hot-swap models
+Drift detection
+Federated retraining bundles
+Encrypted model bundle ingestion
+
+3. Alert Engine & Policy Manager — Detection Logic & Routing
+YAML policy hot-reload
+Policy bundle signing & validation
+High-throughput optimization (10k+/min)
+
+
+4. KillChain & Forensics — Incident Correlation & Evidence
+Full MITRE ATT&CK timeline reconstruction
+Memory / disk forensic dumping
+Evidence compression & artifact storage
+Cross-host campaign stitching
+
+
+5. LLM Summarizer — Generative Reporting
+Offline LLM (GGUF)
+Context injection (timeline, SHAP, forensics)
+Signed PDF / HTML / CSV exports
+PII redaction at generation time
+Audience-specific summaries
+
+6. Incident Response (IR) — Automation & Playbooks
+Playbook registry
+Signed playbooks
+Rollback / sandboxed execution
+AI-assisted recommendations
+
+7. SOC Copilot (Basic) — Analyst Assistance (RAG)
+Offline RAG
+Vector store (FAISS)
+Analyst Q&A
+Feedback loop & retraining bundles
+
+
+8. Threat Correlation — Graph Analysis
+Entity graph
+Campaign inference
+Neo4j export
+ML confidence predictor
+
+
+9. Network Scanner — Discovery & Topology
+Active scanning (nmap)
+Passive discovery
+Topology maps
+Offline CVE matching
+
+10. Orchestrator — Workflow Management
+
+Job orchestration
+Dependency graphs
+Durable queues
+Replay / rehydration
+
+
+11. Forensic Deep-Dive — Advanced Analysis
+
+12. Behavior Summarizer — Advanced LLM
+
+13. Agents (Linux / Windows) — Host Telemetry
+DPI Probe logic exists
+Windows Agent implementation
+eBPF / ETW deep telemetry
+Local inference
+Offline buffering
+Signed updates
+
+
+14. Deception Framework — Active Defense
+
+
+15. AI Assistant (Advanced) — Multi-Agent LLM
+
+16. Threat Intel Feed — IOC Management
+
+
+17. HNMP Engine — Host / Net / Malware / Proc
+
+18. Global Validator — System Assurance
+Synthetic attack simulation
+Signed compliance reports
+Full chain-of-custody verification reports
+
+
+
+

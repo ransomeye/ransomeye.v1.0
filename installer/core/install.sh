@@ -168,7 +168,8 @@ create_core_wrapper() {
     cat > "${INSTALL_ROOT}/bin/ransomeye-core" << 'WRAPPER_EOF'
 #!/bin/bash
 # RansomEye Core Runtime Wrapper
-# This wrapper starts Core runtime with proper environment
+# This wrapper starts Core runtime and FastAPI services with proper environment
+# Installer requirement: Start services using uvicorn without modifying Core code
 
 set -euo pipefail
 
@@ -188,8 +189,50 @@ fi
 # Change to install root for relative path resolution
 cd "$INSTALL_ROOT" || exit 1
 
-# Run Core main entry point
-exec python3 "${INSTALL_ROOT}/lib/core/main.py" "$@"
+# Background process PIDs
+INGEST_PID=""
+UI_PID=""
+
+# Cleanup function: kill background services when Core exits
+cleanup() {
+    if [[ -n "$INGEST_PID" ]]; then
+        kill "$INGEST_PID" 2>/dev/null || true
+        wait "$INGEST_PID" 2>/dev/null || true
+    fi
+    if [[ -n "$UI_PID" ]]; then
+        kill "$UI_PID" 2>/dev/null || true
+        wait "$UI_PID" 2>/dev/null || true
+    fi
+}
+
+# Trap signals to ensure cleanup on exit
+trap cleanup SIGTERM SIGINT
+
+# Installer requirement: Start FastAPI services (Ingest, UI Backend) using uvicorn
+# Services have their own main blocks that call uvicorn when run directly
+# This does NOT modify Core code - installer calls services as-is
+
+# Start Ingest service in background
+python3 "${INSTALL_ROOT}/lib/services/ingest/app/main.py" &
+INGEST_PID=$!
+
+# Start UI Backend service in background
+python3 "${INSTALL_ROOT}/lib/services/ui/backend/main.py" &
+UI_PID=$!
+
+# Give services time to start
+sleep 2
+
+# Run Core main entry point (foreground process - systemd tracks this)
+# Core runtime coordinates modules and remains running until shutdown signal
+# Use exec to replace shell with Core process (systemd tracks this)
+python3 "${INSTALL_ROOT}/lib/core/main.py" "$@"
+CORE_EXIT=$?
+
+# Cleanup when Core exits
+cleanup
+
+exit $CORE_EXIT
 WRAPPER_EOF
 
     chmod +x "${INSTALL_ROOT}/bin/ransomeye-core" || error_exit "Failed to make wrapper executable"
@@ -244,7 +287,7 @@ RANSOMEYE_DB_HOST="localhost"
 RANSOMEYE_DB_PORT="5432"
 RANSOMEYE_DB_NAME="ransomeye"
 RANSOMEYE_DB_USER="gagan"
-RANSOMEYE_DB_PASSWORD="gagangagan"
+RANSOMEYE_DB_PASSWORD="gagan"
 
 # Service ports
 RANSOMEYE_INGEST_PORT="8000"
@@ -290,7 +333,7 @@ check_postgresql() {
     fi
     
     # Test connection with credentials (user: gagan, password: gagan)
-    export PGPASSWORD="gagangagan"
+    export PGPASSWORD="gagan"
     if psql -h localhost -U gagan -d ransomeye -c "SELECT 1" &> /dev/null; then
         echo -e "${GREEN}✓${NC} PostgreSQL connection successful"
     else

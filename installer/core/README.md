@@ -38,7 +38,7 @@ Before running the installer, ensure:
 2. **PostgreSQL database and user created:**
    ```bash
    sudo -u postgres psql -c "CREATE DATABASE ransomeye;"
-   sudo -u postgres psql -c "CREATE USER gagan WITH PASSWORD 'gagangagan';"
+   sudo -u postgres psql -c "CREATE USER gagan WITH PASSWORD 'gagan';"
    sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE ransomeye TO gagan;"
    sudo -u postgres psql -d ransomeye -c "GRANT ALL ON SCHEMA public TO gagan;"
    ```
@@ -132,7 +132,7 @@ Example installation structure (if install root is `/opt/ransomeye`):
 The installer generates `${INSTALL_ROOT}/config/environment` with all required environment variables:
 
 - **Installation paths**: All absolute paths based on install root
-- **Database credentials**: user: `gagan`, password: `gagangagan`
+- **Database credentials**: user: `gagan`, password: `gagan`
 - **Service ports**: Ingest (8000), UI Backend (8080)
 - **Component identity**: Component instance ID (UUID)
 - **Runtime identity**: User/group IDs

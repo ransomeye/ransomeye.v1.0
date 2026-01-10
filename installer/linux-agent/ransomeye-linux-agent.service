@@ -1,0 +1,52 @@
+[Unit]
+Description=RansomEye v1.0 Linux Agent
+Documentation=https://ransomeye.v1.0/
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ransomeye-agent
+Group=ransomeye-agent
+WorkingDirectory=@INSTALL_ROOT@
+
+# Environment file (contains all configuration)
+EnvironmentFile=@INSTALL_ROOT@/config/environment
+
+# Executable (agent binary)
+ExecStart=@INSTALL_ROOT@/bin/ransomeye-linux-agent
+
+# Restart on failure (but with limits to avoid crash-loops)
+Restart=on-failure
+RestartSec=60
+
+# Crash-loop prevention: Limit restarts to 5 attempts in 5 minutes
+# If Core is unreachable, agent will exit with code 3 (RuntimeError)
+# After 5 failed attempts, systemd stops restarting (prevents crash-loop)
+StartLimitIntervalSec=300
+StartLimitBurst=5
+StartLimitAction=none
+
+# Resource limits (prevent runaway processes)
+LimitNOFILE=65536
+LimitNPROC=4096
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=@INSTALL_ROOT@/logs @INSTALL_ROOT@/runtime
+
+# Graceful shutdown (agent handles SIGTERM cleanly)
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ransomeye-linux-agent
+
+[Install]
+WantedBy=multi-user.target

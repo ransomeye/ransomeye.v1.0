@@ -1,0 +1,164 @@
+Promot Start*
+
+You are continuing RansomEye v1.0 – Enterprise & Military-Grade Build.
+
+WORK UNIT: Linux Agent Installer (Standalone, systemd)
+
+STRICT CONTEXT (DO NOT VIOLATE)
+
+Linux Agent is a standalone component
+
+❌ Do NOT modify Linux Agent code
+
+❌ Do NOT modify Core code
+
+❌ Do NOT assume Core is installed
+
+❌ Do NOT hardcode any paths
+
+❌ Do NOT add features
+
+This task is installer packaging only.
+
+OBJECTIVE (ONLY THIS)
+
+Create a production-grade installer for the Linux Agent that:
+
+Installs cleanly on Ubuntu LTS
+
+Uses any install path chosen by the user
+
+Runs as a standalone systemd service
+
+Emits real events when Core is present
+
+Fails cleanly when Core is absent (no crashes, no loops)
+
+INSTALLER REQUIREMENTS (MANDATORY)
+1. Installer Type
+
+Bash installer (install.sh)
+
+Executable
+
+Fail-fast (set -euo pipefail)
+
+2. User & Permissions
+
+Installer must:
+
+Create system user: ransomeye-agent
+
+Drop privileges for runtime
+
+Ensure least-privilege filesystem access
+
+3. Paths (NO HARDCODED PATHS)
+
+Installer must:
+
+Prompt for install root (example: /opt/ransomeye-agent)
+
+Create:
+
+bin/
+
+config/
+
+logs/
+
+runtime/
+
+Write agent installation manifest with absolute paths
+
+4. Configuration
+
+Installer must generate:
+
+Agent environment file
+
+Core endpoint configurable via env (no assumption Core exists)
+
+Credentials fixed:
+
+username: gagan
+
+password: gagan
+
+5. systemd Service (MANDATORY)
+
+Create ONE service:
+
+ransomeye-linux-agent.service
+
+Service must:
+
+Run Linux Agent binary
+
+Restart on failure
+
+Handle SIGTERM cleanly
+
+Not crash-loop if Core is unreachable
+
+6. Validation Hook
+
+Installer must:
+
+Start agent
+
+Verify process is running
+
+NOT require Core to be present
+
+OUTPUT FORMAT (MANDATORY)
+/installer/
+  linux-agent/
+    install.sh
+    uninstall.sh
+    ransomeye-linux-agent.service
+    installer.manifest.json
+    README.md
+
+README MUST EXPLICITLY STATE
+
+Standalone nature of Linux Agent
+
+Supported OS
+
+How to install
+
+How to uninstall
+
+Behavior when Core is unreachable
+
+No path assumptions
+
+PASS / FAIL CRITERIA
+
+PASS only if:
+
+Agent installs without Core
+
+Agent runs under systemd
+
+Agent stops cleanly
+
+Re-running installer is idempotent
+
+Uninstall removes all artifacts
+
+FAIL if:
+
+Any hardcoded path exists
+
+Agent assumes Core availability
+
+Multiple services are created
+
+Begin immediately.
+Do not explain.
+Do not summarize.
+Build the Linux Agent installer only.
+
+Promot end*
