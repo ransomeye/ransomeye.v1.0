@@ -545,7 +545,11 @@ def run_core():
     """
     Phase 10.1 requirement: Run Core runtime.
     Initialize Core, load components as modules, coordinate execution.
+    Installer requirement: Start FastAPI services (Ingest, UI Backend) as unified runtime.
     """
+    import threading
+    import uvicorn
+    
     # Phase 10.1 requirement: Initialize Core
     _initialize_core()
     
@@ -554,21 +558,72 @@ def run_core():
     
     logger.startup("Core runtime starting")
     
-    # Phase 10.1 requirement: Components run as modules within Core
-    # Note: Actual component execution is coordinated by Core
-    # Components are not standalone services, they are Core modules
+    # Installer requirement: Start FastAPI services (Ingest and UI Backend)
+    # Run them in background threads to keep unified process
+    ingest_thread = None
+    ui_thread = None
     
-    logger.startup("Core runtime ready")
-    
-    # Phase 10.1 requirement: Core remains running until shutdown signal
-    # Components execute within Core context, not as separate processes
-    # Note: Component execution is coordinated by Core (components are modules, not processes)
-    import time
-    while not _shutdown_handler.is_shutdown_requested():
-        time.sleep(1)
-    
-    logger.shutdown("Core runtime stopping")
-    _core_cleanup()
+    try:
+        # Start Ingest FastAPI service in background thread
+        if _ingest_module and hasattr(_ingest_module, 'app'):
+            ingest_port = int(config.get('RANSOMEYE_INGEST_PORT', 8000))
+            logger.startup(f"Starting Ingest service on port {ingest_port}")
+            
+            def run_ingest():
+                try:
+                    uvicorn.run(_ingest_module.app, host="0.0.0.0", port=ingest_port, log_config=None)
+                except Exception as e:
+                    logger.fatal(f"Ingest service failed: {e}")
+                    exit_fatal(f"Ingest service failed: {e}", ExitCode.FATAL_ERROR)
+            
+            ingest_thread = threading.Thread(target=run_ingest, daemon=True)
+            ingest_thread.start()
+            logger.startup("Ingest service started")
+        else:
+            logger.warning("Ingest module or app not found, skipping Ingest service")
+        
+        # Start UI Backend FastAPI service in background thread
+        if _ui_module and hasattr(_ui_module, 'app'):
+            ui_port = int(config.get('RANSOMEYE_UI_PORT', 8080))
+            logger.startup(f"Starting UI Backend service on port {ui_port}")
+            
+            def run_ui():
+                try:
+                    uvicorn.run(_ui_module.app, host="0.0.0.0", port=ui_port, log_config=None)
+                except Exception as e:
+                    logger.fatal(f"UI Backend service failed: {e}")
+                    exit_fatal(f"UI Backend service failed: {e}", ExitCode.FATAL_ERROR)
+            
+            ui_thread = threading.Thread(target=run_ui, daemon=True)
+            ui_thread.start()
+            logger.startup("UI Backend service started")
+        else:
+            logger.warning("UI module or app not found, skipping UI Backend service")
+        
+        # Phase 10.1 requirement: Components run as modules within Core
+        # FastAPI services run in background threads, keeping unified process
+        logger.startup("Core runtime ready")
+        
+        # Phase 10.1 requirement: Core remains running until shutdown signal
+        # Components execute within Core context (FastAPI in threads, other modules as direct calls)
+        # Note: Component execution is coordinated by Core (components are modules, not separate processes)
+        import time
+        while not _shutdown_handler.is_shutdown_requested():
+            # Check if service threads are still alive
+            if ingest_thread and not ingest_thread.is_alive():
+                logger.error("Ingest service thread died unexpectedly")
+            if ui_thread and not ui_thread.is_alive():
+                logger.error("UI Backend service thread died unexpectedly")
+            
+            time.sleep(1)
+        
+        logger.shutdown("Core runtime stopping")
+        
+    except Exception as e:
+        logger.fatal(f"Core runtime failed: {e}")
+        raise
+    finally:
+        _core_cleanup()
 
 if __name__ == "__main__":
     try:

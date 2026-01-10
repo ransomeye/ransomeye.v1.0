@@ -1,0 +1,45 @@
+[Unit]
+Description=RansomEye v1.0 Core Runtime
+Documentation=https://ransomeye.v1.0/
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=ransomeye
+Group=ransomeye
+WorkingDirectory=@INSTALL_ROOT@
+
+# Environment file (contains all configuration)
+EnvironmentFile=@INSTALL_ROOT@/config/environment
+
+# Executable (wrapper script that sources environment and runs Core)
+ExecStart=@INSTALL_ROOT@/bin/ransomeye-core
+
+# Restart on failure
+Restart=on-failure
+RestartSec=10
+
+# Resource limits (prevent runaway processes)
+LimitNOFILE=65536
+LimitNPROC=4096
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=@INSTALL_ROOT@/logs @INSTALL_ROOT@/runtime
+
+# Graceful shutdown
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ransomeye-core
+
+[Install]
+WantedBy=multi-user.target
