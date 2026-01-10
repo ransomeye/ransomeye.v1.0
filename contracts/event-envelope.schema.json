@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ransomeye.v1.0/contracts/event-envelope",
+  "title": "RansomEye v1.0 Canonical Event Envelope",
+  "description": "AUTHORITATIVE: Immutable contract for all event envelopes in RansomEye v1.0. This schema is frozen and MUST NOT be modified.",
+  "type": "object",
+  "required": [
+    "event_id",
+    "machine_id",
+    "component",
+    "component_instance_id",
+    "observed_at",
+    "ingested_at",
+    "sequence",
+    "payload",
+    "identity",
+    "integrity"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Universally unique identifier for this event. MUST be a valid UUID v4."
+    },
+    "machine_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Machine identifier where the event originated. MUST be a non-empty string."
+    },
+    "component": {
+      "type": "string",
+      "enum": ["linux_agent", "windows_agent", "dpi", "core"],
+      "description": "Component that generated this event. MUST be one of: linux_agent, windows_agent, dpi, core."
+    },
+    "component_instance_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Unique identifier for this specific instance of the component. MUST be a non-empty string."
+    },
+    "observed_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp when the event was observed at the source. MUST be in UTC timezone and RFC3339 format."
+    },
+    "ingested_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp when the event was ingested into the system. MUST be in UTC timezone and RFC3339 format."
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 18446744073709551615,
+      "description": "Monotonically increasing sequence number within the component instance. MUST be a 64-bit unsigned integer (0 to 2^64-1)."
+    },
+    "payload": {
+      "type": "object",
+      "description": "Opaque event payload. Structure is component-specific and not validated by this schema. MUST be a valid JSON object."
+    },
+    "identity": {
+      "type": "object",
+      "required": [
+        "hostname",
+        "boot_id",
+        "agent_version"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "hostname": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Hostname of the machine where the event was observed. MUST be a non-empty string."
+        },
+        "boot_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Boot identifier of the machine. Changes on each system boot. MUST be a non-empty string."
+        },
+        "agent_version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Version string of the agent that generated this event. MUST be a non-empty string."
+        }
+      }
+    },
+    "integrity": {
+      "type": "object",
+      "required": [
+        "hash_sha256",
+        "prev_hash_sha256"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "hash_sha256": {
+          "type": "string",
+          "pattern": "^[a-fA-F0-9]{64}$",
+          "description": "SHA256 hash of the entire event envelope (computed after all fields are populated). MUST be a 64-character hexadecimal string."
+        },
+        "prev_hash_sha256": {
+          "oneOf": [
+            {
+              "type": "string",
+              "pattern": "^[a-fA-F0-9]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "SHA256 hash of the previous event in the sequence. MUST be null for the first event (sequence=0), otherwise MUST be a 64-character hexadecimal string matching the hash_sha256 of the preceding event."
+        }
+      }
+    }
+  }
+}

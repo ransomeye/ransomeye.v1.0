@@ -1,0 +1,15 @@
+# RansomEye v1.0 Policy Engine (Phase 7 - Simulation-First)
+# Python 3.10+ only
+
+# PostgreSQL database client (for reading incidents)
+psycopg2-binary==2.9.9
+
+# Cryptographic signing (for command signing)
+cryptography==41.0.7
+
+# Date/time parsing
+python-dateutil==2.8.2
+
+# Environment variable validation
+pydantic==2.5.0
+pydantic-settings==2.1.0

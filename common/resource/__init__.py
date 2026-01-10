@@ -1,0 +1,1 @@
+# Common resource safety utilities

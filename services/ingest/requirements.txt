@@ -1,0 +1,22 @@
+# RansomEye v1.0 Ingest Service (Phase 4 - Minimal)
+# Python 3.10+ only
+
+# HTTP server for accepting events
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+
+# PostgreSQL database client
+psycopg2-binary==2.9.9
+
+# JSON Schema validation (for event-envelope.schema.json)
+jsonschema==4.19.2
+
+# SHA256 hashing (for hash verification)
+# Python standard library hashlib is sufficient, no external dependency needed
+
+# RFC3339 timestamp parsing
+python-dateutil==2.8.2
+
+# Environment variable validation
+pydantic==2.5.0
+pydantic-settings==2.1.0

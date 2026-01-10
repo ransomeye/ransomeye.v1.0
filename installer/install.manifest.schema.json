@@ -1,0 +1,189 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ransomeye.v1.0/installer/install-manifest",
+  "title": "RansomEye v1.0 Installation Manifest Schema",
+  "description": "AUTHORITATIVE: Machine-readable manifest containing complete installation state. This manifest is the single source of truth for runtime configuration. All paths are absolute. No paths may be computed internally by services.",
+  "type": "object",
+  "required": [
+    "version",
+    "install_root",
+    "directories",
+    "runtime_identity",
+    "enabled_components",
+    "bundle_hashes",
+    "installed_at",
+    "installed_by"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "type": "string",
+      "pattern": "^1\\.0\\.0$",
+      "description": "Manifest schema version. MUST be exactly '1.0.0' for RansomEye v1.0."
+    },
+    "install_root": {
+      "type": "string",
+      "pattern": "^/.*[^/]$",
+      "description": "Absolute path to installation root directory. MUST be absolute path (starting with /), MUST NOT end with trailing slash. Example: /opt/ransomeye or /home/user/ransomeye. No path assumptions - supports any install location."
+    },
+    "directories": {
+      "type": "object",
+      "required": [
+        "bin",
+        "lib",
+        "etc",
+        "data",
+        "log",
+        "run",
+        "tmp"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "bin": {
+          "type": "string",
+          "pattern": "^/.*[^/]$",
+          "description": "Absolute path to binary directory. Contains executable binaries. MUST be absolute path, MUST NOT end with trailing slash. Example: ${install_root}/bin"
+        },
+        "lib": {
+          "type": "string",
+          "pattern": "^/.*[^/]$",
+          "description": "Absolute path to library directory. Contains shared libraries, plugins, modules. MUST be absolute path, MUST NOT end with trailing slash. Example: ${install_root}/lib"
+        },
+        "etc": {
+          "type": "string",
+          "pattern": "^/.*[^/]$",
+          "description": "Absolute path to configuration directory. Contains configuration files. MUST be absolute path, MUST NOT end with trailing slash. Example: ${install_root}/etc"
+        },
+        "data": {
+          "type": "string",
+          "pattern": "^/.*[^/]$",
+          "description": "Absolute path to data directory. Contains persistent data, databases, state files. MUST be absolute path, MUST NOT end with trailing slash. Example: ${install_root}/data"
+        },
+        "log": {
+          "type": "string",
+          "pattern": "^/.*[^/]$",
+          "description": "Absolute path to log directory. Contains log files. MUST be absolute path, MUST NOT end with trailing slash. Example: ${install_root}/log"
+        },
+        "run": {
+          "type": "string",
+          "pattern": "^/.*[^/]$",
+          "description": "Absolute path to runtime directory. Contains PID files, sockets, runtime state. MUST be absolute path, MUST NOT end with trailing slash. Example: ${install_root}/run"
+        },
+        "tmp": {
+          "type": "string",
+          "pattern": "^/.*[^/]$",
+          "description": "Absolute path to temporary directory. Contains temporary files. MUST be absolute path, MUST NOT end with trailing slash. Example: ${install_root}/tmp"
+        }
+      }
+    },
+    "runtime_identity": {
+      "type": "object",
+      "required": [
+        "user",
+        "group",
+        "uid",
+        "gid"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "user": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[a-z_][a-z0-9_]*$",
+          "description": "System username for RansomEye runtime. MUST be valid POSIX username (lowercase alphanumeric, underscore, starting with letter or underscore). Example: 'ransomeye'"
+        },
+        "group": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[a-z_][a-z0-9_]*$",
+          "description": "System groupname for RansomEye runtime. MUST be valid POSIX groupname (lowercase alphanumeric, underscore, starting with letter or underscore). Example: 'ransomeye'"
+        },
+        "uid": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65534,
+          "description": "Numeric user ID (UID). MUST be in valid UID range (1 to 65534). System-assigned UID for runtime user."
+        },
+        "gid": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65534,
+          "description": "Numeric group ID (GID). MUST be in valid GID range (1 to 65534). System-assigned GID for runtime group."
+        }
+      }
+    },
+    "enabled_components": {
+      "type": "object",
+      "required": [
+        "linux_agent",
+        "windows_agent",
+        "dpi",
+        "core",
+        "correlation_engine",
+        "ai_core"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "linux_agent": {
+          "type": "boolean",
+          "description": "Linux agent enabled. TRUE if Linux agent component is enabled, FALSE if disabled."
+        },
+        "windows_agent": {
+          "type": "boolean",
+          "description": "Windows agent enabled. TRUE if Windows agent component is enabled, FALSE if disabled."
+        },
+        "dpi": {
+          "type": "boolean",
+          "description": "DPI probe enabled. TRUE if DPI probe component is enabled, FALSE if disabled."
+        },
+        "core": {
+          "type": "boolean",
+          "description": "Core service enabled. TRUE if core service is enabled, FALSE if disabled. Core MUST always be enabled if any other component is enabled."
+        },
+        "correlation_engine": {
+          "type": "boolean",
+          "description": "Correlation engine enabled. TRUE if correlation engine is enabled, FALSE if disabled."
+        },
+        "ai_core": {
+          "type": "boolean",
+          "description": "AI core enabled. TRUE if AI core is enabled, FALSE if disabled."
+        }
+      }
+    },
+    "bundle_hashes": {
+      "type": "object",
+      "required": [
+        "contract_bundle_sha256",
+        "schema_bundle_sha256"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "contract_bundle_sha256": {
+          "type": "string",
+          "pattern": "^[a-fA-F0-9]{64}$",
+          "description": "SHA256 hash of Phase 1 contract bundle. MUST be 64-character hexadecimal string. Used for bundle integrity verification. MUST match contract bundle hash from Phase 1."
+        },
+        "schema_bundle_sha256": {
+          "type": "string",
+          "pattern": "^[a-fA-F0-9]{64}$",
+          "description": "SHA256 hash of Phase 2 schema bundle. MUST be 64-character hexadecimal string. Used for bundle integrity verification. MUST match schema bundle hash from Phase 2."
+        }
+      }
+    },
+    "installed_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp when installation was completed. MUST be in UTC timezone and RFC3339 format. Set by installer on successful completion."
+    },
+    "installed_by": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Username or identifier of user/process that performed installation. MUST be non-empty string. Example: 'root' or 'installer' or process identifier."
+    },
+    "installer_version": {
+      "type": "string",
+      "pattern": "^1\\.0\\.0$",
+      "description": "Installer version that created this manifest. MUST be exactly '1.0.0' for RansomEye v1.0 installer. Used for manifest compatibility checking."
+    }
+  }
+}

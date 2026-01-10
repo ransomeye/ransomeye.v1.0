@@ -1,0 +1,166 @@
+Promot Start
+
+You are continuing RansomEye v1.0 – Clean-Room Rebuild.
+
+PHASE: 8 — SOC UI (READ-ONLY)
+
+PREVIOUS PHASES (FROZEN):
+
+Phase 1: System Contracts
+
+Phase 2: Database Schema
+
+Phase 3: Installer Contracts
+
+Phase 4: Minimal Data Plane
+
+Phase 5: Correlation Engine
+
+Phase 6: AI Core (Read-Only)
+
+Phase 7: Policy Engine (Simulation-First)
+
+HARD RULES (NON-NEGOTIABLE)
+
+❌ UI must NOT write to DB
+
+❌ UI must NOT query base tables
+
+❌ UI must NOT infer state
+
+❌ UI must NOT trigger actions
+
+❌ UI must NOT contain policy logic
+
+❌ UI must NOT contain AI logic
+
+❌ No schema changes
+
+❌ No contract changes
+
+UI is OBSERVATIONAL ONLY.
+
+OBJECTIVE
+
+Implement the minimal SOC UI that provides read-only visibility into system state.
+
+REQUIRED DB VIEWS (MUST DEFINE)
+
+Define READ-ONLY SQL VIEWS for:
+
+v_active_incidents
+
+incident_id
+
+machine_id
+
+stage
+
+confidence
+
+created_at
+
+v_incident_timeline
+
+incident_id
+
+stage
+
+transitioned_at
+
+v_incident_evidence_summary
+
+incident_id
+
+evidence_count
+
+v_policy_recommendations
+
+incident_id
+
+recommended_action
+
+simulation_mode
+
+created_at
+
+v_ai_insights
+
+incident_id
+
+cluster_id
+
+novelty_score
+
+shap_summary
+
+UI FEATURES (MINIMAL)
+Dashboards
+
+Incident list (from v_active_incidents)
+
+Incident detail view:
+
+Timeline
+
+Evidence count
+
+AI insights
+
+Policy recommendations
+
+Constraints
+
+No edits
+
+No buttons that execute actions
+
+No “acknowledge”, “resolve”, or “close”
+
+OUTPUT FORMAT (MANDATORY)
+/services/
+  ui/
+    backend/
+      main.py
+      views.sql
+      requirements.txt
+    frontend/
+      src/
+      package.json
+      README.md
+    README.md
+
+README MUST EXPLICITLY STATE
+
+UI is read-only
+
+UI does not affect pipeline
+
+UI reads from DB views only
+
+System correctness is independent of UI
+
+VALIDATION (PASS / FAIL)
+
+PASS only if:
+
+UI reads ONLY from views
+
+UI cannot modify data
+
+UI can be disabled without impact
+
+No table writes exist
+
+FAIL if:
+
+Any DB write exists
+
+Any base table is queried
+
+Any action can be triggered
+
+Begin immediately.
+Do not explain — implement exactly.
+
+Prompt End

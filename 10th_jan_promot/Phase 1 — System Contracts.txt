@@ -1,0 +1,166 @@
+*****Promot Start*****
+
+You are working on **RansomEye v1.0 – Clean-Room Rebuild**.
+
+**STRICT CONTEXT (READ CAREFULLY):**
+
+* This is a **clean-room rebuild**. Assume **zero prior code exists**.
+* You are in **Phase 1 – System Contracts**.
+* **NO SERVICE CODE IS ALLOWED**.
+* **NO INSTALLER CODE**.
+* **NO DATABASE CODE**.
+* Output must be **contracts only**.
+* If you feel tempted to “prepare for later” or “add convenience”, **do not**.
+
+---
+
+## OBJECTIVE OF THIS PROMPT
+
+Define the **canonical, immutable system contracts** for RansomEye v1.0.
+
+These contracts will be frozen and **every future component must conform to them**.
+If any later code violates these contracts, the code will be deleted.
+
+---
+
+## SCOPE (MUST DELIVER ALL)
+
+Produce **ONLY** the following artifacts:
+
+### 1. Canonical Event Envelope (AUTHORITATIVE)
+
+Deliver:
+
+* JSON Schema (Draft 2020-12)
+* Protobuf definition
+
+The envelope **must exactly contain** the following fields (no more, no less):
+
+```json
+{
+  "event_id": "uuid",
+  "machine_id": "string",
+  "component": "linux_agent | windows_agent | dpi | core",
+  "component_instance_id": "string",
+  "observed_at": "RFC3339 UTC",
+  "ingested_at": "RFC3339 UTC",
+  "sequence": "monotonic_uint64",
+  "payload": {},
+  "identity": {
+    "hostname": "string",
+    "boot_id": "string",
+    "agent_version": "string"
+  },
+  "integrity": {
+    "hash_sha256": "string",
+    "prev_hash_sha256": "string | null"
+  }
+}
+```
+
+Rules:
+
+* **No optional fields**
+* **No defaults**
+* **No extensions**
+* `payload` is opaque but must be typed correctly
+* `component` must be an enum
+* Timestamps must be strictly validated
+
+---
+
+### 2. Time Semantics Contract (TEXT + MACHINE-READABLE)
+
+Define **explicit, enforceable rules** for:
+
+* `observed_at`
+* `ingested_at`
+* Clock skew tolerance
+* Out-of-order arrival
+* Late arrival
+* Duplicate arrival
+
+Deliverables:
+
+* Human-readable spec (Markdown)
+* Machine-readable policy (JSON)
+
+---
+
+### 3. Failure Semantics Contract (MANDATORY)
+
+Define **explicit behavior** for each component when:
+
+* No events are received
+* Events arrive late
+* Events are duplicated
+* Dependencies are unavailable
+* Integrity chain breaks
+* Schema validation fails
+
+Rules:
+
+* **Silence is forbidden**
+* Every failure must result in:
+
+  * Explicit state
+  * Explicit log classification
+  * Explicit downstream behavior
+
+Deliverable:
+
+* Structured failure matrix (Markdown table)
+* Machine-readable failure policy (JSON)
+
+---
+
+### 4. Contract Bundle Metadata
+
+Produce:
+
+* Contract bundle version
+* SHA256 hash placeholder (document where hash will be inserted later)
+* Compatibility rules (breaking vs non-breaking)
+* Freeze statement (immutable once approved)
+
+---
+
+## OUTPUT FORMAT (MANDATORY)
+
+Return output in this **exact structure**:
+
+```
+/contracts/
+  event-envelope.schema.json
+  event-envelope.proto
+  time-semantics.md
+  time-semantics.policy.json
+  failure-semantics.md
+  failure-semantics.policy.json
+  CONTRACT_BUNDLE.md
+```
+
+Each file must be fully written.
+
+---
+
+## HARD RULES (NON-NEGOTIABLE)
+
+* ❌ Do NOT write code
+* ❌ Do NOT reference databases
+* ❌ Do NOT reference installers
+* ❌ Do NOT reference paths
+* ❌ Do NOT reference systemd
+* ❌ Do NOT invent future fields
+* ❌ Do NOT optimize for convenience
+
+This is a **military-grade contract freeze**, not a draft.
+
+If anything is ambiguous, **make it explicit**.
+If something can fail, **define how it fails**.
+
+---
+
+Begin immediately.
+
+*****Prompt End*****

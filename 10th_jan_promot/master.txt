@@ -1,0 +1,2197 @@
+*****Promot Start*****
+
+You are working on **RansomEye v1.0 – Clean-Room Rebuild**.
+
+**STRICT CONTEXT (READ CAREFULLY):**
+
+* This is a **clean-room rebuild**. Assume **zero prior code exists**.
+* You are in **Phase 1 – System Contracts**.
+* **NO SERVICE CODE IS ALLOWED**.
+* **NO INSTALLER CODE**.
+* **NO DATABASE CODE**.
+* Output must be **contracts only**.
+* If you feel tempted to “prepare for later” or “add convenience”, **do not**.
+
+---
+
+## OBJECTIVE OF THIS PROMPT
+
+Define the **canonical, immutable system contracts** for RansomEye v1.0.
+
+These contracts will be frozen and **every future component must conform to them**.
+If any later code violates these contracts, the code will be deleted.
+
+---
+
+## SCOPE (MUST DELIVER ALL)
+
+Produce **ONLY** the following artifacts:
+
+### 1. Canonical Event Envelope (AUTHORITATIVE)
+
+Deliver:
+
+* JSON Schema (Draft 2020-12)
+* Protobuf definition
+
+The envelope **must exactly contain** the following fields (no more, no less):
+
+```json
+{
+  "event_id": "uuid",
+  "machine_id": "string",
+  "component": "linux_agent | windows_agent | dpi | core",
+  "component_instance_id": "string",
+  "observed_at": "RFC3339 UTC",
+  "ingested_at": "RFC3339 UTC",
+  "sequence": "monotonic_uint64",
+  "payload": {},
+  "identity": {
+    "hostname": "string",
+    "boot_id": "string",
+    "agent_version": "string"
+  },
+  "integrity": {
+    "hash_sha256": "string",
+    "prev_hash_sha256": "string | null"
+  }
+}
+```
+
+Rules:
+
+* **No optional fields**
+* **No defaults**
+* **No extensions**
+* `payload` is opaque but must be typed correctly
+* `component` must be an enum
+* Timestamps must be strictly validated
+
+---
+
+### 2. Time Semantics Contract (TEXT + MACHINE-READABLE)
+
+Define **explicit, enforceable rules** for:
+
+* `observed_at`
+* `ingested_at`
+* Clock skew tolerance
+* Out-of-order arrival
+* Late arrival
+* Duplicate arrival
+
+Deliverables:
+
+* Human-readable spec (Markdown)
+* Machine-readable policy (JSON)
+
+---
+
+### 3. Failure Semantics Contract (MANDATORY)
+
+Define **explicit behavior** for each component when:
+
+* No events are received
+* Events arrive late
+* Events are duplicated
+* Dependencies are unavailable
+* Integrity chain breaks
+* Schema validation fails
+
+Rules:
+
+* **Silence is forbidden**
+* Every failure must result in:
+
+  * Explicit state
+  * Explicit log classification
+  * Explicit downstream behavior
+
+Deliverable:
+
+* Structured failure matrix (Markdown table)
+* Machine-readable failure policy (JSON)
+
+---
+
+### 4. Contract Bundle Metadata
+
+Produce:
+
+* Contract bundle version
+* SHA256 hash placeholder (document where hash will be inserted later)
+* Compatibility rules (breaking vs non-breaking)
+* Freeze statement (immutable once approved)
+
+---
+
+## OUTPUT FORMAT (MANDATORY)
+
+Return output in this **exact structure**:
+
+```
+/contracts/
+  event-envelope.schema.json
+  event-envelope.proto
+  time-semantics.md
+  time-semantics.policy.json
+  failure-semantics.md
+  failure-semantics.policy.json
+  CONTRACT_BUNDLE.md
+```
+
+Each file must be fully written.
+
+---
+
+## HARD RULES (NON-NEGOTIABLE)
+
+* ❌ Do NOT write code
+* ❌ Do NOT reference databases
+* ❌ Do NOT reference installers
+* ❌ Do NOT reference paths
+* ❌ Do NOT reference systemd
+* ❌ Do NOT invent future fields
+* ❌ Do NOT optimize for convenience
+
+This is a **military-grade contract freeze**, not a draft.
+
+If anything is ambiguous, **make it explicit**.
+If something can fail, **define how it fails**.
+
+---
+
+Begin immediately.
+
+*****Prompt End*****
+
+
+*****Promot Start*****
+
+You are continuing **RansomEye v1.0 – Clean-Room Rebuild**.
+
+**STRICT CONTEXT (DO NOT VIOLATE):**
+
+* Phase 1 (System Contracts) is **COMPLETE and FROZEN**.
+* You are now entering **PHASE 2 — DATABASE FIRST**.
+* **NO SERVICE CODE IS ALLOWED**.
+* **NO INSTALLER CODE**.
+* **NO AGENT / DPI CODE**.
+* **NO UI CODE**.
+* Database design is **authoritative**; future code must conform to it.
+* If schema changes later without migration + version bump, the schema is invalid.
+
+---
+
+## OBJECTIVE OF THIS PROMPT
+
+Design the **authoritative, production-grade database schema** for **RansomEye v1.0**, aligned **exactly** to the frozen system contracts and threat model.
+
+This schema must support:
+
+* Linux Agent
+* Windows Agent
+* DPI Probe
+* Ingest
+* Correlation Engine
+* AI Core (read-only metadata)
+* SOC UI (read-only views)
+
+---
+
+## HARD DATABASE PHILOSOPHY (NON-NEGOTIABLE)
+
+* Schema is **not derived from code**
+* Code will adapt to schema, not the reverse
+* No dynamic columns
+* No JSON blobs for core facts (JSON only where explicitly justified)
+* Machine-first modeling (host-centric, not event-centric)
+* Time-indexed everywhere
+* Immutable primary keys
+* Explicit foreign keys
+* Deterministic querying
+
+---
+
+## SCOPE (MUST DELIVER ALL)
+
+### 1. Core Identity Tables
+
+Define tables for:
+
+* Machines / Hosts
+* Components (agent / dpi instances)
+* Component identity history (version, boot_id)
+
+Must align with:
+
+* `machine_id`
+* `component`
+* `component_instance_id`
+* `identity.*` fields from the event envelope
+
+---
+
+### 2. Event Storage Model (RAW + NORMALIZED)
+
+Design:
+
+* **Raw event storage** (exact envelope preservation)
+* **Normalized tables** for:
+
+  * Process activity
+  * File activity
+  * Persistence
+  * Network intent (agent-side)
+  * DPI-derived flows
+  * DNS
+  * Deception
+  * Health / heartbeat
+
+Rules:
+
+* Raw events are immutable
+* Normalized tables are query-optimized
+* Every normalized row must reference its raw event
+
+---
+
+### 3. Integrity & Ordering
+
+Schema must explicitly support:
+
+* Event hash chains
+* Sequence monotonicity per component instance
+* Duplicate detection
+* Gap detection
+
+No inference in code — DB must support this natively.
+
+---
+
+### 4. Correlation & Incident Tables
+
+Define tables for:
+
+* Incidents
+* Incident stages (Clean → Suspicious → Probable → Confirmed)
+* Confidence accumulation
+* Evidence linkage (event → incident)
+
+Rules:
+
+* One event can contribute to multiple incidents
+* Incident state transitions must be auditable
+* No deletion of incident history
+
+---
+
+### 5. AI / ML Metadata Tables (READ-ONLY)
+
+Define tables for:
+
+* Feature vectors (references only)
+* Clusters
+* Novelty scores
+* SHAP explanations (references, not blobs)
+
+Rules:
+
+* AI NEVER writes facts
+* AI NEVER mutates incidents
+* Metadata only, versioned
+
+---
+
+### 6. Indexing, Partitioning & Retention
+
+For every table:
+
+* Primary key
+* Foreign keys
+* Mandatory indexes
+* Time partitioning strategy
+* Retention policy (hot / warm / cold)
+
+No hand-waving. Be explicit.
+
+---
+
+### 7. Schema Freeze Artifacts
+
+Produce:
+
+* Versioned schema definition (DDL)
+* Schema hash placeholder
+* Migration rules (what constitutes breaking vs non-breaking)
+* Explicit freeze statement
+
+---
+
+## OUTPUT FORMAT (MANDATORY)
+
+Return output in this **exact structure**:
+
+```
+/schemas/
+  00_core_identity.sql
+  01_raw_events.sql
+  02_normalized_agent.sql
+  03_normalized_dpi.sql
+  04_correlation.sql
+  05_ai_metadata.sql
+  06_indexes.sql
+  07_retention.sql
+  SCHEMA_BUNDLE.md
+```
+
+* SQL must be **PostgreSQL 14+ compatible**
+* Use `UUID`, `TIMESTAMPTZ`, `JSONB` only where justified
+* Every file must be complete and executable
+
+---
+
+## HARD RULES (DO NOT BREAK)
+
+* ❌ No assumptions about paths
+* ❌ No assumptions about deployment size
+* ❌ No sample data
+* ❌ No test data
+* ❌ No service logic
+* ❌ No shortcuts for “later optimization”
+
+This schema must survive:
+
+* Zero data
+* One event
+* Partial failure
+* Adversarial input
+* Multi-year growth
+
+---
+
+Begin immediately.
+Do not explain — **design**.
+
+*****Prompt End*****
+
+Promot Start
+
+You are continuing RansomEye v1.0 – Clean-Room Rebuild.
+
+PHASE: 3 — INSTALLER BEFORE SERVICES
+PREVIOUS PHASES COMPLETE:
+
+Phase 1: System Contracts (Frozen)
+
+Phase 2: Database Schema (Frozen)
+
+STRICT RULES (NON-NEGOTIABLE)
+
+❌ No service code
+
+❌ No agent code
+
+❌ No DPI code
+
+❌ No database schema changes
+
+❌ No systemd unit files yet
+
+❌ No hardcoded paths
+
+❌ No assumptions about install location
+
+This installer must support commercial self-installation at any path.
+
+ALLOWED LANGUAGES ONLY
+
+Bash
+
+Python 3.10+
+
+No other languages permitted.
+
+OBJECTIVE
+
+Design the authoritative unified installer specification for RansomEye v1.0.
+
+The installer is responsible for:
+
+Discovering install root
+
+Creating system user
+
+Generating manifest
+
+Injecting paths via ENV
+
+Enforcing fail-closed startup
+
+SCOPE (MUST DELIVER ALL)
+1. Installation Manifest (AUTHORITATIVE)
+
+Define a machine-readable manifest that contains:
+
+Install root (absolute)
+
+Data directories
+
+Log directories
+
+Binary directories
+
+Config directories
+
+Runtime UID/GID
+
+Enabled components
+
+Schema bundle hash
+
+Contract bundle hash
+
+Deliver:
+
+install.manifest.schema.json
+
+Example install.manifest.json (NO PATH ASSUMPTIONS, use placeholders)
+
+2. Environment Variable Contract
+
+Define EXACT ENV VARS that every service must read:
+
+Paths
+
+IDs
+
+Versions
+
+Runtime identity
+
+Deliver:
+
+env.contract.md
+
+env.contract.json
+
+No service may compute paths internally.
+
+3. Privilege Model
+
+Define:
+
+Installer privilege requirements
+
+Runtime privilege drop rules
+
+Agent/DPI exception boundaries
+
+Deliver:
+
+privilege-model.md
+
+4. Failure Semantics (Installer-Specific)
+
+Define:
+
+What causes install abort
+
+What is recoverable
+
+What is fatal
+
+Rollback rules
+
+Deliver:
+
+installer-failure-policy.md
+
+installer-failure-policy.json
+
+OUTPUT FORMAT (MANDATORY)
+/installer/
+  install.manifest.schema.json
+  install.manifest.json
+  env.contract.md
+  env.contract.json
+  privilege-model.md
+  installer-failure-policy.md
+  installer-failure-policy.json
+  INSTALLER_BUNDLE.md
+
+HARD REQUIREMENTS
+
+Installer must be idempotent
+
+Installer must be fail-closed
+
+Installer must leave zero partial state
+
+All paths are injected, never inferred
+
+Manifest is the single source of runtime truth
+
+This installer defines how RansomEye exists on disk.
+
+Begin immediately.
+Do not explain — design.
+
+Prompt End
+
+
+Promot Start
+
+You are continuing RansomEye v1.0 – Clean-Room Rebuild.
+
+PHASE: 4 — MINIMAL DATA PLANE (ONE EVENT)
+
+PREVIOUS PHASES (FROZEN):
+
+Phase 1: System Contracts
+
+Phase 2: Database Schema
+
+Phase 3: Installer Contracts
+
+HARD RULES (NON-NEGOTIABLE)
+
+❌ No correlation engine
+
+❌ No AI / ML / LLM
+
+❌ No enrichment
+
+❌ No heuristics
+
+❌ No retries
+
+❌ No buffering
+
+❌ No background threads
+
+❌ No filesystem/process monitoring
+
+❌ No installer code
+
+❌ No schema changes
+
+❌ No contract changes
+
+This phase exists only to prove:
+
+One valid event → validated → stored → queryable
+
+COMPONENT 1 — LINUX AGENT (MINIMAL)
+Allowed Language
+
+Rust only
+
+Responsibilities (ONLY)
+
+Read environment variables defined in env.contract.json
+
+Construct exact canonical event envelope
+
+Populate:
+
+event_id
+
+machine_id
+
+component = linux_agent
+
+component_instance_id
+
+observed_at
+
+sequence = 1
+
+identity.*
+
+integrity.hash_sha256
+
+payload may contain one dummy key/value (explicitly allowed for this phase)
+
+Transmit event to Ingest over HTTP
+
+Forbidden
+
+No local persistence
+
+No retries
+
+No batching
+
+No enrichment
+
+No inference
+
+Deliver:
+
+Minimal Rust binary
+
+Clear module structure
+
+Inline comments explaining contract compliance
+
+COMPONENT 2 — INGEST SERVICE (MINIMAL)
+Allowed Language
+
+Python 3.10+ only
+
+Responsibilities (ONLY)
+
+Accept event via HTTP
+
+Validate against:
+
+event-envelope.schema.json
+
+time-semantics.policy.json
+
+Verify hash integrity
+
+Detect duplicates (event_id + sequence)
+
+Write to:
+
+machines
+
+component_instances
+
+raw_events
+
+event_validation_log
+
+Forbidden
+
+No correlation
+
+No enrichment
+
+No retry logic
+
+No background jobs
+
+No AI
+
+No assumptions
+
+OUTPUT FORMAT (MANDATORY)
+/services/
+  linux-agent/
+    src/
+    Cargo.toml
+    README.md
+
+  ingest/
+    app/
+    requirements.txt
+    README.md
+
+
+Each README must explain:
+
+What this component does
+
+What it explicitly does NOT do
+
+How it proves Phase 4 correctness
+
+VALIDATION CRITERIA (PASS / FAIL)
+
+PASS only if:
+
+One event is accepted
+
+One row exists in raw_events
+
+Hash chain is valid
+
+No other tables are touched
+
+Restarting ingest does NOT duplicate data
+
+FAIL if:
+
+Anything “helpful” is added
+
+Any future logic leaks in
+
+Begin immediately.
+Do not explain — implement exactly.
+
+Prompt End
+
+
+Promot Start
+
+You are continuing RansomEye v1.0 – Clean-Room Rebuild.
+
+PHASE: 5 — CORRELATION ENGINE (DETERMINISTIC)
+
+PREVIOUS PHASES (FROZEN):
+
+Phase 1: System Contracts
+
+Phase 2: Database Schema
+
+Phase 3: Installer Contracts
+
+Phase 4: Minimal Data Plane
+
+HARD RULES (NON-NEGOTIABLE)
+
+❌ No AI / ML / LLM
+
+❌ No time-window dependency
+
+❌ No probabilistic logic
+
+❌ No heuristics
+
+❌ No enrichment
+
+❌ No retries
+
+❌ No background threads
+
+❌ No async
+
+❌ No schema changes
+
+❌ No contract changes
+
+This engine must be purely deterministic.
+
+OBJECTIVE
+
+Implement the minimal deterministic correlation engine that:
+
+Consumes validated events
+
+Applies explicit contradiction rules
+
+Produces at most one incident per event
+
+INPUT
+
+Read from:
+
+raw_events
+
+Normalized tables (if required)
+
+Use only persisted facts
+
+DETECTION MODEL (MINIMAL)
+
+For this phase, define exactly ONE rule:
+
+If a Linux Agent event exists with component = linux_agent,
+THEN:
+
+Either create zero incidents, OR
+
+Create exactly one incident with:
+
+stage = Suspicious
+
+confidence = deterministic constant (e.g. 0.3)
+
+No additional logic is allowed.
+
+INCIDENT REQUIREMENTS
+
+When an incident is created:
+
+Insert into incidents
+
+Insert initial stage into incident_stages
+
+Link triggering event in evidence
+
+All writes must be atomic (single transaction)
+
+OUTPUT FORMAT (MANDATORY)
+/services/
+  correlation-engine/
+    app/
+      main.py
+      rules.py
+      db.py
+    requirements.txt
+    README.md
+
+README MUST EXPLICITLY STATE
+
+What rules exist
+
+Why rules are deterministic
+
+What this engine does NOT do
+
+Why time is NOT required for correctness
+
+VALIDATION (PASS / FAIL)
+
+PASS only if:
+
+One event → ≤ 1 incident
+
+Restarting engine does NOT duplicate incidents
+
+No time-window logic exists
+
+No ML/AI imports exist
+
+No retries or background jobs exist
+
+FAIL if:
+
+Engine waits for more data
+
+Engine uses time windows
+
+Engine attempts “confidence tuning”
+
+Begin immediately.
+Do not explain — implement exactly.
+
+Prompt End
+
+
+Promot Start
+
+You are continuing RansomEye v1.0 – Clean-Room Rebuild.
+
+PHASE: 6 — AI CORE (READ-ONLY, NON-BLOCKING)
+
+PREVIOUS PHASES (FROZEN):
+
+Phase 1: System Contracts
+
+Phase 2: Database Schema
+
+Phase 3: Installer Contracts
+
+Phase 4: Minimal Data Plane
+
+Phase 5: Deterministic Correlation Engine
+
+HARD RULES (NON-NEGOTIABLE)
+
+❌ AI must NOT create incidents
+
+❌ AI must NOT modify incidents
+
+❌ AI must NOT block pipeline
+
+❌ AI must NOT require real-time inference
+
+❌ AI must NOT be in data plane
+
+❌ No deep learning
+
+❌ No retries
+
+❌ No background schedulers
+
+❌ No schema changes
+
+❌ No contract changes
+
+The system must remain fully correct if AI is disabled.
+
+OBJECTIVE
+
+Implement the minimal AI Core that operates in read-only advisory mode.
+
+The AI Core must:
+
+Consume existing incidents
+
+Perform offline, batch analysis
+
+Produce metadata only
+
+AI FUNCTIONS (MINIMAL, REQUIRED)
+
+Implement exactly three capabilities:
+
+1. Feature Extraction (Deterministic)
+
+Derive numeric features from:
+
+incident confidence
+
+incident stage
+
+evidence count
+
+Persist feature vector references only
+
+2. Unsupervised Clustering
+
+Use scikit-learn (e.g., KMeans or DBSCAN)
+
+Cluster incidents
+
+Persist:
+
+cluster_id
+
+model_version
+
+incident ↔ cluster mapping
+
+3. Explainability (SHAP)
+
+Generate SHAP explanations for:
+
+confidence contribution
+
+evidence contribution
+
+Store references only, not raw arrays
+
+OUTPUT FORMAT (MANDATORY)
+/services/
+  ai-core/
+    app/
+      main.py
+      feature_extraction.py
+      clustering.py
+      shap_explainer.py
+      db.py
+    requirements.txt
+    README.md
+
+README MUST EXPLICITLY STATE
+
+AI is read-only
+
+AI cannot block or decide
+
+AI output is advisory only
+
+System remains correct without AI
+
+VALIDATION (PASS / FAIL)
+
+PASS only if:
+
+Incidents are unchanged
+
+Only AI metadata tables are written
+
+Disabling AI has zero impact on detection
+
+SHAP output is generated per run
+
+Models are versioned and reproducible
+
+FAIL if:
+
+AI touches facts
+
+AI alters incident state
+
+AI introduces timing dependency
+
+AI blocks pipeline
+
+Begin immediately.
+Do not explain — implement exactly.
+
+Prompt End
+
+
+Promot Start
+
+You are continuing RansomEye v1.0 – Clean-Room Rebuild.
+
+PHASE: 7 — POLICY ENGINE (SIMULATION-FIRST)
+
+PREVIOUS PHASES (FROZEN):
+
+Phase 1: System Contracts
+
+Phase 2: Database Schema
+
+Phase 3: Installer Contracts
+
+Phase 4: Minimal Data Plane
+
+Phase 5: Deterministic Correlation Engine
+
+Phase 6: AI Core (Read-Only)
+
+HARD RULES (NON-NEGOTIABLE)
+
+❌ No automatic enforcement
+
+❌ No agent execution
+
+❌ No incident modification
+
+❌ No AI / ML / LLM
+
+❌ No background schedulers
+
+❌ No async
+
+❌ No schema changes
+
+❌ No contract changes
+
+Policy Engine operates in SIMULATION MODE BY DEFAULT.
+
+OBJECTIVE
+
+Implement the minimal Policy Engine that:
+
+Consumes existing incidents
+
+Evaluates explicit policy rules
+
+Produces policy decisions and simulations
+
+Signs commands without executing them
+
+POLICY MODEL (MINIMAL)
+
+Define exactly ONE policy rule:
+
+IF incident.stage == SUSPICIOUS
+THEN recommend action: ISOLATE_HOST
+
+Rules:
+
+Recommendation only
+
+No execution
+
+Deterministic (no time, no probability)
+
+COMMAND MODEL
+
+When a policy decision is made:
+
+Generate a command payload:
+
+command_type
+
+target_machine_id
+
+incident_id
+
+issued_at
+
+Cryptographically sign the command
+
+Store signed command in DB
+
+DO NOT send to agents
+
+OUTPUT FORMAT (MANDATORY)
+/services/
+  policy-engine/
+    app/
+      main.py
+      rules.py
+      signer.py
+      db.py
+    requirements.txt
+    README.md
+
+README MUST EXPLICITLY STATE
+
+Policy is simulation-first
+
+No commands are executed
+
+Enforcement is disabled by default
+
+All commands are signed and auditable
+
+System correctness does not depend on policy engine
+
+VALIDATION (PASS / FAIL)
+
+PASS only if:
+
+Incidents are unchanged
+
+Policy decisions are recorded
+
+Signed commands are generated
+
+No enforcement occurs
+
+Disabling policy engine has zero impact
+
+FAIL if:
+
+Any command is executed
+
+Any agent is contacted
+
+Incident state is modified
+
+Enforcement occurs implicitly
+
+Begin immediately.
+Do not explain — implement exactly.
+
+Prompt End
+
+
+
+Promot Start
+
+You are continuing RansomEye v1.0 – Clean-Room Rebuild.
+
+PHASE: 8 — SOC UI (READ-ONLY)
+
+PREVIOUS PHASES (FROZEN):
+
+Phase 1: System Contracts
+
+Phase 2: Database Schema
+
+Phase 3: Installer Contracts
+
+Phase 4: Minimal Data Plane
+
+Phase 5: Correlation Engine
+
+Phase 6: AI Core (Read-Only)
+
+Phase 7: Policy Engine (Simulation-First)
+
+HARD RULES (NON-NEGOTIABLE)
+
+❌ UI must NOT write to DB
+
+❌ UI must NOT query base tables
+
+❌ UI must NOT infer state
+
+❌ UI must NOT trigger actions
+
+❌ UI must NOT contain policy logic
+
+❌ UI must NOT contain AI logic
+
+❌ No schema changes
+
+❌ No contract changes
+
+UI is OBSERVATIONAL ONLY.
+
+OBJECTIVE
+
+Implement the minimal SOC UI that provides read-only visibility into system state.
+
+REQUIRED DB VIEWS (MUST DEFINE)
+
+Define READ-ONLY SQL VIEWS for:
+
+v_active_incidents
+
+incident_id
+
+machine_id
+
+stage
+
+confidence
+
+created_at
+
+v_incident_timeline
+
+incident_id
+
+stage
+
+transitioned_at
+
+v_incident_evidence_summary
+
+incident_id
+
+evidence_count
+
+v_policy_recommendations
+
+incident_id
+
+recommended_action
+
+simulation_mode
+
+created_at
+
+v_ai_insights
+
+incident_id
+
+cluster_id
+
+novelty_score
+
+shap_summary
+
+UI FEATURES (MINIMAL)
+Dashboards
+
+Incident list (from v_active_incidents)
+
+Incident detail view:
+
+Timeline
+
+Evidence count
+
+AI insights
+
+Policy recommendations
+
+Constraints
+
+No edits
+
+No buttons that execute actions
+
+No “acknowledge”, “resolve”, or “close”
+
+OUTPUT FORMAT (MANDATORY)
+/services/
+  ui/
+    backend/
+      main.py
+      views.sql
+      requirements.txt
+    frontend/
+      src/
+      package.json
+      README.md
+    README.md
+
+README MUST EXPLICITLY STATE
+
+UI is read-only
+
+UI does not affect pipeline
+
+UI reads from DB views only
+
+System correctness is independent of UI
+
+VALIDATION (PASS / FAIL)
+
+PASS only if:
+
+UI reads ONLY from views
+
+UI cannot modify data
+
+UI can be disabled without impact
+
+No table writes exist
+
+FAIL if:
+
+Any DB write exists
+
+Any base table is queried
+
+Any action can be triggered
+
+Begin immediately.
+Do not explain — implement exactly.
+
+Prompt End
+
+
+Promot Start
+
+You are continuing RansomEye v1.0 – Clean-Room Rebuild.
+
+PHASE: 9 — VALIDATION HARNESS (WRITTEN FIRST)
+
+PREVIOUS PHASES (FROZEN):
+
+Phase 1: System Contracts
+
+Phase 2: Database Schema
+
+Phase 3: Installer Contracts
+
+Phase 4: Minimal Data Plane
+
+Phase 5: Correlation Engine
+
+Phase 6: AI Core (Read-Only)
+
+Phase 7: Policy Engine (Simulation-First)
+
+Phase 8: SOC UI (Read-Only)
+
+HARD RULES (NON-NEGOTIABLE)
+
+❌ No service logic
+
+❌ No mocks of core logic
+
+❌ No sleeps / timing hacks
+
+❌ No randomness
+
+❌ No skipping failures
+
+❌ No schema changes
+
+❌ No contract changes
+
+Validation must assert real system behavior.
+
+OBJECTIVE
+
+Implement the authoritative validation harness that proves end-to-end correctness of RansomEye v1.0.
+
+VALIDATION CASES (ALL REQUIRED)
+
+Implement tests for:
+
+Cold start correctness
+
+Zero-event correctness
+
+One-event correctness
+
+Duplicate event handling
+
+Failure semantics enforcement
+
+Subsystem disablement (AI, Policy, UI)
+
+Each test must:
+
+Set up environment
+
+Execute scenario
+
+Assert DB state
+
+Assert logs / exit codes
+
+Clean up
+
+OUTPUT FORMAT (MANDATORY)
+/validation/
+  harness/
+    test_cold_start.py
+    test_zero_event.py
+    test_one_event.py
+    test_duplicates.py
+    test_failure_semantics.py
+    test_subsystem_disablement.py
+  README.md
+
+README MUST EXPLICITLY STATE
+
+What is validated
+
+Why failures block release
+
+How to run validation
+
+Determinism guarantees
+
+PASS / FAIL CRITERIA
+
+PASS only if:
+
+All tests pass consistently
+
+Results are deterministic
+
+System is left clean
+
+No silent failures exist
+
+FAIL if:
+
+Any nondeterminism
+
+Any skipped test
+
+Any silent error
+
+Begin immediately.
+Do not explain — implement exactly.
+
+Prompt End
+
+
+Promot Start
+
+You are continuing RansomEye v1.0 – Clean-Room Rebuild.
+
+PHASE: 9.1 — VALIDATION HARDENING (MANDATORY CORRECTION)
+
+HARD RULES (NON-NEGOTIABLE)
+
+❌ NO synthetic events
+
+❌ NO fabricated UUIDs
+
+❌ NO prebuilt payloads
+
+❌ NO fixed timestamps
+
+❌ NO dummy data of any kind
+
+Validation must observe real system behavior only.
+
+OBJECTIVE
+
+Refactor the existing Phase 9 validation harness to meet military-grade forensic correctness.
+
+REQUIRED CHANGES
+1. Linux Agent–Driven Validation
+
+Validation must:
+
+Launch the real Linux Agent binary
+
+Wait for agent to emit one real event
+
+Observe resulting DB state
+
+No manual event construction allowed.
+
+2. Replace Fixed Assertions
+
+Replace:
+
+Fixed UUID checks
+
+Fixed timestamp checks
+
+With:
+
+Structural assertions
+
+Cardinality assertions
+
+Contract compliance assertions
+
+Integrity chain verification
+
+3. Policy & AI Validation Tightening
+
+Validation must:
+
+Verify signed command exists
+
+Verify signature cryptographically
+
+Verify command was not executed
+
+Verify AI metadata exists or not, without inspecting content
+
+OUTPUT
+
+Modify only files under:
+
+/validation/harness/
+
+
+No schema changes.
+No service changes.
+No contract changes.
+
+PASS CRITERIA
+
+PASS only if:
+
+Validation uses real agents
+
+No synthetic data exists
+
+All assertions are observational
+
+Results remain deterministic
+
+System remains clean
+
+Begin immediately.
+Do not explain — fix it.
+
+Prompt End
+
+
+
+Promot Start*
+
+You are continuing RansomEye v1.0 – Clean-Room Rebuild.
+
+PHASE: 10.1 — CORE RUNTIME HARDENING (STARTUP & SHUTDOWN)
+
+STRICT CONTEXT (DO NOT VIOLATE)
+
+You are hardening RansomEye Core, not individual services.
+
+Ingest, Correlation, AI Core, Policy Engine, UI Backend run inside one Core runtime.
+
+❌ NO systemd files
+
+❌ NO standalone service assumptions
+
+❌ NO new features
+
+❌ NO retries
+
+❌ NO schema or contract changes
+
+OBJECTIVE (ONLY THIS)
+
+Harden startup and shutdown behavior for RansomEye Core components.
+
+COMPONENTS IN SCOPE
+
+Inside Core:
+
+Ingest
+
+Correlation Engine
+
+AI Core
+
+Policy Engine
+
+UI Backend
+
+Treat them as modules, not services.
+
+REQUIRED HARDENING (IMPLEMENT ALL)
+1. Startup Validation (MANDATORY)
+
+On Core startup:
+
+Validate all required environment variables
+
+Validate DB connectivity
+
+Validate schema presence
+
+Validate write permissions where applicable
+
+Validate read-only enforcement where applicable
+
+If ANY check fails:
+
+Log explicit error
+
+Exit process immediately (non-zero)
+
+2. Fail-Fast Invariants
+
+Add invariant checks that terminate Core immediately if violated:
+
+Missing env var
+
+DB connection failure
+
+Schema mismatch
+
+Unauthorized write attempt (read-only module)
+
+Duplicate incident creation attempt
+
+No recovery. No retry.
+
+3. Graceful Shutdown
+
+On SIGTERM / SIGINT:
+
+Stop accepting new work
+
+Finish in-flight DB transactions
+
+Close DB connections cleanly
+
+Exit cleanly with log confirmation
+
+OUTPUT CONSTRAINTS
+
+Modify existing Core code only
+
+Do NOT create new processes
+
+Do NOT introduce background schedulers
+
+Do NOT add retries
+
+Do NOT add systemd files
+
+Each modified Core module must update its README with a new section:
+
+Operational Hardening Guarantees
+PASS CRITERIA
+
+PASS only if:
+
+Core fails immediately on bad config
+
+Core shuts down cleanly
+
+No partial state possible
+
+No retries hide failures
+
+Begin immediately.
+Do not explain.
+Implement only what is asked.
+
+Promot end*
+
+
+Promot Start*
+
+You are continuing RansomEye v1.0 – Enterprise & Military-Grade Build.
+
+WORK UNIT: Database Hardening & Transaction Safety
+(Do NOT use phase numbers anywhere)
+
+STRICT CONTEXT (DO NOT VIOLATE)
+
+This applies to RansomEye Core database usage
+
+Core runs as one unified runtime
+
+❌ No schema changes
+
+❌ No contract changes
+
+❌ No retry loops
+
+❌ No silent fallbacks
+
+❌ No per-module DB ownership confusion
+
+OBJECTIVE (ONLY THIS)
+
+Harden all database interactions to ensure:
+
+Atomicity
+
+Consistency
+
+Explicit failure behavior
+
+Zero partial state
+
+Deterministic outcomes under failure
+
+COMPONENTS IN SCOPE (CORE)
+
+Ingest
+
+Correlation Engine
+
+AI Core
+
+Policy Engine
+
+UI Backend (read-only)
+
+REQUIRED HARDENING (IMPLEMENT ALL)
+1. Transaction Discipline (MANDATORY)
+
+For every DB write path:
+
+Explicit transaction begin
+
+Explicit commit on success
+
+Explicit rollback on failure
+
+No implicit autocommit behavior
+
+If rollback fails → terminate Core.
+
+2. Isolation & Consistency
+
+Explicitly set isolation level at connection creation
+
+Log isolation level at startup
+
+Reject runtime if isolation cannot be enforced
+
+3. Deadlock & Integrity Detection
+
+Detect and fail fast on:
+
+Serialization failures
+
+Deadlocks
+
+Foreign-key violations
+
+Unique-constraint violations
+
+No retries.
+Log → terminate.
+
+4. Connection Safety
+
+Validate connection health before each critical operation
+
+Detect dropped connections
+
+Fail immediately on broken connection
+
+No reconnection loops
+
+5. Read-Only Enforcement (UI & AI)
+
+Explicitly open read-only DB sessions
+
+Abort process if write attempt occurs
+
+Log security-grade error
+
+OUTPUT CONSTRAINTS
+
+Modify existing DB access layers only
+
+No new abstractions unless required for safety
+
+No background workers
+
+No schedulers
+
+Each modified component must update its README:
+
+Database Safety & Transaction Guarantees
+PASS CRITERIA
+
+PASS only if:
+
+No partial writes possible
+
+All failures are explicit and fatal
+
+Isolation level is enforced and logged
+
+Read-only violations terminate immediately
+
+System behavior is deterministic under DB failure
+
+Begin immediately.
+Do not explain.
+Do not refactor unrelated code.
+Harden the database interactions only.
+
+Promot end*
+
+
+
+
+Promot Start*
+
+You are continuing RansomEye v1.0 – Enterprise & Military-Grade Build.
+
+WORK UNIT: Database Safety Completion (AI Core, Policy Engine, UI Backend)
+
+STRICT CONTEXT (DO NOT VIOLATE)
+
+Database schema is frozen
+
+Contracts are frozen
+
+Core runs as one unified runtime
+
+❌ No retries
+
+❌ No silent failures
+
+❌ No best-effort fallbacks
+
+❌ No new abstractions beyond existing common/db/safety.py
+
+OBJECTIVE (ONLY THIS)
+
+Complete database hardening for remaining Core modules using the existing safety utilities.
+
+COMPONENT-SPECIFIC REQUIREMENTS
+1. AI Core
+
+File:
+services/ai-core/app/db.py
+
+Required changes:
+
+All read paths must use create_readonly_connection()
+
+All write paths must use execute_write_operation()
+
+Enforce isolation level
+
+Abort Core on:
+
+Deadlock
+
+Integrity violation
+
+Unauthorized write attempt
+
+2. Policy Engine
+
+File:
+services/policy-engine/app/db.py
+
+Required changes:
+
+Use read-only connections only
+
+Enforce read-only mode explicitly
+
+Abort Core if any write is attempted
+
+Policy Engine must never write to DB.
+
+3. UI Backend
+
+File:
+services/ui/backend/main.py
+
+Required changes:
+
+Enforce read-only DB connections at pool level
+
+Ensure query_view() cannot execute writes
+
+Any write attempt → immediate Core termination
+
+4. Documentation (MANDATORY)
+
+Update README for:
+
+AI Core
+
+Policy Engine
+
+UI Backend
+
+Add section:
+
+Database Safety & Transaction Guarantees
+
+Must explicitly state:
+
+Isolation level enforcement
+
+Explicit transaction behavior
+
+Read-only enforcement (where applicable)
+
+Fail-fast semantics
+
+No retries, no partial state
+
+No fluff. No marketing.
+
+PASS CRITERIA
+
+PASS only if:
+
+AI Core writes are fully transaction-safe
+
+Policy Engine cannot write under any condition
+
+UI Backend is read-only by construction
+
+Any DB misuse terminates Core
+
+All READMEs updated correctly
+
+Begin immediately.
+Do not refactor unrelated code.
+Do not summarize.
+Finish database hardening cleanly.
+
+Promot end*
+
+
+
+
+Promot Start*
+
+You are continuing RansomEye v1.0 – Enterprise & Military-Grade Build.
+
+WORK UNIT: Resource & Disk Safety Hardening
+
+STRICT CONTEXT (DO NOT VIOLATE)
+
+Applies to RansomEye Core runtime
+
+Core runs as one unified process
+
+❌ No schema changes
+
+❌ No contract changes
+
+❌ No retries
+
+❌ No background schedulers
+
+❌ No new features
+
+This is safety hardening only.
+
+OBJECTIVE (ONLY THIS)
+
+Harden Core against resource exhaustion and disk failures so the system fails explicitly and safely, never silently.
+
+COMPONENTS IN SCOPE (CORE)
+
+Ingest
+
+Correlation Engine
+
+AI Core
+
+Policy Engine
+
+UI Backend
+
+REQUIRED HARDENING (IMPLEMENT ALL)
+1. Disk Safety (MANDATORY)
+
+Implement explicit checks and fail-fast behavior for:
+
+Disk full conditions
+
+Permission denied (logs, temp, runtime dirs)
+
+Read-only filesystem
+
+Rules:
+
+Detect error at write attempt
+
+Log explicit error
+
+Terminate Core immediately
+
+No retries, no degradation
+
+2. Log Safety
+
+Prevent unbounded log growth
+
+Enforce size limits or rotation without losing critical errors
+
+If logging fails → terminate Core (fail-fast)
+
+No silent logging failures.
+
+3. File Descriptor & Resource Limits
+
+Detect exhaustion of file descriptors
+
+Detect inability to open files/sockets
+
+Fail fast with explicit error
+
+4. Memory Safety (BASIC, NOT OPTIMIZATION)
+
+Detect MemoryError / allocation failures
+
+Abort Core immediately on memory allocation failure
+
+No swap-based survival logic
+
+OUTPUT CONSTRAINTS
+
+Modify existing code paths only
+
+Use explicit exception handling
+
+No new abstractions unless strictly required for safety
+
+No platform-specific hacks
+
+Each modified component must update its README with a section:
+
+Resource & Disk Safety Guarantees
+PASS CRITERIA
+
+PASS only if:
+
+Disk full causes explicit termination
+
+Logging failure causes explicit termination
+
+Resource exhaustion causes explicit termination
+
+No silent degradation paths exist
+
+Behavior is deterministic under resource failure
+
+Begin immediately.
+Do not explain.
+Do not refactor unrelated code.
+Harden resource and disk safety only.
+
+Promot end*
+
+
+Promot Start*
+
+You are continuing RansomEye v1.0 – Enterprise & Military-Grade Build.
+
+WORK UNIT: Security Hardening (Secrets, Redaction, Signing Discipline)
+
+STRICT CONTEXT (DO NOT VIOLATE)
+
+Applies to RansomEye Core runtime
+
+Core runs as one unified process
+
+❌ No schema changes
+
+❌ No contract changes
+
+❌ No new features
+
+❌ No retries
+
+❌ No background schedulers
+
+❌ No standalone services added
+
+Security hygiene only.
+
+OBJECTIVE (ONLY THIS)
+
+Eliminate secret leakage risks and enforce cryptographic discipline across Core.
+
+COMPONENTS IN SCOPE (CORE)
+
+Ingest
+
+Correlation Engine
+
+AI Core
+
+Policy Engine
+
+UI Backend
+
+Common logging & config utilities
+
+REQUIRED HARDENING (IMPLEMENT ALL)
+1. Secrets Handling (MANDATORY)
+
+All secrets only from environment variables
+
+No secrets in:
+
+Code
+
+Config files
+
+Logs
+
+Exceptions
+
+Validate presence and format at startup
+
+If a required secret is missing or malformed → terminate Core immediately
+
+2. Log Redaction (MANDATORY)
+
+Implement centralized redaction for:
+
+DB credentials
+
+API tokens
+
+Signing keys
+
+Any value matching secret patterns
+
+Ensure:
+
+Secrets never appear in logs
+
+Stack traces are sanitized
+
+Any attempt to log a secret → terminate Core
+
+3. Signing Discipline (Policy Engine)
+
+Ensure command signing keys:
+
+Are read once at startup
+
+Never logged
+
+Never reloaded dynamically
+
+Validate key strength and format
+
+Fail fast on weak/invalid keys
+
+4. Untrusted Input Handling (AI & UI)
+
+Treat AI metadata and UI inputs as untrusted
+
+Validate types and bounds before processing
+
+Abort Core on malformed or unexpected structures
+
+OUTPUT CONSTRAINTS
+
+Modify existing code paths only
+
+No new crypto schemes
+
+Use existing libraries already in use
+
+No platform-specific hacks
+
+Each modified component must update its README with:
+
+Security & Secrets Handling Guarantees
+PASS CRITERIA
+
+PASS only if:
+
+No secrets can be logged
+
+Missing/weak secrets terminate Core
+
+Signing keys are handled once, securely
+
+Malformed untrusted input terminates Core
+
+Behavior is deterministic and explicit
+
+Begin immediately.
+Do not explain.
+Do not refactor unrelated code.
+Harden security hygiene only.
+
+Promot end*
+
+
+

@@ -1,0 +1,144 @@
+Promot Start
+
+You are continuing RansomEye v1.0 – Clean-Room Rebuild.
+
+PHASE: 6 — AI CORE (READ-ONLY, NON-BLOCKING)
+
+PREVIOUS PHASES (FROZEN):
+
+Phase 1: System Contracts
+
+Phase 2: Database Schema
+
+Phase 3: Installer Contracts
+
+Phase 4: Minimal Data Plane
+
+Phase 5: Deterministic Correlation Engine
+
+HARD RULES (NON-NEGOTIABLE)
+
+❌ AI must NOT create incidents
+
+❌ AI must NOT modify incidents
+
+❌ AI must NOT block pipeline
+
+❌ AI must NOT require real-time inference
+
+❌ AI must NOT be in data plane
+
+❌ No deep learning
+
+❌ No retries
+
+❌ No background schedulers
+
+❌ No schema changes
+
+❌ No contract changes
+
+The system must remain fully correct if AI is disabled.
+
+OBJECTIVE
+
+Implement the minimal AI Core that operates in read-only advisory mode.
+
+The AI Core must:
+
+Consume existing incidents
+
+Perform offline, batch analysis
+
+Produce metadata only
+
+AI FUNCTIONS (MINIMAL, REQUIRED)
+
+Implement exactly three capabilities:
+
+1. Feature Extraction (Deterministic)
+
+Derive numeric features from:
+
+incident confidence
+
+incident stage
+
+evidence count
+
+Persist feature vector references only
+
+2. Unsupervised Clustering
+
+Use scikit-learn (e.g., KMeans or DBSCAN)
+
+Cluster incidents
+
+Persist:
+
+cluster_id
+
+model_version
+
+incident ↔ cluster mapping
+
+3. Explainability (SHAP)
+
+Generate SHAP explanations for:
+
+confidence contribution
+
+evidence contribution
+
+Store references only, not raw arrays
+
+OUTPUT FORMAT (MANDATORY)
+/services/
+  ai-core/
+    app/
+      main.py
+      feature_extraction.py
+      clustering.py
+      shap_explainer.py
+      db.py
+    requirements.txt
+    README.md
+
+README MUST EXPLICITLY STATE
+
+AI is read-only
+
+AI cannot block or decide
+
+AI output is advisory only
+
+System remains correct without AI
+
+VALIDATION (PASS / FAIL)
+
+PASS only if:
+
+Incidents are unchanged
+
+Only AI metadata tables are written
+
+Disabling AI has zero impact on detection
+
+SHAP output is generated per run
+
+Models are versioned and reproducible
+
+FAIL if:
+
+AI touches facts
+
+AI alters incident state
+
+AI introduces timing dependency
+
+AI blocks pipeline
+
+Begin immediately.
+Do not explain — implement exactly.
+
+Prompt End

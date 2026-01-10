@@ -1,0 +1,119 @@
+Promot Start
+
+You are continuing RansomEye v1.0 – Clean-Room Rebuild.
+
+PHASE: 9 — VALIDATION HARNESS (WRITTEN FIRST)
+
+PREVIOUS PHASES (FROZEN):
+
+Phase 1: System Contracts
+
+Phase 2: Database Schema
+
+Phase 3: Installer Contracts
+
+Phase 4: Minimal Data Plane
+
+Phase 5: Correlation Engine
+
+Phase 6: AI Core (Read-Only)
+
+Phase 7: Policy Engine (Simulation-First)
+
+Phase 8: SOC UI (Read-Only)
+
+HARD RULES (NON-NEGOTIABLE)
+
+❌ No service logic
+
+❌ No mocks of core logic
+
+❌ No sleeps / timing hacks
+
+❌ No randomness
+
+❌ No skipping failures
+
+❌ No schema changes
+
+❌ No contract changes
+
+Validation must assert real system behavior.
+
+OBJECTIVE
+
+Implement the authoritative validation harness that proves end-to-end correctness of RansomEye v1.0.
+
+VALIDATION CASES (ALL REQUIRED)
+
+Implement tests for:
+
+Cold start correctness
+
+Zero-event correctness
+
+One-event correctness
+
+Duplicate event handling
+
+Failure semantics enforcement
+
+Subsystem disablement (AI, Policy, UI)
+
+Each test must:
+
+Set up environment
+
+Execute scenario
+
+Assert DB state
+
+Assert logs / exit codes
+
+Clean up
+
+OUTPUT FORMAT (MANDATORY)
+/validation/
+  harness/
+    test_cold_start.py
+    test_zero_event.py
+    test_one_event.py
+    test_duplicates.py
+    test_failure_semantics.py
+    test_subsystem_disablement.py
+  README.md
+
+README MUST EXPLICITLY STATE
+
+What is validated
+
+Why failures block release
+
+How to run validation
+
+Determinism guarantees
+
+PASS / FAIL CRITERIA
+
+PASS only if:
+
+All tests pass consistently
+
+Results are deterministic
+
+System is left clean
+
+No silent failures exist
+
+FAIL if:
+
+Any nondeterminism
+
+Any skipped test
+
+Any silent error
+
+Begin immediately.
+Do not explain — implement exactly.
+
+Prompt End

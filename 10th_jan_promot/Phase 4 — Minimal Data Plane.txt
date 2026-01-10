@@ -1,0 +1,183 @@
+Promot Start
+
+You are continuing RansomEye v1.0 – Clean-Room Rebuild.
+
+PHASE: 4 — MINIMAL DATA PLANE (ONE EVENT)
+
+PREVIOUS PHASES (FROZEN):
+
+Phase 1: System Contracts
+
+Phase 2: Database Schema
+
+Phase 3: Installer Contracts
+
+HARD RULES (NON-NEGOTIABLE)
+
+❌ No correlation engine
+
+❌ No AI / ML / LLM
+
+❌ No enrichment
+
+❌ No heuristics
+
+❌ No retries
+
+❌ No buffering
+
+❌ No background threads
+
+❌ No filesystem/process monitoring
+
+❌ No installer code
+
+❌ No schema changes
+
+❌ No contract changes
+
+This phase exists only to prove:
+
+One valid event → validated → stored → queryable
+
+COMPONENT 1 — LINUX AGENT (MINIMAL)
+Allowed Language
+
+Rust only
+
+Responsibilities (ONLY)
+
+Read environment variables defined in env.contract.json
+
+Construct exact canonical event envelope
+
+Populate:
+
+event_id
+
+machine_id
+
+component = linux_agent
+
+component_instance_id
+
+observed_at
+
+sequence = 1
+
+identity.*
+
+integrity.hash_sha256
+
+payload may contain one dummy key/value (explicitly allowed for this phase)
+
+Transmit event to Ingest over HTTP
+
+Forbidden
+
+No local persistence
+
+No retries
+
+No batching
+
+No enrichment
+
+No inference
+
+Deliver:
+
+Minimal Rust binary
+
+Clear module structure
+
+Inline comments explaining contract compliance
+
+COMPONENT 2 — INGEST SERVICE (MINIMAL)
+Allowed Language
+
+Python 3.10+ only
+
+Responsibilities (ONLY)
+
+Accept event via HTTP
+
+Validate against:
+
+event-envelope.schema.json
+
+time-semantics.policy.json
+
+Verify hash integrity
+
+Detect duplicates (event_id + sequence)
+
+Write to:
+
+machines
+
+component_instances
+
+raw_events
+
+event_validation_log
+
+Forbidden
+
+No correlation
+
+No enrichment
+
+No retry logic
+
+No background jobs
+
+No AI
+
+No assumptions
+
+OUTPUT FORMAT (MANDATORY)
+/services/
+  linux-agent/
+    src/
+    Cargo.toml
+    README.md
+
+  ingest/
+    app/
+    requirements.txt
+    README.md
+
+
+Each README must explain:
+
+What this component does
+
+What it explicitly does NOT do
+
+How it proves Phase 4 correctness
+
+VALIDATION CRITERIA (PASS / FAIL)
+
+PASS only if:
+
+One event is accepted
+
+One row exists in raw_events
+
+Hash chain is valid
+
+No other tables are touched
+
+Restarting ingest does NOT duplicate data
+
+FAIL if:
+
+Anything “helpful” is added
+
+Any future logic leaks in
+
+Begin immediately.
+Do not explain — implement exactly.
+
+Prompt End

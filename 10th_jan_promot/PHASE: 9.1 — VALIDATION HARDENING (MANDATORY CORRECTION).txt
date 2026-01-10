@@ -1,0 +1,96 @@
+Promot Start
+
+You are continuing RansomEye v1.0 – Clean-Room Rebuild.
+
+PHASE: 9.1 — VALIDATION HARDENING (MANDATORY CORRECTION)
+
+HARD RULES (NON-NEGOTIABLE)
+
+❌ NO synthetic events
+
+❌ NO fabricated UUIDs
+
+❌ NO prebuilt payloads
+
+❌ NO fixed timestamps
+
+❌ NO dummy data of any kind
+
+Validation must observe real system behavior only.
+
+OBJECTIVE
+
+Refactor the existing Phase 9 validation harness to meet military-grade forensic correctness.
+
+REQUIRED CHANGES
+1. Linux Agent–Driven Validation
+
+Validation must:
+
+Launch the real Linux Agent binary
+
+Wait for agent to emit one real event
+
+Observe resulting DB state
+
+No manual event construction allowed.
+
+2. Replace Fixed Assertions
+
+Replace:
+
+Fixed UUID checks
+
+Fixed timestamp checks
+
+With:
+
+Structural assertions
+
+Cardinality assertions
+
+Contract compliance assertions
+
+Integrity chain verification
+
+3. Policy & AI Validation Tightening
+
+Validation must:
+
+Verify signed command exists
+
+Verify signature cryptographically
+
+Verify command was not executed
+
+Verify AI metadata exists or not, without inspecting content
+
+OUTPUT
+
+Modify only files under:
+
+/validation/harness/
+
+
+No schema changes.
+No service changes.
+No contract changes.
+
+PASS CRITERIA
+
+PASS only if:
+
+Validation uses real agents
+
+No synthetic data exists
+
+All assertions are observational
+
+Results remain deterministic
+
+System remains clean
+
+Begin immediately.
+Do not explain — fix it.
+
+Prompt End

@@ -1,0 +1,138 @@
+Promot Start
+
+You are continuing RansomEye v1.0 – Clean-Room Rebuild.
+
+PHASE: 7 — POLICY ENGINE (SIMULATION-FIRST)
+
+PREVIOUS PHASES (FROZEN):
+
+Phase 1: System Contracts
+
+Phase 2: Database Schema
+
+Phase 3: Installer Contracts
+
+Phase 4: Minimal Data Plane
+
+Phase 5: Deterministic Correlation Engine
+
+Phase 6: AI Core (Read-Only)
+
+HARD RULES (NON-NEGOTIABLE)
+
+❌ No automatic enforcement
+
+❌ No agent execution
+
+❌ No incident modification
+
+❌ No AI / ML / LLM
+
+❌ No background schedulers
+
+❌ No async
+
+❌ No schema changes
+
+❌ No contract changes
+
+Policy Engine operates in SIMULATION MODE BY DEFAULT.
+
+OBJECTIVE
+
+Implement the minimal Policy Engine that:
+
+Consumes existing incidents
+
+Evaluates explicit policy rules
+
+Produces policy decisions and simulations
+
+Signs commands without executing them
+
+POLICY MODEL (MINIMAL)
+
+Define exactly ONE policy rule:
+
+IF incident.stage == SUSPICIOUS
+THEN recommend action: ISOLATE_HOST
+
+Rules:
+
+Recommendation only
+
+No execution
+
+Deterministic (no time, no probability)
+
+COMMAND MODEL
+
+When a policy decision is made:
+
+Generate a command payload:
+
+command_type
+
+target_machine_id
+
+incident_id
+
+issued_at
+
+Cryptographically sign the command
+
+Store signed command in DB
+
+DO NOT send to agents
+
+OUTPUT FORMAT (MANDATORY)
+/services/
+  policy-engine/
+    app/
+      main.py
+      rules.py
+      signer.py
+      db.py
+    requirements.txt
+    README.md
+
+README MUST EXPLICITLY STATE
+
+Policy is simulation-first
+
+No commands are executed
+
+Enforcement is disabled by default
+
+All commands are signed and auditable
+
+System correctness does not depend on policy engine
+
+VALIDATION (PASS / FAIL)
+
+PASS only if:
+
+Incidents are unchanged
+
+Policy decisions are recorded
+
+Signed commands are generated
+
+No enforcement occurs
+
+Disabling policy engine has zero impact
+
+FAIL if:
+
+Any command is executed
+
+Any agent is contacted
+
+Incident state is modified
+
+Enforcement occurs implicitly
+
+Begin immediately.
+Do not explain — implement exactly.
+
+Prompt End

@@ -1,0 +1,123 @@
+Promot Start*
+
+You are continuing RansomEye v1.0 – Clean-Room Rebuild.
+
+PHASE: 10.1 — CORE RUNTIME HARDENING (STARTUP & SHUTDOWN)
+
+STRICT CONTEXT (DO NOT VIOLATE)
+
+You are hardening RansomEye Core, not individual services.
+
+Ingest, Correlation, AI Core, Policy Engine, UI Backend run inside one Core runtime.
+
+❌ NO systemd files
+
+❌ NO standalone service assumptions
+
+❌ NO new features
+
+❌ NO retries
+
+❌ NO schema or contract changes
+
+OBJECTIVE (ONLY THIS)
+
+Harden startup and shutdown behavior for RansomEye Core components.
+
+COMPONENTS IN SCOPE
+
+Inside Core:
+
+Ingest
+
+Correlation Engine
+
+AI Core
+
+Policy Engine
+
+UI Backend
+
+Treat them as modules, not services.
+
+REQUIRED HARDENING (IMPLEMENT ALL)
+1. Startup Validation (MANDATORY)
+
+On Core startup:
+
+Validate all required environment variables
+
+Validate DB connectivity
+
+Validate schema presence
+
+Validate write permissions where applicable
+
+Validate read-only enforcement where applicable
+
+If ANY check fails:
+
+Log explicit error
+
+Exit process immediately (non-zero)
+
+2. Fail-Fast Invariants
+
+Add invariant checks that terminate Core immediately if violated:
+
+Missing env var
+
+DB connection failure
+
+Schema mismatch
+
+Unauthorized write attempt (read-only module)
+
+Duplicate incident creation attempt
+
+No recovery. No retry.
+
+3. Graceful Shutdown
+
+On SIGTERM / SIGINT:
+
+Stop accepting new work
+
+Finish in-flight DB transactions
+
+Close DB connections cleanly
+
+Exit cleanly with log confirmation
+
+OUTPUT CONSTRAINTS
+
+Modify existing Core code only
+
+Do NOT create new processes
+
+Do NOT introduce background schedulers
+
+Do NOT add retries
+
+Do NOT add systemd files
+
+Each modified Core module must update its README with a new section:
+
+Operational Hardening Guarantees
+PASS CRITERIA
+
+PASS only if:
+
+Core fails immediately on bad config
+
+Core shuts down cleanly
+
+No partial state possible
+
+No retries hide failures
+
+Begin immediately.
+Do not explain.
+Implement only what is asked.
+
+Promot end*

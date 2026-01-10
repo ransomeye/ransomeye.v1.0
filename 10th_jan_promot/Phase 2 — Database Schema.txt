@@ -1,0 +1,208 @@
+*****Promot Start*****
+
+You are continuing **RansomEye v1.0 – Clean-Room Rebuild**.
+
+**STRICT CONTEXT (DO NOT VIOLATE):**
+
+* Phase 1 (System Contracts) is **COMPLETE and FROZEN**.
+* You are now entering **PHASE 2 — DATABASE FIRST**.
+* **NO SERVICE CODE IS ALLOWED**.
+* **NO INSTALLER CODE**.
+* **NO AGENT / DPI CODE**.
+* **NO UI CODE**.
+* Database design is **authoritative**; future code must conform to it.
+* If schema changes later without migration + version bump, the schema is invalid.
+
+---
+
+## OBJECTIVE OF THIS PROMPT
+
+Design the **authoritative, production-grade database schema** for **RansomEye v1.0**, aligned **exactly** to the frozen system contracts and threat model.
+
+This schema must support:
+
+* Linux Agent
+* Windows Agent
+* DPI Probe
+* Ingest
+* Correlation Engine
+* AI Core (read-only metadata)
+* SOC UI (read-only views)
+
+---
+
+## HARD DATABASE PHILOSOPHY (NON-NEGOTIABLE)
+
+* Schema is **not derived from code**
+* Code will adapt to schema, not the reverse
+* No dynamic columns
+* No JSON blobs for core facts (JSON only where explicitly justified)
+* Machine-first modeling (host-centric, not event-centric)
+* Time-indexed everywhere
+* Immutable primary keys
+* Explicit foreign keys
+* Deterministic querying
+
+---
+
+## SCOPE (MUST DELIVER ALL)
+
+### 1. Core Identity Tables
+
+Define tables for:
+
+* Machines / Hosts
+* Components (agent / dpi instances)
+* Component identity history (version, boot_id)
+
+Must align with:
+
+* `machine_id`
+* `component`
+* `component_instance_id`
+* `identity.*` fields from the event envelope
+
+---
+
+### 2. Event Storage Model (RAW + NORMALIZED)
+
+Design:
+
+* **Raw event storage** (exact envelope preservation)
+* **Normalized tables** for:
+
+  * Process activity
+  * File activity
+  * Persistence
+  * Network intent (agent-side)
+  * DPI-derived flows
+  * DNS
+  * Deception
+  * Health / heartbeat
+
+Rules:
+
+* Raw events are immutable
+* Normalized tables are query-optimized
+* Every normalized row must reference its raw event
+
+---
+
+### 3. Integrity & Ordering
+
+Schema must explicitly support:
+
+* Event hash chains
+* Sequence monotonicity per component instance
+* Duplicate detection
+* Gap detection
+
+No inference in code — DB must support this natively.
+
+---
+
+### 4. Correlation & Incident Tables
+
+Define tables for:
+
+* Incidents
+* Incident stages (Clean → Suspicious → Probable → Confirmed)
+* Confidence accumulation
+* Evidence linkage (event → incident)
+
+Rules:
+
+* One event can contribute to multiple incidents
+* Incident state transitions must be auditable
+* No deletion of incident history
+
+---
+
+### 5. AI / ML Metadata Tables (READ-ONLY)
+
+Define tables for:
+
+* Feature vectors (references only)
+* Clusters
+* Novelty scores
+* SHAP explanations (references, not blobs)
+
+Rules:
+
+* AI NEVER writes facts
+* AI NEVER mutates incidents
+* Metadata only, versioned
+
+---
+
+### 6. Indexing, Partitioning & Retention
+
+For every table:
+
+* Primary key
+* Foreign keys
+* Mandatory indexes
+* Time partitioning strategy
+* Retention policy (hot / warm / cold)
+
+No hand-waving. Be explicit.
+
+---
+
+### 7. Schema Freeze Artifacts
+
+Produce:
+
+* Versioned schema definition (DDL)
+* Schema hash placeholder
+* Migration rules (what constitutes breaking vs non-breaking)
+* Explicit freeze statement
+
+---
+
+## OUTPUT FORMAT (MANDATORY)
+
+Return output in this **exact structure**:
+
+```
+/schemas/
+  00_core_identity.sql
+  01_raw_events.sql
+  02_normalized_agent.sql
+  03_normalized_dpi.sql
+  04_correlation.sql
+  05_ai_metadata.sql
+  06_indexes.sql
+  07_retention.sql
+  SCHEMA_BUNDLE.md
+```
+
+* SQL must be **PostgreSQL 14+ compatible**
+* Use `UUID`, `TIMESTAMPTZ`, `JSONB` only where justified
+* Every file must be complete and executable
+
+---
+
+## HARD RULES (DO NOT BREAK)
+
+* ❌ No assumptions about paths
+* ❌ No assumptions about deployment size
+* ❌ No sample data
+* ❌ No test data
+* ❌ No service logic
+* ❌ No shortcuts for “later optimization”
+
+This schema must survive:
+
+* Zero data
+* One event
+* Partial failure
+* Adversarial input
+* Multi-year growth
+
+---
+
+Begin immediately.
+Do not explain — **design**.
+
+*****Prompt End*****

@@ -1,0 +1,138 @@
+Promot Start*
+
+You are continuing RansomEye v1.0 – Enterprise & Military-Grade Build.
+
+WORK UNIT: Database Hardening & Transaction Safety
+(Do NOT use phase numbers anywhere)
+
+STRICT CONTEXT (DO NOT VIOLATE)
+
+This applies to RansomEye Core database usage
+
+Core runs as one unified runtime
+
+❌ No schema changes
+
+❌ No contract changes
+
+❌ No retry loops
+
+❌ No silent fallbacks
+
+❌ No per-module DB ownership confusion
+
+OBJECTIVE (ONLY THIS)
+
+Harden all database interactions to ensure:
+
+Atomicity
+
+Consistency
+
+Explicit failure behavior
+
+Zero partial state
+
+Deterministic outcomes under failure
+
+COMPONENTS IN SCOPE (CORE)
+
+Ingest
+
+Correlation Engine
+
+AI Core
+
+Policy Engine
+
+UI Backend (read-only)
+
+REQUIRED HARDENING (IMPLEMENT ALL)
+1. Transaction Discipline (MANDATORY)
+
+For every DB write path:
+
+Explicit transaction begin
+
+Explicit commit on success
+
+Explicit rollback on failure
+
+No implicit autocommit behavior
+
+If rollback fails → terminate Core.
+
+2. Isolation & Consistency
+
+Explicitly set isolation level at connection creation
+
+Log isolation level at startup
+
+Reject runtime if isolation cannot be enforced
+
+3. Deadlock & Integrity Detection
+
+Detect and fail fast on:
+
+Serialization failures
+
+Deadlocks
+
+Foreign-key violations
+
+Unique-constraint violations
+
+No retries.
+Log → terminate.
+
+4. Connection Safety
+
+Validate connection health before each critical operation
+
+Detect dropped connections
+
+Fail immediately on broken connection
+
+No reconnection loops
+
+5. Read-Only Enforcement (UI & AI)
+
+Explicitly open read-only DB sessions
+
+Abort process if write attempt occurs
+
+Log security-grade error
+
+OUTPUT CONSTRAINTS
+
+Modify existing DB access layers only
+
+No new abstractions unless required for safety
+
+No background workers
+
+No schedulers
+
+Each modified component must update its README:
+
+Database Safety & Transaction Guarantees
+PASS CRITERIA
+
+PASS only if:
+
+No partial writes possible
+
+All failures are explicit and fatal
+
+Isolation level is enforced and logged
+
+Read-only violations terminate immediately
+
+System behavior is deterministic under DB failure
+
+Begin immediately.
+Do not explain.
+Do not refactor unrelated code.
+Harden the database interactions only.
+
+Promot end*

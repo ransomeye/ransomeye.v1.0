@@ -1,0 +1,163 @@
+Promot Start
+
+You are continuing RansomEye v1.0 – Clean-Room Rebuild.
+
+PHASE: 3 — INSTALLER BEFORE SERVICES
+PREVIOUS PHASES COMPLETE:
+
+Phase 1: System Contracts (Frozen)
+
+Phase 2: Database Schema (Frozen)
+
+STRICT RULES (NON-NEGOTIABLE)
+
+❌ No service code
+
+❌ No agent code
+
+❌ No DPI code
+
+❌ No database schema changes
+
+❌ No systemd unit files yet
+
+❌ No hardcoded paths
+
+❌ No assumptions about install location
+
+This installer must support commercial self-installation at any path.
+
+ALLOWED LANGUAGES ONLY
+
+Bash
+
+Python 3.10+
+
+No other languages permitted.
+
+OBJECTIVE
+
+Design the authoritative unified installer specification for RansomEye v1.0.
+
+The installer is responsible for:
+
+Discovering install root
+
+Creating system user
+
+Generating manifest
+
+Injecting paths via ENV
+
+Enforcing fail-closed startup
+
+SCOPE (MUST DELIVER ALL)
+1. Installation Manifest (AUTHORITATIVE)
+
+Define a machine-readable manifest that contains:
+
+Install root (absolute)
+
+Data directories
+
+Log directories
+
+Binary directories
+
+Config directories
+
+Runtime UID/GID
+
+Enabled components
+
+Schema bundle hash
+
+Contract bundle hash
+
+Deliver:
+
+install.manifest.schema.json
+
+Example install.manifest.json (NO PATH ASSUMPTIONS, use placeholders)
+
+2. Environment Variable Contract
+
+Define EXACT ENV VARS that every service must read:
+
+Paths
+
+IDs
+
+Versions
+
+Runtime identity
+
+Deliver:
+
+env.contract.md
+
+env.contract.json
+
+No service may compute paths internally.
+
+3. Privilege Model
+
+Define:
+
+Installer privilege requirements
+
+Runtime privilege drop rules
+
+Agent/DPI exception boundaries
+
+Deliver:
+
+privilege-model.md
+
+4. Failure Semantics (Installer-Specific)
+
+Define:
+
+What causes install abort
+
+What is recoverable
+
+What is fatal
+
+Rollback rules
+
+Deliver:
+
+installer-failure-policy.md
+
+installer-failure-policy.json
+
+OUTPUT FORMAT (MANDATORY)
+/installer/
+  install.manifest.schema.json
+  install.manifest.json
+  env.contract.md
+  env.contract.json
+  privilege-model.md
+  installer-failure-policy.md
+  installer-failure-policy.json
+  INSTALLER_BUNDLE.md
+
+HARD REQUIREMENTS
+
+Installer must be idempotent
+
+Installer must be fail-closed
+
+Installer must leave zero partial state
+
+All paths are injected, never inferred
+
+Manifest is the single source of runtime truth
+
+This installer defines how RansomEye exists on disk.
+
+Begin immediately.
+Do not explain — design.
+
+Prompt End

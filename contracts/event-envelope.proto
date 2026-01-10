@@ -1,0 +1,47 @@
+syntax = "proto3";
+
+package ransomeye.v1;
+
+option go_package = "github.com/ransomeye/v1/contracts";
+
+// RansomEye v1.0 Canonical Event Envelope
+// AUTHORITATIVE: Immutable contract for all event envelopes in RansomEye v1.0.
+// This definition is frozen and MUST NOT be modified.
+
+// Component enumeration matching the JSON schema enum values exactly.
+enum Component {
+  COMPONENT_UNSPECIFIED = 0;  // Reserved, MUST NOT be used
+  LINUX_AGENT = 1;            // Maps to "linux_agent"
+  WINDOWS_AGENT = 2;          // Maps to "windows_agent"
+  DPI = 3;                    // Maps to "dpi"
+  CORE = 4;                   // Maps to "core"
+}
+
+// Identity metadata associated with the event source.
+message EventIdentity {
+  string hostname = 1;        // MUST be non-empty
+  string boot_id = 2;         // MUST be non-empty
+  string agent_version = 3;   // MUST be non-empty
+}
+
+// Integrity chain information for tamper detection.
+message EventIntegrity {
+  string hash_sha256 = 1;           // SHA256 of entire envelope (64 hex chars)
+  optional string prev_hash_sha256 = 2;  // SHA256 of previous event, null if sequence=0
+}
+
+// Canonical event envelope. All fields are required.
+// Timestamps MUST be RFC3339 UTC strings.
+// Sequence MUST be a 64-bit unsigned integer.
+message EventEnvelope {
+  string event_id = 1;                    // UUID v4
+  string machine_id = 2;                  // Non-empty string
+  Component component = 3;                // One of: LINUX_AGENT, WINDOWS_AGENT, DPI, CORE
+  string component_instance_id = 4;       // Non-empty string
+  string observed_at = 5;                 // RFC3339 UTC timestamp
+  string ingested_at = 6;                 // RFC3339 UTC timestamp
+  uint64 sequence = 7;                    // Monotonic 64-bit unsigned integer
+  bytes payload = 8;                      // Opaque payload (JSON-serialized object)
+  EventIdentity identity = 9;             // Required identity metadata
+  EventIntegrity integrity = 10;          // Required integrity chain
+}

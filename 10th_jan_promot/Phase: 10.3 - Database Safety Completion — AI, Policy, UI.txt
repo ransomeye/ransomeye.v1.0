@@ -1,0 +1,124 @@
+Promot Start*
+
+You are continuing RansomEye v1.0 – Enterprise & Military-Grade Build.
+
+WORK UNIT: Database Safety Completion (AI Core, Policy Engine, UI Backend)
+
+STRICT CONTEXT (DO NOT VIOLATE)
+
+Database schema is frozen
+
+Contracts are frozen
+
+Core runs as one unified runtime
+
+❌ No retries
+
+❌ No silent failures
+
+❌ No best-effort fallbacks
+
+❌ No new abstractions beyond existing common/db/safety.py
+
+OBJECTIVE (ONLY THIS)
+
+Complete database hardening for remaining Core modules using the existing safety utilities.
+
+COMPONENT-SPECIFIC REQUIREMENTS
+1. AI Core
+
+File:
+services/ai-core/app/db.py
+
+Required changes:
+
+All read paths must use create_readonly_connection()
+
+All write paths must use execute_write_operation()
+
+Enforce isolation level
+
+Abort Core on:
+
+Deadlock
+
+Integrity violation
+
+Unauthorized write attempt
+
+2. Policy Engine
+
+File:
+services/policy-engine/app/db.py
+
+Required changes:
+
+Use read-only connections only
+
+Enforce read-only mode explicitly
+
+Abort Core if any write is attempted
+
+Policy Engine must never write to DB.
+
+3. UI Backend
+
+File:
+services/ui/backend/main.py
+
+Required changes:
+
+Enforce read-only DB connections at pool level
+
+Ensure query_view() cannot execute writes
+
+Any write attempt → immediate Core termination
+
+4. Documentation (MANDATORY)
+
+Update README for:
+
+AI Core
+
+Policy Engine
+
+UI Backend
+
+Add section:
+
+Database Safety & Transaction Guarantees
+
+Must explicitly state:
+
+Isolation level enforcement
+
+Explicit transaction behavior
+
+Read-only enforcement (where applicable)
+
+Fail-fast semantics
+
+No retries, no partial state
+
+No fluff. No marketing.
+
+PASS CRITERIA
+
+PASS only if:
+
+AI Core writes are fully transaction-safe
+
+Policy Engine cannot write under any condition
+
+UI Backend is read-only by construction
+
+Any DB misuse terminates Core
+
+All READMEs updated correctly
+
+Begin immediately.
+Do not refactor unrelated code.
+Do not summarize.
+Finish database hardening cleanly.
+
+Promot end*

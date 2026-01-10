@@ -1,0 +1,454 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ransomeye.v1.0/installer/failure-policy",
+  "title": "RansomEye v1.0 Installer Failure Policy",
+  "description": "AUTHORITATIVE: Machine-readable policy for installer failure handling. Installer MUST be fail-closed and idempotent. Zero partial state allowed.",
+  "type": "object",
+  "required": [
+    "version",
+    "failure_categories",
+    "rollback_rules",
+    "idempotency_rules",
+    "error_codes",
+    "exit_codes"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "type": "string",
+      "const": "1.0.0",
+      "description": "Policy version. MUST match installer bundle version."
+    },
+    "failure_categories": {
+      "type": "object",
+      "required": ["fatal", "recoverable"],
+      "properties": {
+        "fatal": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "scenario",
+              "detection",
+              "action",
+              "rollback",
+              "error_code"
+            ],
+            "properties": {
+              "scenario": {
+                "type": "string"
+              },
+              "detection": {
+                "type": "string"
+              },
+              "action": {
+                "type": "string",
+                "enum": ["ABORT_INSTALLATION"]
+              },
+              "rollback": {
+                "type": "string"
+              },
+              "error_code": {
+                "type": "string"
+              }
+            }
+          },
+          "default": [
+            {
+              "scenario": "Insufficient Privileges",
+              "detection": "Installer not running as root/Administrator",
+              "action": "ABORT_INSTALLATION",
+              "rollback": "NONE",
+              "error_code": "INSTALLER_INSUFFICIENT_PRIVILEGES"
+            },
+            {
+              "scenario": "Invalid Install Root",
+              "detection": "Install root path is invalid (not absolute, contains invalid characters, not writable)",
+              "action": "ABORT_INSTALLATION",
+              "rollback": "NONE",
+              "error_code": "INSTALLER_INVALID_INSTALL_ROOT"
+            },
+            {
+              "scenario": "User/Group Creation Failure",
+              "detection": "Cannot create runtime user/group (user already exists but UID/GID mismatch, system error)",
+              "action": "ABORT_INSTALLATION",
+              "rollback": "REMOVE_CREATED_USER_GROUP",
+              "error_code": "INSTALLER_USER_CREATION_FAILED"
+            },
+            {
+              "scenario": "Directory Creation Failure",
+              "detection": "Cannot create required directories (permission denied, disk full, invalid path)",
+              "action": "ABORT_INSTALLATION",
+              "rollback": "REMOVE_CREATED_DIRECTORIES",
+              "error_code": "INSTALLER_DIRECTORY_CREATION_FAILED"
+            },
+            {
+              "scenario": "Manifest Creation Failure",
+              "detection": "Cannot write manifest file (permission denied, disk full, invalid JSON)",
+              "action": "ABORT_INSTALLATION",
+              "rollback": "REMOVE_CREATED_DIRECTORIES, REMOVE_CREATED_USER_GROUP",
+              "error_code": "INSTALLER_MANIFEST_CREATION_FAILED"
+            },
+            {
+              "scenario": "Bundle Hash Validation Failure",
+              "detection": "Contract bundle hash or schema bundle hash does not match expected value",
+              "action": "ABORT_INSTALLATION",
+              "rollback": "REMOVE_ALL_CREATED_ARTIFACTS",
+              "error_code": "INSTALLER_BUNDLE_HASH_MISMATCH"
+            },
+            {
+              "scenario": "File Installation Failure",
+              "detection": "Cannot copy binaries/libraries/config files (source file missing, permission denied, disk full)",
+              "action": "ABORT_INSTALLATION",
+              "rollback": "REMOVE_ALL_CREATED_ARTIFACTS",
+              "error_code": "INSTALLER_FILE_INSTALLATION_FAILED"
+            },
+            {
+              "scenario": "Manifest Schema Validation Failure",
+              "detection": "Generated manifest does not conform to schema (invalid JSON, missing required fields, invalid values)",
+              "action": "ABORT_INSTALLATION",
+              "rollback": "REMOVE_ALL_CREATED_ARTIFACTS",
+              "error_code": "INSTALLER_MANIFEST_SCHEMA_VIOLATION"
+            }
+          ]
+        },
+        "recoverable": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "scenario",
+              "detection",
+              "action",
+              "rollback",
+              "error_code"
+            ],
+            "properties": {
+              "scenario": {
+                "type": "string"
+              },
+              "detection": {
+                "type": "string"
+              },
+              "action": {
+                "type": "string",
+                "enum": ["CONTINUE_INSTALLATION", "VALIDATE_EXISTING_MANIFEST", "ABORT_INSTALLATION"]
+              },
+              "rollback": {
+                "type": "string"
+              },
+              "error_code": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          },
+          "default": [
+            {
+              "scenario": "User/Group Already Exists",
+              "detection": "Runtime user/group already exists with correct UID/GID",
+              "action": "CONTINUE_INSTALLATION",
+              "rollback": "NONE",
+              "error_code": null
+            },
+            {
+              "scenario": "Directory Already Exists",
+              "detection": "Required directory already exists",
+              "action": "CONTINUE_INSTALLATION",
+              "rollback": "NONE",
+              "error_code": null
+            },
+            {
+              "scenario": "Manifest Already Exists (Valid)",
+              "detection": "Manifest file already exists and is valid (idempotency check)",
+              "action": "CONTINUE_INSTALLATION",
+              "rollback": "NONE",
+              "error_code": null
+            },
+            {
+              "scenario": "Manifest Already Exists (Invalid)",
+              "detection": "Manifest file already exists but is invalid or corrupted",
+              "action": "ABORT_INSTALLATION",
+              "rollback": "NONE",
+              "error_code": "INSTALLER_EXISTING_MANIFEST_INVALID"
+            },
+            {
+              "scenario": "Partial Installation Detected",
+              "detection": "Some directories/files exist but manifest is missing (partial previous installation)",
+              "action": "ABORT_INSTALLATION",
+              "rollback": "NONE",
+              "error_code": "INSTALLER_PARTIAL_INSTALLATION_DETECTED"
+            }
+          ]
+        }
+      }
+    },
+    "rollback_rules": {
+      "type": "object",
+      "required": [
+        "strategy",
+        "rollback_order",
+        "rollback_phases",
+        "rollback_failure_handling"
+      ],
+      "properties": {
+        "strategy": {
+          "type": "string",
+          "const": "ATOMIC_OPERATIONS_WITH_REVERSE_ORDER_ROLLBACK",
+          "description": "Installer MUST perform operations atomically where possible. Rollback MUST be performed in reverse order."
+        },
+        "rollback_order": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "Remove created files",
+            "Remove created directories",
+            "Remove created user/group",
+            "Remove created install root"
+          ]
+        },
+        "rollback_phases": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["phase", "rollback_action"],
+            "properties": {
+              "phase": {
+                "type": "string"
+              },
+              "rollback_action": {
+                "type": "string"
+              }
+            }
+          },
+          "default": [
+            {
+              "phase": "Phase 1: Pre-Installation Check",
+              "rollback_action": "NONE"
+            },
+            {
+              "phase": "Phase 2: User/Group Creation",
+              "rollback_action": "Remove runtime user, remove runtime group"
+            },
+            {
+              "phase": "Phase 3: Directory Creation",
+              "rollback_action": "Remove all created directories (in reverse order)"
+            },
+            {
+              "phase": "Phase 4: File Installation",
+              "rollback_action": "Remove all installed files, then remove directories"
+            },
+            {
+              "phase": "Phase 5: Manifest Creation",
+              "rollback_action": "Remove manifest file, then remove all installed files, then remove directories"
+            }
+          ]
+        },
+        "rollback_failure_handling": {
+          "type": "object",
+          "required": ["actions", "error_code"],
+          "properties": {
+            "actions": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "default": [
+                "Log critical error to stderr and log file",
+                "Exit with non-zero exit code indicating rollback failure",
+                "Provide clear error message indicating manual cleanup is required"
+              ]
+            },
+            "error_code": {
+              "type": "string",
+              "const": "INSTALLER_ROLLBACK_FAILED"
+            }
+          }
+        }
+      }
+    },
+    "idempotency_rules": {
+      "type": "object",
+      "required": [
+        "check_existing_installation",
+        "idempotent_operations"
+      ],
+      "properties": {
+        "check_existing_installation": {
+          "type": "object",
+          "required": ["check_manifest", "if_manifest_exists"],
+          "properties": {
+            "check_manifest": {
+              "type": "string",
+              "const": "Check if manifest exists at ${install_root}/etc/install.manifest.json"
+            },
+            "if_manifest_exists": {
+              "type": "object",
+              "required": ["validate", "compare", "if_match", "if_differ"],
+              "properties": {
+                "validate": {
+                  "type": "string",
+                  "const": "Read and validate manifest against schema"
+                },
+                "compare": {
+                  "type": "string",
+                  "const": "Compare manifest parameters with current installation parameters"
+                },
+                "if_match": {
+                  "type": "string",
+                  "const": "SKIP_INSTALLATION (installation already complete)"
+                },
+                "if_differ": {
+                  "type": "string",
+                  "const": "ABORT_INSTALLATION (cannot modify existing installation, uninstall first)"
+                }
+              }
+            }
+          }
+        },
+        "idempotent_operations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["operation", "check", "if_exists"],
+            "properties": {
+              "operation": {
+                "type": "string"
+              },
+              "check": {
+                "type": "string"
+              },
+              "if_exists": {
+                "type": "string"
+              }
+            }
+          },
+          "default": [
+            {
+              "operation": "User/Group Creation",
+              "check": "Check if user/group exists before creating",
+              "if_exists": "If exists with correct UID/GID, skip creation"
+            },
+            {
+              "operation": "Directory Creation",
+              "check": "Check if directory exists before creating",
+              "if_exists": "If exists, update ownership/permissions only"
+            },
+            {
+              "operation": "File Installation",
+              "check": "Check if file exists before copying",
+              "if_exists": "If exists and matches hash, skip copying"
+            },
+            {
+              "operation": "Manifest Creation",
+              "check": "Check if manifest exists before writing",
+              "if_exists": "If exists and valid, skip writing"
+            }
+          ]
+        }
+      }
+    },
+    "error_codes": {
+      "type": "object",
+      "required": ["codes"],
+      "properties": {
+        "codes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "INSTALLER_INSUFFICIENT_PRIVILEGES",
+            "INSTALLER_INVALID_INSTALL_ROOT",
+            "INSTALLER_USER_CREATION_FAILED",
+            "INSTALLER_DIRECTORY_CREATION_FAILED",
+            "INSTALLER_MANIFEST_CREATION_FAILED",
+            "INSTALLER_BUNDLE_HASH_MISMATCH",
+            "INSTALLER_FILE_INSTALLATION_FAILED",
+            "INSTALLER_MANIFEST_SCHEMA_VIOLATION",
+            "INSTALLER_PARTIAL_INSTALLATION_DETECTED",
+            "INSTALLER_EXISTING_MANIFEST_INVALID",
+            "INSTALLER_ROLLBACK_FAILED"
+          ]
+        }
+      }
+    },
+    "exit_codes": {
+      "type": "object",
+      "required": ["codes"],
+      "properties": {
+        "codes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["code", "meaning"],
+            "properties": {
+              "code": {
+                "type": "integer"
+              },
+              "meaning": {
+                "type": "string"
+              }
+            }
+          },
+          "default": [
+            {
+              "code": 0,
+              "meaning": "Installation successful (or already installed, idempotent)"
+            },
+            {
+              "code": 1,
+              "meaning": "Fatal error (installation aborted, rollback attempted)"
+            },
+            {
+              "code": 2,
+              "meaning": "Fatal error with rollback failure (manual cleanup required)"
+            },
+            {
+              "code": 3,
+              "meaning": "Invalid arguments (usage error)"
+            },
+            {
+              "code": 4,
+              "meaning": "Insufficient privileges (not root/Administrator)"
+            }
+          ]
+        }
+      }
+    },
+    "logging_requirements": {
+      "type": "object",
+      "required": [
+        "log_file",
+        "log_format",
+        "log_levels"
+      ],
+      "properties": {
+        "log_file": {
+          "type": "string",
+          "const": "${install_root}/log/installer.log (if directory exists) or stderr (if directory does not exist)"
+        },
+        "log_format": {
+          "type": "string",
+          "const": "Timestamp, log level (INFO, WARN, ERROR, FATAL), message, error code (if applicable)"
+        },
+        "log_levels": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["INFO", "WARN", "ERROR", "FATAL"]
+          },
+          "default": ["INFO", "WARN", "ERROR", "FATAL"]
+        }
+      }
+    }
+  }
+}

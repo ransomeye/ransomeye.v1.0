@@ -1,0 +1,135 @@
+Promot Start
+
+You are continuing RansomEye v1.0 – Clean-Room Rebuild.
+
+PHASE: 5 — CORRELATION ENGINE (DETERMINISTIC)
+
+PREVIOUS PHASES (FROZEN):
+
+Phase 1: System Contracts
+
+Phase 2: Database Schema
+
+Phase 3: Installer Contracts
+
+Phase 4: Minimal Data Plane
+
+HARD RULES (NON-NEGOTIABLE)
+
+❌ No AI / ML / LLM
+
+❌ No time-window dependency
+
+❌ No probabilistic logic
+
+❌ No heuristics
+
+❌ No enrichment
+
+❌ No retries
+
+❌ No background threads
+
+❌ No async
+
+❌ No schema changes
+
+❌ No contract changes
+
+This engine must be purely deterministic.
+
+OBJECTIVE
+
+Implement the minimal deterministic correlation engine that:
+
+Consumes validated events
+
+Applies explicit contradiction rules
+
+Produces at most one incident per event
+
+INPUT
+
+Read from:
+
+raw_events
+
+Normalized tables (if required)
+
+Use only persisted facts
+
+DETECTION MODEL (MINIMAL)
+
+For this phase, define exactly ONE rule:
+
+If a Linux Agent event exists with component = linux_agent,
+THEN:
+
+Either create zero incidents, OR
+
+Create exactly one incident with:
+
+stage = Suspicious
+
+confidence = deterministic constant (e.g. 0.3)
+
+No additional logic is allowed.
+
+INCIDENT REQUIREMENTS
+
+When an incident is created:
+
+Insert into incidents
+
+Insert initial stage into incident_stages
+
+Link triggering event in evidence
+
+All writes must be atomic (single transaction)
+
+OUTPUT FORMAT (MANDATORY)
+/services/
+  correlation-engine/
+    app/
+      main.py
+      rules.py
+      db.py
+    requirements.txt
+    README.md
+
+README MUST EXPLICITLY STATE
+
+What rules exist
+
+Why rules are deterministic
+
+What this engine does NOT do
+
+Why time is NOT required for correctness
+
+VALIDATION (PASS / FAIL)
+
+PASS only if:
+
+One event → ≤ 1 incident
+
+Restarting engine does NOT duplicate incidents
+
+No time-window logic exists
+
+No ML/AI imports exist
+
+No retries or background jobs exist
+
+FAIL if:
+
+Engine waits for more data
+
+Engine uses time windows
+
+Engine attempts “confidence tuning”
+
+Begin immediately.
+Do not explain — implement exactly.
+
+Prompt End

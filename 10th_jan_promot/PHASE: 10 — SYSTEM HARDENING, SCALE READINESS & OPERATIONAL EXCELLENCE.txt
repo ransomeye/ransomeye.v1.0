@@ -1,0 +1,248 @@
+Promot Start*
+
+You are continuing RansomEye v1.0 – Clean-Room Rebuild.
+
+PHASE: 10 — SYSTEM HARDENING, SCALE READINESS & OPERATIONAL EXCELLENCE
+STATUS: CONTINUOUS EXECUTION — DO NOT STOP UNTIL SYSTEM IS FULLY BUILT, TESTED, AND RUNNING WITH ZERO FAILURES
+
+ABSOLUTE DIRECTIVE (NON-NEGOTIABLE)
+
+This is military-grade, enterprise-class cybersecurity software intended for commercial sale.
+
+Therefore:
+
+❌ NO placeholders
+
+❌ NO dummy files
+
+❌ NO synthetic data
+
+❌ NO test-only shortcuts
+
+❌ NO “assume this exists”
+
+❌ NO partial success
+
+Everything must:
+
+Build
+
+Start
+
+Run
+
+Restart
+
+Recover
+
+Validate
+without a single failure
+
+Only after this is complete may installers be built.
+
+PHASE 10 OBJECTIVE
+
+Harden ALL EXISTING COMPONENTS so the system:
+
+Runs continuously on this machine
+
+Survives crashes, restarts, partial failures
+
+Is operationally safe for customer environments
+
+Is ready for installer packaging (Phase 11)
+
+SCOPE — WHAT YOU MUST HARDEN (ALL REQUIRED)
+Core Runtime Components (MANDATORY)
+
+Ingest Service
+
+Correlation Engine
+
+AI Core
+
+Policy Engine
+
+SOC UI Backend
+
+Linux Agent
+
+DPI Probe (stubbed runtime, capture disabled for now)
+
+Windows Agent is NOT implemented yet — do not invent it.
+
+HARDENING DIMENSIONS (ALL REQUIRED)
+1. PROCESS HARDENING
+
+For every runtime component:
+
+Deterministic startup
+
+Fail-fast on misconfiguration
+
+Clear exit codes
+
+No silent crashes
+
+Explicit logging (startup, shutdown, failure)
+
+Deliver:
+
+Startup checks
+
+Fatal error classification
+
+Graceful shutdown handlers
+
+2. CONFIGURATION HARDENING
+
+All configuration via:
+
+Environment variables
+
+Installer manifest
+
+No fallback defaults for security-sensitive values
+
+Missing config ⇒ hard failure
+
+Deliver:
+
+Centralized config loader per component
+
+Explicit config validation errors
+
+3. CRASH & RESTART SAFETY
+
+Simulate and handle:
+
+Process kill
+
+Service restart
+
+Partial component outage
+
+System must:
+
+Resume safely
+
+Not duplicate data
+
+Not corrupt state
+
+4. DATA INTEGRITY HARDENING
+
+Enforce hash-chain continuity checks
+
+Enforce sequence monotonicity
+
+Enforce idempotency across restarts
+
+Detect and log corruption explicitly
+
+No silent acceptance of bad state.
+
+5. RESOURCE SAFETY
+
+File descriptor safety
+
+DB connection pooling limits
+
+Backpressure behavior
+
+Disk full detection (log + fail closed)
+
+6. SCALE READINESS (SINGLE NODE)
+
+You must validate:
+
+Thousands of machines logically supported
+
+High event cardinality handling
+
+No unbounded memory growth
+
+No unbounded disk growth
+
+Simulation must use real agent behavior, not synthetic generators.
+
+HARD RULES (REPEAT — DO NOT BREAK)
+
+❌ No schema changes
+
+❌ No contract changes
+
+❌ No shortcuts
+
+❌ No mock services
+
+❌ No synthetic load generators
+
+❌ No skipping failure cases
+
+OUTPUT FORMAT (MANDATORY)
+
+You must modify and/or add files only under:
+
+/services/
+/agents/
+/dpi/
+/common/
+
+
+NO changes under:
+
+/contracts/
+/schemas/
+/installer/
+/validation/
+
+REQUIRED DELIVERABLES
+
+Hardened startup & shutdown logic for each service
+
+Explicit error classification & logging
+
+Restart-safe behavior verified
+
+End-to-end system running cleanly
+
+Zero validation regressions (Phase 9 & 9.1 must still pass)
+
+VALIDATION (PASS / FAIL)
+
+PASS only if:
+
+All services start cleanly
+
+Linux Agent emits real events
+
+Ingest, Correlation, AI, Policy, UI all run simultaneously
+
+Validation harness passes unchanged
+
+System survives restart with no duplication
+
+No crashes, no warnings, no silent failures
+
+FAIL if:
+
+Any service crashes
+
+Any undefined behavior exists
+
+Any validation test fails
+
+Any shortcut is taken
+
+IMPORTANT NOTE
+
+Do NOT build installers yet.
+Installer generation happens only after Phase 10 is fully complete and frozen.
+
+Begin immediately.
+Do not explain.
+Do not summarize.
+Harden the system.
+
+Promot end*

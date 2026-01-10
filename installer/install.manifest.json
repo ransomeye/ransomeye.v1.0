@@ -1,0 +1,34 @@
+{
+  "version": "1.0.0",
+  "install_root": "[PLACEHOLDER - Absolute path to install root, e.g., /opt/ransomeye or /home/user/ransomeye]",
+  "directories": {
+    "bin": "[PLACEHOLDER - Absolute path, e.g., ${install_root}/bin]",
+    "lib": "[PLACEHOLDER - Absolute path, e.g., ${install_root}/lib]",
+    "etc": "[PLACEHOLDER - Absolute path, e.g., ${install_root}/etc]",
+    "data": "[PLACEHOLDER - Absolute path, e.g., ${install_root}/data]",
+    "log": "[PLACEHOLDER - Absolute path, e.g., ${install_root}/log]",
+    "run": "[PLACEHOLDER - Absolute path, e.g., ${install_root}/run]",
+    "tmp": "[PLACEHOLDER - Absolute path, e.g., ${install_root}/tmp]"
+  },
+  "runtime_identity": {
+    "user": "[PLACEHOLDER - System username, e.g., 'ransomeye']",
+    "group": "[PLACEHOLDER - System groupname, e.g., 'ransomeye']",
+    "uid": [PLACEHOLDER - Numeric UID, e.g., 1000],
+    "gid": [PLACEHOLDER - Numeric GID, e.g., 1000]
+  },
+  "enabled_components": {
+    "linux_agent": [PLACEHOLDER - Boolean, e.g., true or false],
+    "windows_agent": [PLACEHOLDER - Boolean, e.g., false],
+    "dpi": [PLACEHOLDER - Boolean, e.g., true or false],
+    "core": [PLACEHOLDER - Boolean, MUST be true if any component enabled],
+    "correlation_engine": [PLACEHOLDER - Boolean, e.g., true or false],
+    "ai_core": [PLACEHOLDER - Boolean, e.g., true or false]
+  },
+  "bundle_hashes": {
+    "contract_bundle_sha256": "[PLACEHOLDER - 64-character hex string, Phase 1 contract bundle hash]",
+    "schema_bundle_sha256": "[PLACEHOLDER - 64-character hex string, Phase 2 schema bundle hash]"
+  },
+  "installed_at": "[PLACEHOLDER - RFC3339 UTC timestamp, e.g., '2024-01-10T15:00:00Z']",
+  "installed_by": "[PLACEHOLDER - Username/identifier, e.g., 'root' or 'installer']",
+  "installer_version": "1.0.0"
+}

@@ -1,0 +1,387 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ransomeye.v1.0/contracts/failure-semantics-policy",
+  "title": "RansomEye v1.0 Failure Semantics Policy",
+  "description": "AUTHORITATIVE: Machine-readable policy for failure handling and state management. This policy is frozen and MUST NOT be modified.",
+  "type": "object",
+  "required": [
+    "version",
+    "failure_matrix",
+    "component_states",
+    "state_transitions",
+    "log_classifications",
+    "timeout_thresholds"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "type": "string",
+      "const": "1.0.0",
+      "description": "Policy version. MUST match contract bundle version."
+    },
+    "failure_matrix": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "failure_scenario",
+          "components_affected",
+          "detection_method",
+          "action",
+          "emit_state",
+          "log_classification",
+          "downstream_behavior",
+          "error_code"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "failure_scenario": {
+            "type": "string"
+          },
+          "components_affected": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": ["all", "linux_agent", "windows_agent", "dpi", "core"]
+            }
+          },
+          "detection_method": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string",
+            "enum": ["ACCEPT", "REJECT", "ACCEPT_WITH_WARNING", "EMIT_EVENT", "FAIL_STARTUP"]
+          },
+          "emit_state": {
+            "type": "string"
+          },
+          "log_classification": {
+            "type": "string",
+            "enum": ["INFO", "WARN", "ERROR", "FATAL"]
+          },
+          "downstream_behavior": {
+            "type": "string"
+          },
+          "error_code": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "default": [
+        {
+          "failure_scenario": "No events received",
+          "components_affected": ["all"],
+          "detection_method": "Timeout threshold exceeded",
+          "action": "EMIT_EVENT",
+          "emit_state": "NO_EVENTS_RECEIVED",
+          "log_classification": "WARN",
+          "downstream_behavior": "Mark component as STALE",
+          "error_code": "EVENT_STREAM_STALLED"
+        },
+        {
+          "failure_scenario": "Events arrive late",
+          "components_affected": ["core"],
+          "detection_method": "ingested_at - observed_at > 1 hour",
+          "action": "ACCEPT_WITH_WARNING",
+          "emit_state": "EVENT_LATE_ARRIVAL",
+          "log_classification": "WARN",
+          "downstream_behavior": "Mark event as LATE_ARRIVAL in metadata",
+          "error_code": null
+        },
+        {
+          "failure_scenario": "Events are duplicated",
+          "components_affected": ["core"],
+          "detection_method": "event_id exists in system",
+          "action": "REJECT",
+          "emit_state": "EVENT_DUPLICATE_REJECTED",
+          "log_classification": "ERROR",
+          "downstream_behavior": "Do not process, do not update sequence",
+          "error_code": "DUPLICATE_EVENT_ID"
+        },
+        {
+          "failure_scenario": "Dependencies unavailable",
+          "components_affected": ["all"],
+          "detection_method": "Dependency health check fails",
+          "action": "EMIT_EVENT",
+          "emit_state": "DEPENDENCY_UNAVAILABLE",
+          "log_classification": "ERROR",
+          "downstream_behavior": "Mark component as DEGRADED or FAILED",
+          "error_code": "DEPENDENCY_UNREACHABLE"
+        },
+        {
+          "failure_scenario": "Integrity chain breaks",
+          "components_affected": ["core"],
+          "detection_method": "prev_hash_sha256 does not match previous event's hash_sha256",
+          "action": "REJECT",
+          "emit_state": "INTEGRITY_CHAIN_BROKEN",
+          "log_classification": "ERROR",
+          "downstream_behavior": "Do not process, mark chain as BROKEN",
+          "error_code": "INTEGRITY_VIOLATION"
+        },
+        {
+          "failure_scenario": "Schema validation fails",
+          "components_affected": ["core"],
+          "detection_method": "JSON Schema validation error",
+          "action": "REJECT",
+          "emit_state": "SCHEMA_VALIDATION_FAILED",
+          "log_classification": "ERROR",
+          "downstream_behavior": "Do not process, return validation errors",
+          "error_code": "SCHEMA_VIOLATION"
+        },
+        {
+          "failure_scenario": "Timestamp validation fails",
+          "components_affected": ["core"],
+          "detection_method": "RFC3339 parse error or timezone violation",
+          "action": "REJECT",
+          "emit_state": "TIMESTAMP_VALIDATION_FAILED",
+          "log_classification": "ERROR",
+          "downstream_behavior": "Do not process",
+          "error_code": "TIMESTAMP_PARSE_ERROR"
+        },
+        {
+          "failure_scenario": "Clock skew exceeds tolerance",
+          "components_affected": ["core"],
+          "detection_method": "ingested_at - observed_at < -5 seconds",
+          "action": "REJECT",
+          "emit_state": "CLOCK_SKEW_EXCEEDED",
+          "log_classification": "ERROR",
+          "downstream_behavior": "Do not process",
+          "error_code": "TIMESTAMP_FUTURE_BEYOND_TOLERANCE"
+        },
+        {
+          "failure_scenario": "Event too old",
+          "components_affected": ["core"],
+          "detection_method": "ingested_at - observed_at > 30 days",
+          "action": "REJECT",
+          "emit_state": "EVENT_TOO_OLD",
+          "log_classification": "ERROR",
+          "downstream_behavior": "Do not process",
+          "error_code": "TIMESTAMP_TOO_OLD"
+        },
+        {
+          "failure_scenario": "Sequence gap detected",
+          "components_affected": ["core"],
+          "detection_method": "incoming_sequence > last_sequence + 1",
+          "action": "ACCEPT_WITH_WARNING",
+          "emit_state": "SEQUENCE_GAP_DETECTED",
+          "log_classification": "WARN",
+          "downstream_behavior": "Mark event as HAS_GAPS in metadata",
+          "error_code": null
+        },
+        {
+          "failure_scenario": "Out-of-order arrival",
+          "components_affected": ["core"],
+          "detection_method": "incoming_sequence < last_sequence",
+          "action": "ACCEPT_WITH_WARNING",
+          "emit_state": "SEQUENCE_OUT_OF_ORDER",
+          "log_classification": "WARN",
+          "downstream_behavior": "Mark event as OUT_OF_ORDER in metadata",
+          "error_code": null
+        },
+        {
+          "failure_scenario": "Missing required fields",
+          "components_affected": ["core"],
+          "detection_method": "Schema validation: required field missing",
+          "action": "REJECT",
+          "emit_state": "SCHEMA_MISSING_REQUIRED_FIELD",
+          "log_classification": "ERROR",
+          "downstream_behavior": "Do not process, return field list",
+          "error_code": "SCHEMA_VIOLATION"
+        },
+        {
+          "failure_scenario": "Invalid component enum",
+          "components_affected": ["core"],
+          "detection_method": "Schema validation: component not in enum",
+          "action": "REJECT",
+          "emit_state": "INVALID_COMPONENT_ENUM",
+          "log_classification": "ERROR",
+          "downstream_behavior": "Do not process",
+          "error_code": "SCHEMA_VIOLATION"
+        },
+        {
+          "failure_scenario": "Invalid UUID format",
+          "components_affected": ["core"],
+          "detection_method": "Schema validation: event_id not valid UUID",
+          "action": "REJECT",
+          "emit_state": "INVALID_EVENT_ID_FORMAT",
+          "log_classification": "ERROR",
+          "downstream_behavior": "Do not process",
+          "error_code": "SCHEMA_VIOLATION"
+        },
+        {
+          "failure_scenario": "Invalid SHA256 format",
+          "components_affected": ["core"],
+          "detection_method": "Schema validation: hash_sha256 not 64 hex chars",
+          "action": "REJECT",
+          "emit_state": "INVALID_HASH_FORMAT",
+          "log_classification": "ERROR",
+          "downstream_behavior": "Do not process",
+          "error_code": "SCHEMA_VIOLATION"
+        },
+        {
+          "failure_scenario": "Empty string violation",
+          "components_affected": ["core"],
+          "detection_method": "Schema validation: required string field is empty",
+          "action": "REJECT",
+          "emit_state": "EMPTY_STRING_VIOLATION",
+          "log_classification": "ERROR",
+          "downstream_behavior": "Do not process",
+          "error_code": "SCHEMA_VIOLATION"
+        },
+        {
+          "failure_scenario": "Hash computation mismatch",
+          "components_affected": ["core"],
+          "detection_method": "Computed hash_sha256 does not match provided hash_sha256",
+          "action": "REJECT",
+          "emit_state": "HASH_MISMATCH",
+          "log_classification": "ERROR",
+          "downstream_behavior": "Do not process",
+          "error_code": "INTEGRITY_VIOLATION"
+        },
+        {
+          "failure_scenario": "First event prev_hash not null",
+          "components_affected": ["core"],
+          "detection_method": "sequence == 0 but prev_hash_sha256 is not null",
+          "action": "REJECT",
+          "emit_state": "FIRST_EVENT_HASH_VIOLATION",
+          "log_classification": "ERROR",
+          "downstream_behavior": "Do not process",
+          "error_code": "SCHEMA_VIOLATION"
+        },
+        {
+          "failure_scenario": "Non-first event prev_hash null",
+          "components_affected": ["core"],
+          "detection_method": "sequence > 0 but prev_hash_sha256 is null",
+          "action": "REJECT",
+          "emit_state": "MISSING_PREV_HASH",
+          "log_classification": "ERROR",
+          "downstream_behavior": "Do not process",
+          "error_code": "SCHEMA_VIOLATION"
+        }
+      ]
+    },
+    "component_states": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["HEALTHY", "DEGRADED", "STALE", "FAILED", "BROKEN"]
+      },
+      "default": ["HEALTHY", "DEGRADED", "STALE", "FAILED", "BROKEN"]
+    },
+    "state_transitions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["from", "to", "trigger"],
+        "properties": {
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "trigger": {
+            "type": "string"
+          }
+        }
+      },
+      "default": [
+        {
+          "from": "HEALTHY",
+          "to": "DEGRADED",
+          "trigger": "Dependency unavailable (non-critical)"
+        },
+        {
+          "from": "HEALTHY",
+          "to": "STALE",
+          "trigger": "No events received (timeout)"
+        },
+        {
+          "from": "HEALTHY",
+          "to": "FAILED",
+          "trigger": "Critical dependency unavailable or component crash"
+        },
+        {
+          "from": "HEALTHY",
+          "to": "BROKEN",
+          "trigger": "Integrity chain broken"
+        },
+        {
+          "from": "DEGRADED",
+          "to": "HEALTHY",
+          "trigger": "All dependencies restored"
+        },
+        {
+          "from": "DEGRADED",
+          "to": "FAILED",
+          "trigger": "Critical dependency unavailable"
+        },
+        {
+          "from": "STALE",
+          "to": "HEALTHY",
+          "trigger": "Events received again"
+        },
+        {
+          "from": "STALE",
+          "to": "FAILED",
+          "trigger": "Extended staleness (configurable threshold)"
+        },
+        {
+          "from": "FAILED",
+          "to": "HEALTHY",
+          "trigger": "Recovery successful (requires manual intervention or automated recovery)"
+        },
+        {
+          "from": "BROKEN",
+          "to": "HEALTHY",
+          "trigger": "Manual intervention and chain repair"
+        }
+      ]
+    },
+    "log_classifications": {
+      "type": "object",
+      "required": ["INFO", "WARN", "ERROR", "FATAL"],
+      "properties": {
+        "INFO": {
+          "type": "string",
+          "const": "Normal operation, expected events, successful processing"
+        },
+        "WARN": {
+          "type": "string",
+          "const": "Anomalies that do not prevent operation but require attention"
+        },
+        "ERROR": {
+          "type": "string",
+          "const": "Failures that prevent processing of specific events or degrade component functionality"
+        },
+        "FATAL": {
+          "type": "string",
+          "const": "Critical failures that cause component to exit or require immediate intervention"
+        }
+      }
+    },
+    "timeout_thresholds": {
+      "type": "object",
+      "required": ["agent_seconds", "dpi_seconds"],
+      "properties": {
+        "agent_seconds": {
+          "type": "integer",
+          "const": 300,
+          "description": "Timeout in seconds for agent components (linux_agent, windows_agent). MUST be 300 seconds (5 minutes)."
+        },
+        "dpi_seconds": {
+          "type": "integer",
+          "const": 60,
+          "description": "Timeout in seconds for DPI component. MUST be 60 seconds (1 minute)."
+        }
+      }
+    }
+  }
+}

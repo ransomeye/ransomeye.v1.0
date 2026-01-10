@@ -1,0 +1,12 @@
+# RansomEye v1.0 Correlation Engine (Phase 5 - Deterministic)
+# Python 3.10+ only
+
+# PostgreSQL database client
+psycopg2-binary==2.9.9
+
+# UUID generation (for incident_id)
+uuid==1.30
+
+# Environment variable validation
+pydantic==2.5.0
+pydantic-settings==2.1.0

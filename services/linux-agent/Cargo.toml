@@ -1,0 +1,24 @@
+[package]
+name = "ransomeye-linux-agent"
+version = "1.0.0"
+edition = "2021"
+
+[dependencies]
+# HTTP client for transmitting events to ingest service
+reqwest = { version = "0.11", features = ["json"] }
+# UUID v4 generation (matches event-envelope.schema.json requirement)
+uuid = { version = "1.0", features = ["v4"] }
+# JSON serialization/deserialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+# SHA256 hashing (for integrity.hash_sha256)
+sha2 = "0.10"
+# RFC3339 timestamp formatting (for observed_at, ingested_at)
+chrono = { version = "0.4", features = ["serde"] }
+# Environment variable reading (for env.contract.json compliance)
+# std::env is sufficient, but this provides better error messages
+# Using std::env only for minimal dependencies
+# Error handling
+anyhow = "1.0"
+# Hostname retrieval
+hostname = "0.4"

@@ -1,0 +1,285 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ransomeye.v1.0/contracts/time-semantics-policy",
+  "title": "RansomEye v1.0 Time Semantics Policy",
+  "description": "AUTHORITATIVE: Machine-readable policy for time semantics validation and enforcement. This policy is frozen and MUST NOT be modified.",
+  "type": "object",
+  "required": [
+    "version",
+    "timestamp_formats",
+    "clock_skew_tolerance",
+    "late_arrival_threshold",
+    "validation_rules",
+    "behavior_policies"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "type": "string",
+      "const": "1.0.0",
+      "description": "Policy version. MUST match contract bundle version."
+    },
+    "timestamp_formats": {
+      "type": "object",
+      "required": ["required_format", "timezone_requirement"],
+      "properties": {
+        "required_format": {
+          "type": "string",
+          "const": "RFC3339",
+          "description": "Required timestamp format. MUST be RFC3339."
+        },
+        "timezone_requirement": {
+          "type": "string",
+          "const": "UTC",
+          "description": "Required timezone. MUST be UTC (Z suffix or +00:00 offset)."
+        },
+        "allowed_patterns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "YYYY-MM-DDTHH:MM:SS.fffZ",
+            "YYYY-MM-DDTHH:MM:SSZ",
+            "YYYY-MM-DDTHH:MM:SS.fffffffZ"
+          ]
+        }
+      }
+    },
+    "clock_skew_tolerance": {
+      "type": "object",
+      "required": ["max_future_seconds", "max_past_days"],
+      "properties": {
+        "max_future_seconds": {
+          "type": "integer",
+          "const": 5,
+          "description": "Maximum seconds that observed_at can be in the future relative to ingested_at. MUST be 5 seconds."
+        },
+        "max_past_days": {
+          "type": "integer",
+          "const": 30,
+          "description": "Maximum days that observed_at can be in the past relative to ingested_at. MUST be 30 days."
+        }
+      }
+    },
+    "late_arrival_threshold": {
+      "type": "object",
+      "required": ["threshold_hours"],
+      "properties": {
+        "threshold_hours": {
+          "type": "integer",
+          "const": 1,
+          "description": "Threshold in hours beyond which an event is considered late arrival. MUST be 1 hour."
+        }
+      }
+    },
+    "validation_rules": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["rule_id", "condition", "action", "error_code", "log_classification"],
+        "properties": {
+          "rule_id": {
+            "type": "string"
+          },
+          "condition": {
+            "type": "string",
+            "description": "Condition that triggers this rule (expression or description)"
+          },
+          "action": {
+            "type": "string",
+            "enum": ["ACCEPT", "REJECT", "ACCEPT_WITH_WARNING"]
+          },
+          "error_code": {
+            "type": "string"
+          },
+          "log_classification": {
+            "type": "string",
+            "enum": ["INFO", "WARN", "ERROR"]
+          },
+          "emit_state": {
+            "type": "string",
+            "description": "State to emit when this rule triggers"
+          }
+        }
+      },
+      "default": [
+        {
+          "rule_id": "TIMESTAMP_INVALID_FORMAT",
+          "condition": "observed_at or ingested_at cannot be parsed as RFC3339",
+          "action": "REJECT",
+          "error_code": "TIMESTAMP_PARSE_ERROR",
+          "log_classification": "ERROR",
+          "emit_state": "TIMESTAMP_INVALID_FORMAT"
+        },
+        {
+          "rule_id": "TIMESTAMP_MISSING",
+          "condition": "observed_at or ingested_at is missing or null",
+          "action": "REJECT",
+          "error_code": "TIMESTAMP_MISSING",
+          "log_classification": "ERROR",
+          "emit_state": "TIMESTAMP_MISSING"
+        },
+        {
+          "rule_id": "TIMESTAMP_NON_UTC",
+          "condition": "observed_at or ingested_at is not in UTC timezone",
+          "action": "REJECT",
+          "error_code": "TIMESTAMP_TIMEZONE_VIOLATION",
+          "log_classification": "ERROR",
+          "emit_state": "TIMESTAMP_NON_UTC"
+        },
+        {
+          "rule_id": "TIMESTAMP_FUTURE_BEYOND_TOLERANCE",
+          "condition": "ingested_at - observed_at < -5 seconds (future beyond tolerance)",
+          "action": "REJECT",
+          "error_code": "TIMESTAMP_FUTURE_BEYOND_TOLERANCE",
+          "log_classification": "ERROR",
+          "emit_state": "TIMESTAMP_FUTURE_BEYOND_TOLERANCE"
+        },
+        {
+          "rule_id": "TIMESTAMP_TOO_OLD",
+          "condition": "ingested_at - observed_at > 30 days",
+          "action": "REJECT",
+          "error_code": "TIMESTAMP_TOO_OLD",
+          "log_classification": "ERROR",
+          "emit_state": "TIMESTAMP_TOO_OLD"
+        },
+        {
+          "rule_id": "CLOCK_SKEW_DETECTED",
+          "condition": "ingested_at < observed_at AND ingested_at - observed_at >= -5 seconds (within tolerance)",
+          "action": "ACCEPT_WITH_WARNING",
+          "error_code": null,
+          "log_classification": "WARN",
+          "emit_state": "CLOCK_SKEW_DETECTED"
+        },
+        {
+          "rule_id": "EVENT_LATE_ARRIVAL",
+          "condition": "ingested_at - observed_at > 1 hour",
+          "action": "ACCEPT_WITH_WARNING",
+          "error_code": null,
+          "log_classification": "WARN",
+          "emit_state": "EVENT_LATE_ARRIVAL"
+        },
+        {
+          "rule_id": "EVENT_DUPLICATE_REJECTED",
+          "condition": "event_id already exists in system",
+          "action": "REJECT",
+          "error_code": "DUPLICATE_EVENT_ID",
+          "log_classification": "ERROR",
+          "emit_state": "EVENT_DUPLICATE_REJECTED"
+        },
+        {
+          "rule_id": "SEQUENCE_GAP_DETECTED",
+          "condition": "incoming_sequence > last_sequence + 1",
+          "action": "ACCEPT_WITH_WARNING",
+          "error_code": null,
+          "log_classification": "WARN",
+          "emit_state": "SEQUENCE_GAP_DETECTED"
+        },
+        {
+          "rule_id": "SEQUENCE_OUT_OF_ORDER",
+          "condition": "incoming_sequence < last_sequence",
+          "action": "ACCEPT_WITH_WARNING",
+          "error_code": null,
+          "log_classification": "WARN",
+          "emit_state": "SEQUENCE_OUT_OF_ORDER"
+        },
+        {
+          "rule_id": "SEQUENCE_CONTINUOUS",
+          "condition": "incoming_sequence == last_sequence + 1",
+          "action": "ACCEPT",
+          "error_code": null,
+          "log_classification": "INFO",
+          "emit_state": "SEQUENCE_CONTINUOUS"
+        }
+      ]
+    },
+    "behavior_policies": {
+      "type": "object",
+      "required": ["out_of_order", "gap_detection", "duplicate_detection"],
+      "properties": {
+        "out_of_order": {
+          "type": "object",
+          "required": ["accept", "emit_state", "log_classification"],
+          "properties": {
+            "accept": {
+              "type": "boolean",
+              "const": true,
+              "description": "Out-of-order events MUST be accepted (cannot reject valid data)"
+            },
+            "emit_state": {
+              "type": "string",
+              "const": "SEQUENCE_OUT_OF_ORDER"
+            },
+            "log_classification": {
+              "type": "string",
+              "const": "WARN"
+            },
+            "mark_downstream": {
+              "type": "string",
+              "const": "OUT_OF_ORDER"
+            }
+          }
+        },
+        "gap_detection": {
+          "type": "object",
+          "required": ["accept", "emit_state", "log_classification"],
+          "properties": {
+            "accept": {
+              "type": "boolean",
+              "const": true,
+              "description": "Gap events MUST be accepted (cannot reject valid data)"
+            },
+            "emit_state": {
+              "type": "string",
+              "const": "SEQUENCE_GAP_DETECTED"
+            },
+            "log_classification": {
+              "type": "string",
+              "const": "WARN"
+            },
+            "store_gap_range": {
+              "type": "boolean",
+              "const": true
+            },
+            "mark_downstream": {
+              "type": "string",
+              "const": "HAS_GAPS"
+            }
+          }
+        },
+        "duplicate_detection": {
+          "type": "object",
+          "required": ["reject", "emit_state", "log_classification", "error_code"],
+          "properties": {
+            "reject": {
+              "type": "boolean",
+              "const": true,
+              "description": "Duplicate events MUST be rejected"
+            },
+            "emit_state": {
+              "type": "string",
+              "const": "EVENT_DUPLICATE_REJECTED"
+            },
+            "log_classification": {
+              "type": "string",
+              "const": "ERROR"
+            },
+            "error_code": {
+              "type": "string",
+              "const": "DUPLICATE_EVENT_ID"
+            },
+            "do_not_update_sequence": {
+              "type": "boolean",
+              "const": true
+            },
+            "do_not_modify_integrity_chain": {
+              "type": "boolean",
+              "const": true
+            }
+          }
+        }
+      }
+    }
+  }
+}

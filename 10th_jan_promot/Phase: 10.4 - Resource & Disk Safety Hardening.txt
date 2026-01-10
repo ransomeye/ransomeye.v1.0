@@ -1,0 +1,120 @@
+Promot Start*
+
+You are continuing RansomEye v1.0 – Enterprise & Military-Grade Build.
+
+WORK UNIT: Resource & Disk Safety Hardening
+
+STRICT CONTEXT (DO NOT VIOLATE)
+
+Applies to RansomEye Core runtime
+
+Core runs as one unified process
+
+❌ No schema changes
+
+❌ No contract changes
+
+❌ No retries
+
+❌ No background schedulers
+
+❌ No new features
+
+This is safety hardening only.
+
+OBJECTIVE (ONLY THIS)
+
+Harden Core against resource exhaustion and disk failures so the system fails explicitly and safely, never silently.
+
+COMPONENTS IN SCOPE (CORE)
+
+Ingest
+
+Correlation Engine
+
+AI Core
+
+Policy Engine
+
+UI Backend
+
+REQUIRED HARDENING (IMPLEMENT ALL)
+1. Disk Safety (MANDATORY)
+
+Implement explicit checks and fail-fast behavior for:
+
+Disk full conditions
+
+Permission denied (logs, temp, runtime dirs)
+
+Read-only filesystem
+
+Rules:
+
+Detect error at write attempt
+
+Log explicit error
+
+Terminate Core immediately
+
+No retries, no degradation
+
+2. Log Safety
+
+Prevent unbounded log growth
+
+Enforce size limits or rotation without losing critical errors
+
+If logging fails → terminate Core (fail-fast)
+
+No silent logging failures.
+
+3. File Descriptor & Resource Limits
+
+Detect exhaustion of file descriptors
+
+Detect inability to open files/sockets
+
+Fail fast with explicit error
+
+4. Memory Safety (BASIC, NOT OPTIMIZATION)
+
+Detect MemoryError / allocation failures
+
+Abort Core immediately on memory allocation failure
+
+No swap-based survival logic
+
+OUTPUT CONSTRAINTS
+
+Modify existing code paths only
+
+Use explicit exception handling
+
+No new abstractions unless strictly required for safety
+
+No platform-specific hacks
+
+Each modified component must update its README with a section:
+
+Resource & Disk Safety Guarantees
+PASS CRITERIA
+
+PASS only if:
+
+Disk full causes explicit termination
+
+Logging failure causes explicit termination
+
+Resource exhaustion causes explicit termination
+
+No silent degradation paths exist
+
+Behavior is deterministic under resource failure
+
+Begin immediately.
+Do not explain.
+Do not refactor unrelated code.
+Harden resource and disk safety only.
+
+Promot end*

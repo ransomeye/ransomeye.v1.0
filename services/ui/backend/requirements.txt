@@ -1,0 +1,16 @@
+# RansomEye v1.0 SOC UI Backend (Phase 8 - Read-Only)
+# Python 3.10+ only
+
+# HTTP server for serving UI API
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+
+# PostgreSQL database client
+psycopg2-binary==2.9.9
+
+# CORS support (for frontend)
+fastapi-cors==0.0.6
+
+# Environment variable validation
+pydantic==2.5.0
+pydantic-settings==2.1.0
