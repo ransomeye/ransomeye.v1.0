@@ -2195,3 +2195,94 @@ Promot end*
 
 
 
+Promot Start*
+
+You are continuing RansomEye v1.0 – Enterprise & Military-Grade Build.
+
+WORK UNIT: End-to-End Hardened Run & Validation Re-Execution
+
+STRICT CONTEXT (DO NOT VIOLATE)
+
+All hardening work is complete and frozen
+
+Credentials everywhere are username = gagan, password = gagan
+
+❌ No code changes unless a failure is discovered
+
+❌ No schema changes
+
+❌ No contract changes
+
+❌ No new features
+
+This is an execution and verification step only.
+
+OBJECTIVE (ONLY THIS)
+
+Bring up the entire hardened RansomEye system on this machine and prove zero-failure operation.
+
+REQUIRED EXECUTION STEPS
+
+Start PostgreSQL with credentials:
+
+user: gagan
+
+password: gagan
+
+Start RansomEye Core (single unified runtime):
+
+Ingest
+
+Correlation Engine
+
+AI Core
+
+Policy Engine
+
+UI Backend
+
+Start Linux Agent:
+
+Emit at least one real event
+
+Run full validation harness (hardened, reality-based):
+
+All tests must pass
+
+No warnings ignored
+
+No retries hiding faults
+
+REQUIRED OBSERVATIONS
+
+You must confirm:
+
+No crashes
+
+No invariant violations
+
+No secret leakage in logs
+
+No partial DB state
+
+Clean startup and clean shutdown
+
+Validation passes without modification
+
+OUTPUT EXPECTATION
+
+Return only:
+
+Execution status
+
+Any failures (if present)
+
+Confirmation of zero-failure run
+
+Do NOT summarize code.
+Do NOT refactor.
+
+Begin immediately.
+This step gates installer creation.
+
+Promot end*

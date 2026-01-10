@@ -35,3 +35,8 @@ Thumbs.db
 * token.txt
 *token.txt
 git token.txt
+
+# Auto-sync files
+.git-auto-sync.sh
+.git-auto-sync.log
+.git-auto-sync.lock
