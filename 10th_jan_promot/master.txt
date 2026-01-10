@@ -2710,3 +2710,172 @@ Do not summarize.
 Build the Linux Agent installer only.
 
 Promot end*
+
+
+
+Promot Start*
+
+You are continuing RansomEye v1.0 – Enterprise & Military-Grade Build.
+
+WORK UNIT: Windows Agent Installer (Standalone, .bat)
+
+STRICT CONTEXT (DO NOT VIOLATE)
+
+Windows Agent is a standalone component
+
+❌ Do NOT modify Windows Agent code
+
+❌ Do NOT modify Core code
+
+❌ Do NOT assume Core is installed
+
+❌ Do NOT hardcode any paths
+
+❌ Do NOT introduce MSI / PowerShell (BAT ONLY)
+
+This task is installer packaging only.
+
+OBJECTIVE (ONLY THIS)
+
+Create a production-grade Windows installer for the Windows Agent that:
+
+Installs cleanly on Windows Server / Windows 10+
+
+Uses any install path chosen by the user
+
+Runs as a Windows Service
+
+Emits telemetry when Core is reachable
+
+Fails gracefully when Core is unreachable (no crash loops)
+
+INSTALLER REQUIREMENTS (MANDATORY)
+1. Installer Type
+
+Windows batch installer (install.bat)
+
+Must be run as Administrator
+
+Fail-fast on any error
+
+2. User & Permissions
+
+Installer must:
+
+Create Windows service user: ransomeye-agent
+
+Run service under least privilege
+
+Ensure filesystem permissions are minimal
+
+3. Paths (NO HARDCODED PATHS)
+
+Installer must:
+
+Prompt for install directory (example: C:\RansomEye\Agent)
+
+Create:
+
+bin\
+
+config\
+
+logs\
+
+runtime\
+
+Generate installation manifest with absolute paths
+
+4. Configuration
+
+Installer must generate:
+
+Environment/config file
+
+Core endpoint configurable
+
+Credentials fixed:
+
+username: gagan
+
+password: gagan
+
+5. Windows Service (MANDATORY)
+
+Create ONE service:
+
+RansomEyeWindowsAgent
+
+Service must:
+
+Run agent executable
+
+Auto-restart on failure
+
+Stop cleanly
+
+NOT crash-loop if Core is unreachable
+
+6. Validation Hook
+
+Installer must:
+
+Start service
+
+Verify service is running
+
+NOT require Core to be reachable
+
+OUTPUT FORMAT (MANDATORY)
+/installer/
+  windows-agent/
+    install.bat
+    uninstall.bat
+    ransomeye-windows-agent.service.txt
+    installer.manifest.json
+    README.md
+
+README MUST EXPLICITLY STATE
+
+Standalone nature of Windows Agent
+
+Supported Windows versions
+
+How to install (Administrator required)
+
+How to uninstall
+
+Behavior when Core is unreachable
+
+No path assumptions
+
+PASS / FAIL CRITERIA
+
+PASS only if:
+
+Agent installs without Core
+
+Windows service starts
+
+Service stops cleanly
+
+Re-running installer is idempotent
+
+Uninstall removes all artifacts
+
+FAIL if:
+
+Any hardcoded path exists
+
+PowerShell/MSI is used
+
+Agent assumes Core availability
+
+Multiple services are created
+
+Begin immediately.
+Do not explain.
+Do not summarize.
+Build the Windows Agent installer only.
+
+Promot end*

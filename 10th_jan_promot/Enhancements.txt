@@ -93,3 +93,26 @@ Full chain-of-custody verification reports
 
 
 
+19. DPI Probe — Network Traffic Analysis
+ML-based asset classification (device / role inference)
+“Strict vs Balanced” privacy redaction modes
+Chunked upload signature enforcement at probe
+Flow-level behavioral ML
+Performance tuning proof (10G / AF_PACKET / eBPF fast path)
+
+
+20. Risk Index — Global Enterprise Risk Score
+Cross-module signal fusion
+Enterprise-level aggregation
+Temporal decay functions
+Risk normalization (0–100 scale)
+Board-level / exec reporting
+
+
+21. User Behavior Analytics (UBA) — Insider Threat
+Per-user baseline models
+Time-of-day modeling
+Volume deviation detection
+Privilege drift detection
+Identity ↔ behavior linking
+UBA-specific incident taxonomy
