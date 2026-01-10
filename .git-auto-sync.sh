@@ -34,8 +34,8 @@ log() {
 
 log "Starting auto-sync check..."
 
-# Check if there are any changes
-if git diff --quiet && git diff --cached --quiet; then
+# Check if there are any changes (modified, staged, or untracked files)
+if git diff --quiet && git diff --cached --quiet && [ -z "$(git ls-files --others --exclude-standard)" ]; then
     log "No changes detected. Repository is clean."
     rm -f "$LOCK_FILE"
     exit 0
