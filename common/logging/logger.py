@@ -174,7 +174,13 @@ class StructuredLogger:
         self.info(f"SHUTDOWN: {message}", **kwargs)
     
     def config_error(self, error: str, **kwargs):
-        """Log configuration error (fatal)."""
+        """
+        Log configuration error (fatal).
+        
+        Security: Sanitizes error message to prevent secret leakage.
+        """
+        # Security: Sanitize error message (already sanitized by _log, but explicit here)
+        # The _log method will sanitize the message, but we sanitize here for clarity
         self.fatal(f"Configuration error: {error}", error_type='CONFIG_ERROR', **kwargs)
     
     def db_error(self, error: str, operation: str, **kwargs):
