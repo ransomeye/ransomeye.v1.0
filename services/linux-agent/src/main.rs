@@ -148,6 +148,39 @@ fn get_boot_id() -> Result<String> {
     Ok(boot_id)
 }
 
+/// Sort JSON value recursively to ensure deterministic hashing
+/// Contract compliance: Keys must be sorted for canonical JSON (matches Python's sort_keys=True)
+fn sort_json_value(value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::Object(map) => {
+            // First, recursively sort all nested values
+            for (_, v) in map.iter_mut() {
+                sort_json_value(v);
+            }
+            
+            // Rebuild map with sorted keys (serde_json::Map uses BTreeMap internally, but we need explicit sorting)
+            // Extract all key-value pairs, sort by key, then rebuild
+            let mut sorted_pairs: Vec<(String, serde_json::Value)> = map
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect();
+            sorted_pairs.sort_by_key(|(k, _)| k.clone());
+            
+            let mut new_map = serde_json::Map::new();
+            for (k, v) in sorted_pairs {
+                new_map.insert(k, v);
+            }
+            *value = serde_json::Value::Object(new_map);
+        }
+        serde_json::Value::Array(arr) => {
+            for item in arr.iter_mut() {
+                sort_json_value(item);
+            }
+        }
+        _ => {}
+    }
+}
+
 /// Compute SHA256 hash of JSON-serialized event envelope (hardened)
 /// Phase 10 requirement: Hash computation must exclude hash_sha256 field itself
 /// Contract compliance: hash_sha256 MUST be 64-character hex string (event-envelope.schema.json)
@@ -157,10 +190,18 @@ fn compute_hash(envelope: &EventEnvelope) -> Result<String> {
     let mut envelope_for_hash = envelope.clone();
     envelope_for_hash.integrity.hash_sha256 = String::new();
     
-    // Serialize to canonical JSON (compact, sorted keys for deterministic hashing)
+    // Serialize to JSON value first, then sort keys for canonical format
     // Contract compliance: hash MUST be computed after all fields are populated
-    let json = serde_json::to_string(&envelope_for_hash)
-        .context("Failed to serialize event envelope to JSON")?;
+    // Phase 10 requirement: Keys must be sorted to match Python's sort_keys=True (canonical JSON)
+    let mut json_value = serde_json::to_value(&envelope_for_hash)
+        .context("Failed to serialize event envelope to JSON value")?;
+    
+    // Sort keys recursively for canonical JSON (matches Python json.dumps(sort_keys=True))
+    sort_json_value(&mut json_value);
+    
+    // Serialize to compact JSON string (no extra whitespace, matches Python separators=(',', ':'))
+    let json = serde_json::to_string(&json_value)
+        .context("Failed to serialize sorted JSON value to string")?;
 
     // Phase 10 requirement: Compute SHA256 hash with proper error handling
     let mut hasher = Sha256::new();

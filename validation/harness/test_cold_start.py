@@ -90,6 +90,12 @@ def test_cold_start_correctness():
     clean_database()
     assert_database_empty()
     
+    # Set required environment variables for service imports
+    schema_path = os.path.join(os.path.dirname(__file__), '../../contracts/event-envelope.schema.json')
+    os.environ['RANSOMEYE_EVENT_ENVELOPE_SCHEMA_PATH'] = schema_path
+    os.environ['RANSOMEYE_LOG_DIR'] = '/tmp/ransomeye/logs'
+    os.environ['RANSOMEYE_POLICY_DIR'] = '/tmp/ransomeye/policy'
+    
     # Phase 9 requirement: Execute scenario
     print("Executing cold start scenario...")
     
@@ -97,9 +103,13 @@ def test_cold_start_correctness():
     print("  Test 1: Ingest service can start...")
     try:
         # Import ingest service (validates it can be imported without errors)
-        ingest_path = os.path.join(os.path.dirname(__file__), '../../services/ingest/app')
-        sys.path.insert(0, ingest_path)
-        from main import app as ingest_app
+        import importlib.util
+        ingest_main_path = os.path.join(os.path.dirname(__file__), '../../services/ingest/app/main.py')
+        spec = importlib.util.spec_from_file_location("ingest_main", ingest_main_path)
+        ingest_main = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(ingest_main)
+        # Just check that it has 'app' attribute (the FastAPI app)
+        assert hasattr(ingest_main, 'app'), "Ingest service missing 'app' attribute"
         print("    PASS: Ingest service can be imported")
     except Exception as e:
         print(f"    FAIL: Ingest service cannot be imported: {e}")
@@ -109,10 +119,14 @@ def test_cold_start_correctness():
     print("  Test 2: Correlation engine can start...")
     try:
         # Import correlation engine (validates it can be imported without errors)
-        import sys
-        correlation_path = os.path.join(os.path.dirname(__file__), '../../services/correlation-engine/app')
-        sys.path.insert(0, correlation_path)
-        from main import run_correlation_engine
+        import importlib.util
+        correlation_main_path = os.path.join(os.path.dirname(__file__), '../../services/correlation-engine/app/main.py')
+        spec = importlib.util.spec_from_file_location("correlation_main", correlation_main_path)
+        correlation_main = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(correlation_main)
+        # Check that it has 'run_correlation_engine' function
+        assert hasattr(correlation_main, 'run_correlation_engine'), "Correlation engine missing 'run_correlation_engine' function"
+        run_correlation_engine = correlation_main.run_correlation_engine
         print("    PASS: Correlation engine can be imported")
     except Exception as e:
         print(f"    FAIL: Correlation engine cannot be imported: {e}")

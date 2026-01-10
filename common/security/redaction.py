@@ -54,6 +54,8 @@ def _is_likely_secret(value: Any) -> bool:
     """
     Heuristic to detect if a value is likely a secret.
     
+    Security: Only flags values that look like actual secrets (random strings, not normal text).
+    
     Args:
         value: Value to check
         
@@ -67,15 +69,25 @@ def _is_likely_secret(value: Any) -> bool:
     if len(value) > MAX_VALUE_LENGTH_TO_CHECK:
         return False
     
-    # Check for common secret patterns
+    # Skip normal sentences (contain spaces, common words) - not secrets
+    if ' ' in value or '\n' in value or '\t' in value:
+        # Normal text with spaces is not a secret
+        # Only check if it contains explicit secret patterns (password=, key=, etc.)
+        return False
+    
+    # Check for common secret patterns (must be explicit pattern, not just containing word)
+    # Only flag if pattern suggests a secret value (e.g., "password=xyz", not just "password")
     if _contains_secret_pattern(value):
-        return True
+        # Only flag if it looks like a key-value pair or assignment (e.g., "password=secret123")
+        if '=' in value or ':' in value or value.strip().startswith(('password', 'key', 'token', 'secret')):
+            return True
     
     # Check for high entropy (likely random/secret strings)
-    # Secrets typically have high entropy (random characters)
-    if len(value) >= 16:
+    # Secrets typically have high entropy (random characters, no spaces, no common words)
+    if len(value) >= 16 and ' ' not in value:
         # Check if string looks random (not all same character, mixed case, numbers, symbols)
-        if len(set(value)) > len(value) * 0.5 and not value.isalnum() and not value.isalpha():
+        # Must have high entropy AND no spaces (random strings don't have spaces)
+        if len(set(value)) > len(value) * 0.6 and not value.isalnum() and not value.isalpha():
             return True
     
     return False

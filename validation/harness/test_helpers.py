@@ -148,10 +148,6 @@ def launch_linux_agent_and_wait_for_event(
     observed_at = None
     
     while (time.time() - start_time) < timeout_seconds:
-        # Check if process finished
-        if process.poll() is not None:
-            break
-        
         # Check database for new event (observational)
         conn = get_test_db_connection()
         cur = conn.cursor()
@@ -176,6 +172,32 @@ def launch_linux_agent_and_wait_for_event(
             cur.close()
             conn.close()
         
+        # Check if process finished
+        if process.poll() is not None:
+            # Process finished, check one more time for event (agent might have finished before DB commit)
+            conn = get_test_db_connection()
+            cur = conn.cursor()
+            try:
+                cur.execute("SELECT COUNT(*) FROM raw_events")
+                current_event_count = cur.fetchone()[0]
+                
+                if current_event_count > initial_event_count:
+                    cur.execute("""
+                        SELECT event_id, machine_id, observed_at
+                        FROM raw_events
+                        ORDER BY ingested_at DESC
+                        LIMIT 1
+                    """)
+                    row = cur.fetchone()
+                    if row:
+                        event_id, machine_id, observed_at = row
+                        event_observed = True
+                        break
+            finally:
+                cur.close()
+                conn.close()
+            break
+        
         time.sleep(0.1)  # Small delay to avoid tight loop (observational polling, not timing hack)
     
     # Wait for process to finish (if not already finished)
@@ -186,6 +208,29 @@ def launch_linux_agent_and_wait_for_event(
         stdout, stderr = process.communicate()
     
     agent_exit_code = process.returncode
+    
+    # Final check for event after process completion (in case event was committed after process finished)
+    if not event_observed:
+        conn = get_test_db_connection()
+        cur = conn.cursor()
+        try:
+            cur.execute("SELECT COUNT(*) FROM raw_events")
+            current_event_count = cur.fetchone()[0]
+            
+            if current_event_count > initial_event_count:
+                cur.execute("""
+                    SELECT event_id, machine_id, observed_at
+                    FROM raw_events
+                    ORDER BY ingested_at DESC
+                    LIMIT 1
+                """)
+                row = cur.fetchone()
+                if row:
+                    event_id, machine_id, observed_at = row
+                    event_observed = True
+        finally:
+            cur.close()
+            conn.close()
     
     if not event_observed:
         raise RuntimeError(

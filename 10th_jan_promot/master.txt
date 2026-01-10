@@ -2286,3 +2286,179 @@ Begin immediately.
 This step gates installer creation.
 
 Promot end*
+
+
+
+Promot Start*
+
+You are continuing RansomEye v1.0 – Enterprise & Military-Grade Build.
+
+WORK UNIT: Installer Packaging — RansomEye Core
+
+STRICT CONTEXT (DO NOT VIOLATE)
+
+Core code is frozen
+
+Validation is frozen
+
+❌ No code changes unless installer uncovers a fatal issue
+
+❌ No schema changes
+
+❌ No contract changes
+
+❌ No feature additions
+
+This step is packaging only.
+
+OBJECTIVE (ONLY THIS)
+
+Create a commercial-grade installer for RansomEye Core that:
+
+Installs cleanly on Ubuntu LTS
+
+Uses any install path chosen by the user
+
+Runs Core as a single unified service
+
+Uses credentials:
+
+user: gagan
+
+password: gagan
+
+Is deterministic, idempotent, and fail-closed
+
+INSTALLER REQUIREMENTS (MANDATORY)
+1. Installer Type
+
+Bash installer (install.sh)
+
+Must be executable
+
+Must fail fast on any error
+
+2. User & Permissions
+
+Installer must:
+
+Create system user: ransomeye
+
+Set ownership and permissions correctly
+
+Drop privileges for runtime
+
+3. Paths (NO HARDCODED PATHS)
+
+Installer must:
+
+Prompt for install root (example: /opt/ransomeye)
+
+Create:
+
+bin/
+
+lib/
+
+config/
+
+logs/
+
+runtime/
+
+Write installation manifest with absolute paths
+
+4. Configuration
+
+Installer must generate:
+
+Environment file for Core
+
+DB connection config using:
+
+user: gagan
+
+password: gagan
+
+Log directories with correct permissions
+
+5. Service Management
+
+Create ONE systemd service:
+
+ransomeye-core.service
+
+No per-module services
+
+Service must:
+
+Start Core
+
+Restart on failure
+
+Stop cleanly
+
+6. Validation Hook
+
+Installer must:
+
+Start Core
+
+Perform health check
+
+Fail installation if Core does not start cleanly
+
+OUTPUT FORMAT (MANDATORY)
+/installer/
+  core/
+    install.sh
+    uninstall.sh
+    ransomeye-core.service
+    installer.manifest.json
+    README.md
+
+README MUST EXPLICITLY STATE
+
+What the installer does
+
+Supported OS
+
+How to install
+
+How to uninstall
+
+Failure behavior (fail-closed)
+
+No assumptions about paths
+
+PASS / FAIL CRITERIA
+
+PASS only if:
+
+Installer works on a clean Ubuntu system
+
+Installation path is user-defined
+
+Core starts successfully
+
+Core stops cleanly
+
+Re-running installer is idempotent
+
+FAIL if:
+
+Any hardcoded path exists
+
+Multiple services are created
+
+Installer continues after failure
+
+Begin immediately.
+Do not explain.
+Do not summarize.
+Build the Core installer only.
+
+Promot end*
+
+
+
