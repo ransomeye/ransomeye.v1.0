@@ -1,0 +1,35 @@
+[Service Configuration]
+Service Name: RansomEyeWindowsAgent
+Display Name: RansomEye Windows Agent
+Description: RansomEye v1.0 Windows Agent - Standalone component that emits events to Core Ingest service
+
+[Installation Command]
+sc create "RansomEyeWindowsAgent" binPath= "@INSTALL_ROOT@\bin\ransomeye-windows-agent-wrapper.bat" DisplayName= "RansomEye Windows Agent" start= auto obj= ".\ransomeye-agent" password= ""
+
+[Service Type]
+Type: OWN_PROCESS (10) - Standalone process
+Start: AUTO_START (2) - Start automatically on boot
+ErrorControl: NORMAL (1) - Log error but continue
+
+[Recovery Configuration]
+Reset period: 300 seconds (5 minutes)
+Actions on failure:
+  First failure: Restart service after 60 seconds
+  Second failure: Restart service after 120 seconds
+  Subsequent failures: Restart service after 300 seconds
+  After 5 failures in 5 minutes: Take no action (prevents crash-loop if Core is unreachable)
+
+[Environment Variables]
+Environment variables are passed via wrapper script (ransomeye-windows-agent-wrapper.bat)
+which reads @INSTALL_ROOT@\config\environment.txt and sets variables before running agent.
+
+Required variables:
+- RANSOMEYE_COMPONENT_INSTANCE_ID (required, UUID format)
+- RANSOMEYE_VERSION (required, e.g., "1.0.0")
+- RANSOMEYE_INGEST_URL (optional, defaults to "http://localhost:8000/events")
+
+[Notes]
+- Service runs as user: .\ransomeye-agent (local service account)
+- Service auto-restarts on failure with increasing delays
+- Crash-loop prevention: After 5 failures in 5 minutes, service stops restarting
+- Agent is one-shot: Runs once, transmits event, exits (exit code 0 on success, 3 on Core unreachable)

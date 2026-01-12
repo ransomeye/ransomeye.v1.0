@@ -1,0 +1,115 @@
+{
+  "components": [
+    {
+      "name": "RansomEye Core",
+      "component_id": "core",
+      "installer_path": "core/install.sh",
+      "installer_type": "bash",
+      "service_name": "ransomeye-core.service",
+      "service_type": "systemd",
+      "standalone": false,
+      "requires_core": true,
+      "description": "Unified RansomEye Core runtime (Ingest, Correlation Engine, AI Core, Policy Engine, UI Backend)",
+      "required_privileges": {
+        "installation": "root",
+        "runtime": "non-root user (ransomeye)",
+        "capabilities": []
+      },
+      "supported_os": ["Ubuntu LTS 20.04+", "Ubuntu LTS 22.04+", "Ubuntu LTS 24.04+"],
+      "prerequisites": ["PostgreSQL", "Python 3.8+", "FastAPI", "Uvicorn"],
+      "installer_files": [
+        "core/install.sh",
+        "core/uninstall.sh",
+        "core/ransomeye-core.service",
+        "core/installer.manifest.json",
+        "core/README.md"
+      ]
+    },
+    {
+      "name": "RansomEye Linux Agent",
+      "component_id": "linux-agent",
+      "installer_path": "linux-agent/install.sh",
+      "installer_type": "bash",
+      "service_name": "ransomeye-linux-agent.service",
+      "service_type": "systemd",
+      "standalone": true,
+      "requires_core": false,
+      "description": "Standalone Linux agent that emits events to Core Ingest service",
+      "required_privileges": {
+        "installation": "root",
+        "runtime": "non-root user (ransomeye-agent)",
+        "capabilities": []
+      },
+      "supported_os": ["Ubuntu LTS 20.04+", "Ubuntu LTS 22.04+", "Ubuntu LTS 24.04+"],
+      "prerequisites": ["Rust toolchain (cargo)", "Python 3.10+"],
+      "installer_files": [
+        "linux-agent/install.sh",
+        "linux-agent/uninstall.sh",
+        "linux-agent/ransomeye-linux-agent.service",
+        "linux-agent/installer.manifest.json",
+        "linux-agent/README.md"
+      ]
+    },
+    {
+      "name": "RansomEye Windows Agent",
+      "component_id": "windows-agent",
+      "installer_path": "windows-agent/install.bat",
+      "installer_type": "batch",
+      "service_name": "RansomEyeWindowsAgent",
+      "service_type": "windows-service",
+      "standalone": true,
+      "requires_core": false,
+      "description": "Standalone Windows agent that emits events to Core Ingest service",
+      "required_privileges": {
+        "installation": "Administrator",
+        "runtime": "non-Administrator user (ransomeye-agent)",
+        "capabilities": []
+      },
+      "supported_os": ["Windows Server 2016+", "Windows Server 2019+", "Windows Server 2022+", "Windows 10 Enterprise", "Windows 10 Pro", "Windows 11 Enterprise", "Windows 11 Pro"],
+      "prerequisites": ["Rust toolchain (for building binary)", "Windows Agent binary (.exe)"],
+      "installer_files": [
+        "windows-agent/install.bat",
+        "windows-agent/uninstall.bat",
+        "windows-agent/ransomeye-windows-agent.service.txt",
+        "windows-agent/installer.manifest.json",
+        "windows-agent/README.md"
+      ]
+    },
+    {
+      "name": "RansomEye DPI Probe",
+      "component_id": "dpi-probe",
+      "installer_path": "dpi-probe/install.sh",
+      "installer_type": "bash",
+      "service_name": "ransomeye-dpi.service",
+      "service_type": "systemd",
+      "standalone": true,
+      "requires_core": false,
+      "description": "Standalone privileged component for deep packet inspection and network monitoring",
+      "required_privileges": {
+        "installation": "root",
+        "runtime": "non-root user (ransomeye-dpi) with file capabilities",
+        "capabilities": ["CAP_NET_RAW", "CAP_NET_ADMIN"]
+      },
+      "supported_os": ["Ubuntu LTS 20.04+", "Ubuntu LTS 22.04+", "Ubuntu LTS 24.04+"],
+      "prerequisites": ["Python 3.10+", "libcap2-bin (for capability management)", "Filesystem with capability support (ext4, xfs)"],
+      "installer_files": [
+        "dpi-probe/install.sh",
+        "dpi-probe/uninstall.sh",
+        "dpi-probe/ransomeye-dpi.service",
+        "dpi-probe/installer.manifest.json",
+        "dpi-probe/README.md"
+      ]
+    }
+  ],
+  "credentials_policy": {
+    "database_user": "gagan",
+    "database_password": "gagan",
+    "note": "Fixed credentials for v1.0. Change in production deployments."
+  },
+  "installer_integrity": {
+    "checksum_algorithm": "SHA256",
+    "checksum_file": "checksums/SHA256SUMS",
+    "signature_file": "checksums/SHA256SUMS.sig",
+    "validation_script": "validate-release.sh"
+  }
+}

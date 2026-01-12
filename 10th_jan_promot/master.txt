@@ -3062,3 +3062,149 @@ Build the DPI Probe installer only.
 
 Promot end*
 
+
+
+Promot Start*
+
+You are continuing RansomEye v1.0 – Enterprise & Military-Grade Build.
+
+WORK UNIT: Enterprise Release Bundle & Final Validation
+
+STRICT CONTEXT (DO NOT VIOLATE)
+
+❌ NO code changes
+
+❌ NO installer changes
+
+❌ NO schema or contract changes
+
+❌ NO new features
+
+This task is packaging, validation, and release artifacts only.
+
+OBJECTIVE (ONLY THIS)
+
+Create the final enterprise release bundle for RansomEye v1.0 that:
+
+Groups all installers cleanly
+
+Provides a single authoritative entry point
+
+Produces verifiable integrity artifacts
+
+Enables customers to install components independently or together
+
+REQUIRED OUTPUT STRUCTURE (MANDATORY)
+/release/
+  ransomeye-v1.0/
+    core/
+    linux-agent/
+    windows-agent/
+    dpi-probe/
+    checksums/
+      SHA256SUMS
+      SHA256SUMS.sig
+    audit/
+      build-info.json
+      component-manifest.json
+    validate-release.sh
+    README.md
+
+REQUIREMENTS (MANDATORY)
+1. Installer Aggregation
+
+Copy installers as-is into respective folders
+
+Do NOT modify installer contents
+
+2. Integrity & Audit Artifacts
+
+Generate:
+
+SHA256SUMS for every installer file
+
+build-info.json:
+
+version
+
+build timestamp
+
+OS used
+
+git commit hashes
+
+component-manifest.json:
+
+component name
+
+installer path
+
+service name
+
+standalone vs core
+
+required privileges
+
+3. Validation Script
+
+validate-release.sh must:
+
+Verify checksums
+
+Verify required files exist
+
+Fail fast on any mismatch
+
+NOT install anything
+
+4. README (CRITICAL)
+
+README must clearly explain:
+
+What RansomEye is
+
+Components overview
+
+Installation order (optional)
+
+Standalone vs Core components
+
+Credentials policy (gagan / gagan)
+
+Supported OS matrix
+
+Security & privilege model
+
+How to validate integrity
+
+How to get support (placeholder allowed)
+
+PASS / FAIL CRITERIA
+
+PASS only if:
+
+Bundle is self-contained
+
+Integrity verification works
+
+No files modified from installers
+
+Clear enterprise-grade documentation exists
+
+FAIL if:
+
+Any installer is changed
+
+Any checksum missing
+
+Validation script is non-deterministic
+
+Begin immediately.
+Do not explain.
+Do not summarize.
+Build the enterprise release bundle only.
+
+Promot end*
+
+
+

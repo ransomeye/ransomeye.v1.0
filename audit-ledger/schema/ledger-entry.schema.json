@@ -1,0 +1,185 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RansomEye Audit Ledger Entry",
+  "description": "Frozen schema for append-only audit ledger entries. All fields are mandatory. No optional fields allowed.",
+  "type": "object",
+  "required": [
+    "ledger_entry_id",
+    "timestamp",
+    "component",
+    "component_instance_id",
+    "action_type",
+    "subject",
+    "actor",
+    "payload",
+    "prev_entry_hash",
+    "entry_hash",
+    "signature",
+    "signing_key_id"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "ledger_entry_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this ledger entry (UUID v4)"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp of entry creation"
+    },
+    "component": {
+      "type": "string",
+      "enum": [
+        "core",
+        "linux-agent",
+        "windows-agent",
+        "dpi-probe",
+        "ai-core",
+        "policy-engine",
+        "correlation-engine",
+        "ingest",
+        "ui",
+        "installer",
+        "system"
+      ],
+      "description": "Component that generated this entry"
+    },
+    "component_instance_id": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9_-]+$",
+      "minLength": 1,
+      "maxLength": 128,
+      "description": "Unique identifier for the component instance (e.g., hostname, service ID)"
+    },
+    "action_type": {
+      "type": "string",
+      "enum": [
+        "installer_install",
+        "installer_uninstall",
+        "installer_upgrade",
+        "service_start",
+        "service_stop",
+        "service_restart",
+        "service_crash",
+        "service_health_check",
+        "policy_recommendation",
+        "policy_enforcement",
+        "policy_simulation",
+        "policy_override",
+        "ai_model_register",
+        "ai_model_promote",
+        "ai_model_revoke",
+        "ai_model_inference",
+        "playbook_planned",
+        "playbook_executed",
+        "playbook_rolled_back",
+        "playbook_failed",
+        "forensic_memory_dump",
+        "forensic_disk_read",
+        "forensic_artifact_access",
+        "admin_config_change",
+        "admin_module_load",
+        "admin_module_unload",
+        "admin_user_action",
+        "admin_privilege_escalation",
+        "correlation_incident_created",
+        "correlation_incident_updated",
+        "correlation_incident_resolved",
+        "ingest_event_received",
+        "ingest_event_rejected",
+        "ingest_event_validated"
+      ],
+      "description": "Type of action being recorded"
+    },
+    "subject": {
+      "type": "object",
+      "description": "Subject of the action (incident_id, model_id, playbook_id, etc.)",
+      "required": [
+        "type",
+        "id"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "incident",
+            "model",
+            "playbook",
+            "event",
+            "config",
+            "module",
+            "user",
+            "service",
+            "installer",
+            "forensic_artifact",
+            "none"
+          ],
+          "description": "Type of subject"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "Identifier for the subject (UUID, name, path, etc.)"
+        }
+      },
+      "additionalProperties": false
+    },
+    "actor": {
+      "type": "object",
+      "description": "Actor that performed the action",
+      "required": [
+        "type",
+        "identifier"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "system",
+            "user",
+            "module",
+            "service",
+            "installer"
+          ],
+          "description": "Type of actor"
+        },
+        "identifier": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "Identifier for the actor (username, service name, module name, etc.)"
+        }
+      },
+      "additionalProperties": false
+    },
+    "payload": {
+      "type": "object",
+      "description": "Action-specific payload data (strictly validated per action_type)",
+      "minProperties": 1,
+      "additionalProperties": true
+    },
+    "prev_entry_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA256 hash of the previous ledger entry (empty string for first entry)"
+    },
+    "entry_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA256 hash of this entry (canonical JSON, excluding entry_hash and signature)"
+    },
+    "signature": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9+/=]+$",
+      "description": "Base64-encoded ed25519 signature of entry_hash"
+    },
+    "signing_key_id": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA256 hash of the public key used for signing (key identifier)"
+    }
+  }
+}

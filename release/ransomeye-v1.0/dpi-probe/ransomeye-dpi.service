@@ -1,0 +1,64 @@
+[Unit]
+Description=RansomEye v1.0 DPI Probe
+Documentation=https://ransomeye.v1.0/
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ransomeye-dpi
+Group=ransomeye-dpi
+WorkingDirectory=@INSTALL_ROOT@
+
+# Environment file (contains all configuration)
+EnvironmentFile=@INSTALL_ROOT@/config/environment
+
+# Executable (DPI Probe script with capabilities)
+# Note: DPI Probe script has CAP_NET_RAW and CAP_NET_ADMIN capabilities set via setcap
+# Service runs as non-root user but with required capabilities for packet capture
+ExecStart=/usr/bin/python3 @INSTALL_ROOT@/bin/ransomeye-dpi-probe
+
+# Restart on failure (but with limits to avoid crash-loops)
+Restart=on-failure
+RestartSec=60
+
+# Crash-loop prevention: Limit restarts to 5 attempts in 5 minutes
+# If Core is unreachable, probe will exit with code 3 (RuntimeError)
+# After 5 failed attempts, systemd stops restarting (prevents crash-loop)
+StartLimitIntervalSec=300
+StartLimitBurst=5
+StartLimitAction=none
+
+# Resource limits (prevent runaway processes)
+LimitNOFILE=65536
+LimitNPROC=4096
+
+# Security hardening
+# Note: DPI Probe requires CAP_NET_RAW and CAP_NET_ADMIN for packet capture
+# These capabilities are set on the script file itself via setcap, not via systemd
+# Systemd will run the script as non-root user (ransomeye-dpi) but with file capabilities
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=@INSTALL_ROOT@/logs @INSTALL_ROOT@/runtime
+
+# Capability notes:
+# - CAP_NET_RAW: Required for raw socket creation (packet capture)
+# - CAP_NET_ADMIN: Required for network interface configuration
+# - Capabilities are set on script file via: setcap cap_net_raw,cap_net_admin+ep <script>
+# - Service runs as non-root user but inherits file capabilities
+# - This is more secure than running as full root
+
+# Graceful shutdown (probe handles SIGTERM cleanly)
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ransomeye-dpi
+
+[Install]
+WantedBy=multi-user.target
