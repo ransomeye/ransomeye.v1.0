@@ -1,0 +1,211 @@
+****Promot Start****
+
+You are continuing **RansomEye — Enterprise & Military-Grade Platform Expansion**.
+
+This is **PHASE A2 (FOUNDATIONAL, NON-OPTIONAL)**.
+
+No other work is allowed until this phase is fully complete, validated, and frozen.
+
+---
+
+# WORK UNIT A2 — GLOBAL VALIDATOR (SYSTEM ASSURANCE & PROVABLE CORRECTNESS)
+
+## ABSOLUTE CONTEXT (DO NOT VIOLATE)
+
+* ❌ NO modification to existing v1.0 Core, Agents, DPI, installers, or Audit Ledger code
+* ❌ NO retrofitting logic into existing services
+* ❌ NO mocks, placeholders, synthetic shortcuts, or “best-effort” checks
+* ❌ NO network dependency for correctness (offline-capable)
+* ❌ NO database dependency for correctness (file-based, deterministic)
+
+This phase **adds a new assurance subsystem only**.
+
+---
+
+## OBJECTIVE
+
+Build the **Global Validator**, a deterministic assurance engine that:
+
+* Proves end-to-end system integrity
+* Validates chain-of-custody across Core, Agents, DPI
+* Simulates attacks without altering production state
+* Produces **signed, auditable compliance reports**
+* Consumes the **Audit Ledger as the root of truth**
+
+This subsystem is the **final authority** on whether a deployment is trustworthy.
+
+---
+
+## SCOPE (MANDATORY)
+
+The Global Validator MUST be able to validate:
+
+1. **Audit Ledger Integrity**
+
+   * Full replay
+   * Hash-chain + signature verification
+   * Key continuity (including rotation events)
+
+2. **Installer & Binary Integrity**
+
+   * Hash verification of installed artifacts
+   * Match against release checksums
+   * Detect drift or tampering
+
+3. **Configuration Integrity**
+
+   * Detect unauthorized config changes
+   * Validate config hash entries against ledger
+
+4. **Chain-of-Custody**
+
+   * From ingest → correlation → AI → policy → response
+   * Every step must have a corresponding ledger entry
+   * No gaps, no silent transitions
+
+5. **Subsystem Disablement Correctness**
+
+   * Prove system correctness when:
+
+     * AI disabled
+     * Policy disabled
+     * UI disabled
+   * Evidence must exist in ledger
+
+6. **Synthetic Attack Simulation (NON-DESTRUCTIVE)**
+
+   * Deterministic simulated ransomware scenario
+   * No real system mutation
+   * Simulation actions MUST be recorded in ledger
+   * Must validate detection + response paths
+
+---
+
+## TECHNICAL REQUIREMENTS (NON-NEGOTIABLE)
+
+### 1. Deterministic Execution
+
+* No randomness
+* No wall-clock trust
+* No sleeps
+* Fixed ordering
+* Same input → same output
+
+---
+
+### 2. Validator Inputs
+
+The validator MUST consume:
+
+* Audit Ledger file(s)
+* Public signing keys
+* Release `SHA256SUMS`
+* Installed component manifests
+* Configuration snapshots (read-only)
+
+---
+
+### 3. Validation Outputs (MANDATORY)
+
+Validator MUST produce:
+
+* **Signed validation report** (ed25519)
+* Formats:
+
+  * JSON (authoritative)
+  * PDF (human / compliance)
+  * CSV (regulatory ingestion)
+* Explicit PASS / FAIL
+* Failure classification:
+
+  * Integrity breach
+  * Missing ledger entry
+  * Tampering detected
+  * Configuration drift
+  * Incomplete chain-of-custody
+
+---
+
+### 4. Cryptographic Discipline
+
+* Reuse ed25519 signing model
+* Separate validator signing key
+* Never reuse ledger signing key
+* Verification must fail if keys mismatch
+
+---
+
+### 5. Failure Semantics
+
+* Fail-fast
+* Fail-closed
+* First failure aborts run
+* Failure location explicitly reported
+
+---
+
+## REQUIRED OUTPUT STRUCTURE
+
+```
+/global-validator/
+  schema/
+    validation-report.schema.json
+  crypto/
+    validator_key_manager.py
+    signer.py
+    verifier.py
+  checks/
+    ledger_checks.py
+    integrity_checks.py
+    custody_checks.py
+    config_checks.py
+    simulation_checks.py
+  cli/
+    run_validation.py
+  reports/
+    render_pdf.py
+    render_csv.py
+  README.md
+```
+
+---
+
+## README MUST EXPLICITLY DOCUMENT
+
+* Assurance model & threat assumptions
+* Relationship to Audit Ledger
+* What PASS means legally and operationally
+* What FAIL means (and required actions)
+* Determinism guarantees
+* How to present reports to auditors / regulators
+
+---
+
+## PASS / FAIL CRITERIA
+
+PASS only if:
+
+* Any tampering is detected deterministically
+* Missing or out-of-order ledger entries are detected
+* Simulation produces provable outcomes
+* Signed reports verify correctly
+* No dependency on Core runtime behavior
+
+FAIL if:
+
+* Validation can be bypassed
+* Reports are unsigned
+* Any check is best-effort
+* Any step relies on trust assumptions
+
+---
+
+## DELIVERABLE EXPECTATION
+
+Produce **full production-grade code**, schemas, and documentation.
+
+Do NOT summarize.
+Do NOT explain verbally.
+**Build the Global Validator subsystem only.**
+
+****promot end****

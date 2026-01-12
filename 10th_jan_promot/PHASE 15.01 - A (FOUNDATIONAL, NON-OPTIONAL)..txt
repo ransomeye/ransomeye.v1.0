@@ -1,0 +1,203 @@
+****Promot Start****
+
+You are continuing **RansomEye — Enterprise & Military-Grade Platform Expansion**.
+
+This is **PHASE A (FOUNDATIONAL, NON-OPTIONAL)**.
+
+No other work is allowed until this phase is fully complete, validated, and frozen.
+
+---
+
+# WORK UNIT A1 — AUDIT LEDGER (APPEND-ONLY, SIGNED, SYSTEM-WIDE)
+
+## ABSOLUTE CONTEXT (DO NOT VIOLATE)
+
+* ❌ NO modification to existing v1.0 Core, Agents, DPI, or installers
+* ❌ NO retrofitting logic into existing code paths
+* ❌ NO optional fields, placeholders, mock data, or synthetic shortcuts
+* ❌ NO reliance on wall-clock trust without cryptographic proof
+
+This phase **adds new foundational subsystems** only.
+
+---
+
+## OBJECTIVE
+
+Build a **system-wide Audit Ledger** that provides:
+
+* Append-only, tamper-evident recording
+* Cryptographically signed entries
+* Full chain-of-custody for **every security-relevant action**
+* Deterministic verification and export
+* Court / compliance-grade integrity
+
+This ledger becomes the **root of trust** for RansomEye.
+
+---
+
+## SCOPE (MANDATORY)
+
+The Audit Ledger MUST record **at minimum**:
+
+1. Installer actions (Core, Agents, DPI)
+2. Service lifecycle events (start, stop, crash, restart)
+3. Policy decisions (recommendations, enforcement, simulation)
+4. AI model lifecycle actions (register, promote, revoke)
+5. Playbook execution (planned, executed, rolled back)
+6. Forensic access (memory dump, disk artifact read)
+7. Administrative actions (config change, module load/unload)
+
+No silent actions are allowed anywhere in the system.
+
+---
+
+## TECHNICAL REQUIREMENTS (NON-NEGOTIABLE)
+
+### 1. Ledger Properties
+
+* Append-only
+* Immutable after write
+* Hash-chained (prev_hash → current_hash)
+* Digitally signed (ed25519)
+* Deterministic serialization (canonical JSON)
+
+---
+
+### 2. Ledger Entry Schema (MANDATORY)
+
+Define a **frozen ledger entry schema** including:
+
+* ledger_entry_id (UUID)
+* timestamp (RFC3339 UTC)
+* component (core / agent / dpi / ai / policy / etc.)
+* component_instance_id
+* action_type (ENUM, explicitly defined)
+* subject (incident_id, model_id, playbook_id, etc.)
+* actor (system / user / module)
+* payload (strictly validated object)
+* prev_entry_hash
+* entry_hash
+* signature
+* signing_key_id
+
+No optional fields.
+No free-form strings without schema.
+
+---
+
+### 3. Storage Backend
+
+* File-based append-only log (Phase A)
+* Write-once semantics enforced
+* fsync on write
+* Read-only mount option supported
+* No database dependency for correctness
+
+---
+
+### 4. Cryptography
+
+* ed25519 keypair per installation
+* Private key:
+
+  * Generated at install time
+  * Never logged
+  * Never exported
+* Public key:
+
+  * Exportable
+  * Used for verification
+* Key rotation supported (with ledger continuity)
+
+---
+
+### 5. Verification Tool (MANDATORY)
+
+Build a **ledger verification CLI** that:
+
+* Replays entire ledger
+* Verifies:
+
+  * Hash chain integrity
+  * Signature validity
+  * Schema correctness
+  * Ordering guarantees
+* Produces:
+
+  * PASS / FAIL
+  * Failure location
+* Exports signed verification report (JSON)
+
+---
+
+### 6. Integration Contract (CRITICAL)
+
+* Define a **single, minimal append API**
+* Existing components will call this later
+* For this phase:
+
+  * Build API + stubs
+  * Do NOT modify existing services yet
+
+---
+
+## REQUIRED OUTPUT STRUCTURE
+
+```
+/audit-ledger/
+  schema/
+    ledger-entry.schema.json
+  crypto/
+    key_manager.py
+    signer.py
+    verifier.py
+  storage/
+    append_only_store.py
+  cli/
+    verify_ledger.py
+    export_ledger.py
+  README.md
+```
+
+---
+
+## README MUST EXPLICITLY DOCUMENT
+
+* Threat model
+* Tamper-evidence guarantees
+* Key management model
+* Failure semantics (fail-closed)
+* How verification works
+* Legal / compliance positioning
+
+---
+
+## PASS / FAIL CRITERIA
+
+PASS only if:
+
+* Ledger entries cannot be modified or deleted
+* Any tampering is detected by verifier
+* Hash chain breaks are detected
+* Signature failures are detected
+* Verification is deterministic
+* No dependency on database or network
+
+FAIL if:
+
+* Ledger allows mutation
+* Any field is optional
+* Any action is not representable
+* Verification relies on trust assumptions
+
+---
+
+## DELIVERABLE EXPECTATION
+
+Produce **full production-grade code**, schemas, and documentation.
+
+Do NOT summarize.
+Do NOT explain design verbally.
+**Build the Audit Ledger subsystem only.**
+
+****promot end****

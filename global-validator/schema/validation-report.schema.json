@@ -1,0 +1,350 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RansomEye Global Validator Report",
+  "description": "Frozen schema for validation reports. All fields are mandatory. No optional fields allowed.",
+  "type": "object",
+  "required": [
+    "report_id",
+    "timestamp",
+    "validator_version",
+    "validation_status",
+    "validation_scope",
+    "ledger_checks",
+    "integrity_checks",
+    "custody_checks",
+    "config_checks",
+    "simulation_checks",
+    "failure_classification",
+    "first_failure",
+    "report_hash",
+    "signature",
+    "signing_key_id"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "report_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this validation report (UUID v4)"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp of report generation"
+    },
+    "validator_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "description": "Validator version (semantic versioning)"
+    },
+    "validation_status": {
+      "type": "string",
+      "enum": ["PASS", "FAIL"],
+      "description": "Overall validation status"
+    },
+    "validation_scope": {
+      "type": "object",
+      "description": "Scope of validation performed",
+      "required": [
+        "ledger_path",
+        "key_dir",
+        "release_checksums_path",
+        "component_manifests",
+        "config_snapshots"
+      ],
+      "properties": {
+        "ledger_path": {
+          "type": "string",
+          "description": "Path to audit ledger file"
+        },
+        "key_dir": {
+          "type": "string",
+          "description": "Path to directory containing public keys"
+        },
+        "release_checksums_path": {
+          "type": "string",
+          "description": "Path to release SHA256SUMS file"
+        },
+        "component_manifests": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Paths to component installation manifests"
+        },
+        "config_snapshots": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Paths to configuration snapshot files"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ledger_checks": {
+      "type": "object",
+      "description": "Results of audit ledger integrity checks",
+      "required": [
+        "status",
+        "total_entries",
+        "verified_entries",
+        "hash_chain_valid",
+        "signatures_valid",
+        "key_continuity_valid",
+        "failures"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["PASS", "FAIL"]
+        },
+        "total_entries": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "verified_entries": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "hash_chain_valid": {
+          "type": "boolean"
+        },
+        "signatures_valid": {
+          "type": "boolean"
+        },
+        "key_continuity_valid": {
+          "type": "boolean"
+        },
+        "failures": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["entry_id", "error"],
+            "properties": {
+              "entry_id": {"type": "string"},
+              "error": {"type": "string"}
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "integrity_checks": {
+      "type": "object",
+      "description": "Results of installer and binary integrity checks",
+      "required": [
+        "status",
+        "components_checked",
+        "components_valid",
+        "checksum_matches",
+        "tampering_detected",
+        "failures"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["PASS", "FAIL"]
+        },
+        "components_checked": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "components_valid": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "checksum_matches": {
+          "type": "boolean"
+        },
+        "tampering_detected": {
+          "type": "boolean"
+        },
+        "failures": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["component", "error"],
+            "properties": {
+              "component": {"type": "string"},
+              "error": {"type": "string"}
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "custody_checks": {
+      "type": "object",
+      "description": "Results of chain-of-custody checks",
+      "required": [
+        "status",
+        "chains_verified",
+        "gaps_detected",
+        "silent_transitions_detected",
+        "failures"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["PASS", "FAIL"]
+        },
+        "chains_verified": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "gaps_detected": {
+          "type": "boolean"
+        },
+        "silent_transitions_detected": {
+          "type": "boolean"
+        },
+        "failures": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["chain_type", "error"],
+            "properties": {
+              "chain_type": {"type": "string"},
+              "error": {"type": "string"}
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "config_checks": {
+      "type": "object",
+      "description": "Results of configuration integrity checks",
+      "required": [
+        "status",
+        "configs_checked",
+        "configs_valid",
+        "unauthorized_changes_detected",
+        "failures"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["PASS", "FAIL"]
+        },
+        "configs_checked": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "configs_valid": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unauthorized_changes_detected": {
+          "type": "boolean"
+        },
+        "failures": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["config_path", "error"],
+            "properties": {
+              "config_path": {"type": "string"},
+              "error": {"type": "string"}
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "simulation_checks": {
+      "type": "object",
+      "description": "Results of synthetic attack simulation",
+      "required": [
+        "status",
+        "simulation_executed",
+        "detection_verified",
+        "response_verified",
+        "ledger_entries_created",
+        "failures"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["PASS", "FAIL", "SKIPPED"]
+        },
+        "simulation_executed": {
+          "type": "boolean"
+        },
+        "detection_verified": {
+          "type": "boolean"
+        },
+        "response_verified": {
+          "type": "boolean"
+        },
+        "ledger_entries_created": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "failures": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["simulation_step", "error"],
+            "properties": {
+              "simulation_step": {"type": "string"},
+              "error": {"type": "string"}
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "failure_classification": {
+      "type": "string",
+      "enum": [
+        "NONE",
+        "INTEGRITY_BREACH",
+        "MISSING_LEDGER_ENTRY",
+        "TAMPERING_DETECTED",
+        "CONFIGURATION_DRIFT",
+        "INCOMPLETE_CHAIN_OF_CUSTODY",
+        "SIMULATION_FAILURE"
+      ],
+      "description": "Classification of first failure (NONE if PASS)"
+    },
+    "first_failure": {
+      "type": "object",
+      "description": "Details of first failure (null if PASS)",
+      "required": [
+        "check_type",
+        "location",
+        "error"
+      ],
+      "properties": {
+        "check_type": {
+          "type": "string",
+          "enum": ["ledger", "integrity", "custody", "config", "simulation"]
+        },
+        "location": {
+          "type": "string"
+        },
+        "error": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "report_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA256 hash of report (canonical JSON, excluding report_hash and signature)"
+    },
+    "signature": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9+/=]+$",
+      "description": "Base64-encoded ed25519 signature of report_hash"
+    },
+    "signing_key_id": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA256 hash of validator public key used for signing"
+    }
+  }
+}
