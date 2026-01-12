@@ -1,0 +1,81 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RansomEye HNMP Correlation",
+  "description": "Frozen schema for HNMP correlations. All fields are mandatory. Zero optional fields allowed.",
+  "type": "object",
+  "required": [
+    "correlation_id",
+    "source_event_type",
+    "source_event_id",
+    "target_event_type",
+    "target_event_id",
+    "correlation_type",
+    "correlated_at",
+    "immutable_hash",
+    "ledger_entry_id"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "correlation_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this correlation (UUID v4)"
+    },
+    "source_event_type": {
+      "type": "string",
+      "enum": [
+        "host",
+        "network",
+        "process",
+        "malware"
+      ],
+      "description": "Type of source event"
+    },
+    "source_event_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Source event identifier"
+    },
+    "target_event_type": {
+      "type": "string",
+      "enum": [
+        "host",
+        "network",
+        "process",
+        "malware"
+      ],
+      "description": "Type of target event"
+    },
+    "target_event_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Target event identifier"
+    },
+    "correlation_type": {
+      "type": "string",
+      "enum": [
+        "process_network_flow",
+        "process_file_artifact",
+        "file_artifact_malware_hash",
+        "user_process",
+        "host_network_identity"
+      ],
+      "description": "Type of correlation (strictly factual)"
+    },
+    "correlated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp of correlation (canonical)"
+    },
+    "immutable_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA256 hash of correlation record (immutability guarantee)"
+    },
+    "ledger_entry_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Audit ledger entry ID for this correlation"
+    }
+  }
+}

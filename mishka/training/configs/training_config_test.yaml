@@ -1,7 +1,8 @@
 base_model:
   name: mistralai/Mistral-7B-v0.1
 cpu:
-  max_threads: null
+  max_memory_gb: 16
+  max_threads: 2
   prefer_cpu: true
   use_cpu: true
 data:
@@ -34,7 +35,7 @@ lora:
   - down_proj
 optimization:
   bf16: false
-  dataloader_num_workers: 2
+  dataloader_num_workers: 1
   dataloader_pin_memory: false
   fp16: false
   gradient_checkpointing: true

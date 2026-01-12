@@ -93,16 +93,17 @@ class Phase1Trainer:
                 print(f"8-bit quantization failed: {e}")
                 print("Falling back to float32 with aggressive memory settings...")
                 
-                # Fallback: Use float32 with minimal memory settings
+                # Fallback: Use float32 with memory limits (50% of 32GB = 16GB)
+                max_memory_gb = self.config['cpu'].get('max_memory_gb', 16)
                 self.model = AutoModelForCausalLM.from_pretrained(
                     model_name,
                     device_map="cpu",
                     torch_dtype=torch.float32,
                     trust_remote_code=True,
                     low_cpu_mem_usage=True,
-                    max_memory={0: "20GiB", "cpu": "20GiB"}  # Limit memory usage
+                    max_memory={"cpu": f"{max_memory_gb}GiB"}  # Limit memory usage
                 )
-                print("Model loaded in float32 (memory-limited)")
+                print(f"Model loaded in float32 (memory-limited to {max_memory_gb}GB)")
         else:
             # GPU path
             device_map = "auto"
@@ -175,7 +176,21 @@ class Phase1Trainer:
     
     def tokenize_function(self, examples: Dict[str, Any]) -> Dict[str, Any]:
         """Tokenize examples."""
-        prompts = [self.format_prompt(ex) for ex in examples]
+        # When batched=True, examples is a dict with lists as values
+        # Convert to list of dicts first
+        if isinstance(examples, dict) and all(isinstance(v, list) for v in examples.values()):
+            # Batched mode: convert dict of lists to list of dicts
+            num_examples = len(examples.get('instruction', []))
+            example_list = [
+                {key: examples[key][i] for key in examples.keys()}
+                for i in range(num_examples)
+            ]
+        else:
+            # Single example mode
+            example_list = [examples] if not isinstance(examples, list) else examples
+        
+        # Format prompts
+        prompts = [self.format_prompt(ex) for ex in example_list]
         
         tokenized = self.tokenizer(
             prompts,
@@ -213,9 +228,18 @@ class Phase1Trainer:
         tokenized_dataset = self.prepare_dataset(dataset)
         
         # Split into train/validation
-        split_dataset = tokenized_dataset.train_test_split(test_size=0.1)
-        train_dataset = split_dataset['train']
-        eval_dataset = split_dataset['test']
+        # For small datasets, ensure minimum samples
+        min_test_samples = max(1, len(tokenized_dataset) // 10)
+        test_size = min(0.1, min_test_samples / len(tokenized_dataset))
+        
+        if len(tokenized_dataset) < 10:
+            # Very small dataset - use all for training, create minimal eval
+            train_dataset = tokenized_dataset
+            eval_dataset = tokenized_dataset.select(range(min(1, len(tokenized_dataset))))
+        else:
+            split_dataset = tokenized_dataset.train_test_split(test_size=test_size)
+            train_dataset = split_dataset['train']
+            eval_dataset = split_dataset['test']
         
         # Training arguments with memory optimization
         use_cpu = self.config['cpu']['use_cpu']
@@ -231,7 +255,7 @@ class Phase1Trainer:
             logging_steps=self.config['training']['logging_steps'],
             save_steps=self.config['training']['save_steps'],
             eval_steps=self.config['training']['eval_steps'],
-            evaluation_strategy="steps",
+            eval_strategy="steps",  # Changed from evaluation_strategy to eval_strategy
             save_total_limit=self.config['training']['save_total_limit'],
             load_best_model_at_end=self.config['training']['load_best_model_at_end'],
             metric_for_best_model=self.config['training']['metric_for_best_model'],
@@ -247,6 +271,12 @@ class Phase1Trainer:
             max_grad_norm=1.0,
             remove_unused_columns=False,
         )
+        
+        # Set CPU thread limit if specified
+        if use_cpu and self.config['cpu'].get('max_threads'):
+            max_threads = self.config['cpu']['max_threads']
+            torch.set_num_threads(max_threads)
+            print(f"Limited to {max_threads} CPU threads (50% resource allocation)")
         
         # Data collator
         data_collator = DataCollatorForLanguageModeling(

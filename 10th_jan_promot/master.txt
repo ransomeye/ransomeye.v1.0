@@ -6102,4 +6102,192 @@ After completion, system proceeds to
 
 
 
+****Promot Start****
+
+You are continuing **RansomEye — Military-Grade Enterprise Cyber Defense Platform**.
+All completed subsystems are **frozen, authoritative, deterministic, replayable, validator-verifiable**.
+
+This is **PHASE K — HNMP Engine (Host / Network / Malware / Process Intelligence Core)**.
+
+This phase establishes the **lowest-level, evidence-grade behavioral intelligence layer** that all higher reasoning depends on.
+
+---
+
+## OBJECTIVE
+
+Build the **HNMP Engine** that provides **ground-truth behavioral facts** across:
+
+* **Host** (user, privilege, filesystem, memory)
+* **Network** (flows, connections, DNS, DPI outputs)
+* **Malware** (artifacts, hashes, behaviors)
+* **Process** (execution, parent/child, injections)
+
+HNMP produces **facts only**, never conclusions.
+
+---
+
+## ABSOLUTE CONSTRAINTS (NON-NEGOTIABLE)
+
+* ❌ No scoring
+* ❌ No ML
+* ❌ No heuristics
+* ❌ No enforcement
+* ❌ No alerting
+* ❌ No aggregation logic
+* ❌ No implicit inference
+* ❌ No mutation of upstream data
+
+HNMP is **observation and normalization only**.
+
+---
+
+## REQUIRED STRUCTURE
+
+```
+/hnmp/
+  schema/
+    host-event.schema.json
+    network-event.schema.json
+    process-event.schema.json
+    malware-event.schema.json
+    hnmp-correlation.schema.json
+  engine/
+    host_normalizer.py
+    network_normalizer.py
+    process_normalizer.py
+    malware_normalizer.py
+    correlator.py
+  storage/
+    hnmp_store.py
+  api/
+    hnmp_api.py
+  cli/
+    ingest_hnmp.py
+    correlate_hnmp.py
+  README.md
+```
+
+---
+
+## DATA SOURCES (MANDATORY)
+
+HNMP must ingest **only signed, validated inputs** from:
+
+* Linux Agent (eBPF, procfs, audit)
+* Windows Agent (ETW, registry, process telemetry)
+* DPI Probe (flows, L7 metadata)
+* Forensics Engine (artifacts, memory dumps)
+* Deception Framework (interactions)
+* Threat Intel Engine (IOC matches)
+
+No raw packet capture storage.
+
+---
+
+## EVENT TYPES (MANDATORY)
+
+### Host Events
+
+* User login/logout
+* Privilege escalation
+* File creation/modification
+* Registry change (Windows)
+* Credential access attempt
+
+### Network Events
+
+* Flow start/end
+* DNS query/response
+* Protocol detection
+* TLS metadata (no payload)
+
+### Process Events
+
+* Process start/exit
+* Parent/child linkage
+* Injection attempt
+* Suspicious flags (explicit, no inference)
+
+### Malware Events
+
+* Hash observation
+* Execution attempt
+* Artifact discovery
+* Sandbox verdict reference (no scoring)
+
+---
+
+## CORRELATION RULES
+
+Correlation is **strictly factual**:
+
+* Process ↔ network flow
+* Process ↔ file artifact
+* File artifact ↔ malware hash
+* User ↔ process
+* Host ↔ network identity
+
+No campaign inference here
+(No timelines, no killchain logic)
+
+---
+
+## REQUIRED INTEGRATIONS
+
+HNMP Engine MUST integrate with:
+
+* Audit Ledger (all ingestion & correlation)
+* KillChain & Forensics (input + downstream)
+* Threat Graph (entity + edge generation)
+* Alert Engine (context input only)
+* Risk Index (signal input only)
+* System Explanation Engine (fact substrate)
+* Global Validator (full replay)
+
+---
+
+## DETERMINISM RULES
+
+* Same inputs → same outputs
+* Canonical timestamps
+* Explicit field ordering
+* No time windows
+* No implicit joins
+* No default assumptions
+
+---
+
+## PASS / FAIL
+
+PASS only if:
+
+* All schemas have **zero optional fields**
+* Storage is immutable
+* Correlation produces facts only
+* No decision logic exists
+* Validator can fully reconstruct HNMP state
+* All events are audit-anchored
+
+FAIL if:
+
+* Any scoring exists
+* Any ML appears
+* Any inference sneaks in
+* Any enforcement happens
+* Any event mutates upstream data
+
+---
+
+## OUTPUT EXPECTATION
+
+* **HNMP Engine** as the factual backbone of RansomEye
+* Immutable behavioral substrate
+* Deterministic, replayable intelligence
+* Court-defensible evidence layer
+
+After completion, system proceeds to:
+
+**PHASE L — DPI Probe Advanced Engine (10G / eBPF / AF_PACKET Fast-Path)**
+
+****Promot end****
 

@@ -1,0 +1,80 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RansomEye Host Event",
+  "description": "Frozen schema for host events. All fields are mandatory. Zero optional fields allowed.",
+  "type": "object",
+  "required": [
+    "event_id",
+    "event_type",
+    "host_id",
+    "user_id",
+    "timestamp",
+    "event_data",
+    "source_agent",
+    "immutable_hash",
+    "ledger_entry_id"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this event (UUID v4)"
+    },
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "user_login",
+        "user_logout",
+        "privilege_escalation",
+        "file_creation",
+        "file_modification",
+        "registry_change",
+        "credential_access_attempt"
+      ],
+      "description": "Type of host event (explicit enumeration)"
+    },
+    "host_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Host identifier"
+    },
+    "user_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "User identifier (username or SID)"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp of event (canonical)"
+    },
+    "event_data": {
+      "type": "object",
+      "description": "Event-specific data (immutable, no optional fields)",
+      "minProperties": 1,
+      "additionalProperties": true
+    },
+    "source_agent": {
+      "type": "string",
+      "enum": [
+        "linux_agent",
+        "windows_agent",
+        "forensics_engine",
+        "deception_framework"
+      ],
+      "description": "Source agent that generated this event"
+    },
+    "immutable_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA256 hash of event record (immutability guarantee)"
+    },
+    "ledger_entry_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Audit ledger entry ID for this event"
+    }
+  }
+}

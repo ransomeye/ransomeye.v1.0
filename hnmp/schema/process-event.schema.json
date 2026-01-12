@@ -1,0 +1,103 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RansomEye Process Event",
+  "description": "Frozen schema for process events. All fields are mandatory. Zero optional fields allowed.",
+  "type": "object",
+  "required": [
+    "event_id",
+    "event_type",
+    "process_id",
+    "parent_process_id",
+    "host_id",
+    "user_id",
+    "executable_path",
+    "command_line",
+    "timestamp",
+    "event_data",
+    "source_agent",
+    "immutable_hash",
+    "ledger_entry_id"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this event (UUID v4)"
+    },
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "process_start",
+        "process_exit",
+        "parent_child_linkage",
+        "injection_attempt",
+        "suspicious_flags"
+      ],
+      "description": "Type of process event (explicit enumeration)"
+    },
+    "process_id": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Process identifier (PID)"
+    },
+    "parent_process_id": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Parent process identifier (PPID, 0 if no parent)"
+    },
+    "host_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Host identifier"
+    },
+    "user_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "User identifier (username or SID)"
+    },
+    "executable_path": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096,
+      "description": "Full path to executable"
+    },
+    "command_line": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 8192,
+      "description": "Complete command line (no truncation)"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp of event (canonical)"
+    },
+    "event_data": {
+      "type": "object",
+      "description": "Event-specific data (immutable, no optional fields)",
+      "minProperties": 1,
+      "additionalProperties": true
+    },
+    "source_agent": {
+      "type": "string",
+      "enum": [
+        "linux_agent",
+        "windows_agent",
+        "forensics_engine"
+      ],
+      "description": "Source agent that generated this event"
+    },
+    "immutable_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA256 hash of event record (immutability guarantee)"
+    },
+    "ledger_entry_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Audit ledger entry ID for this event"
+    }
+  }
+}

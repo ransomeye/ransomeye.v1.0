@@ -49,14 +49,15 @@ optimization:
   fp16: false  # Use bf16 if GPU available, false for CPU
   bf16: false  # CPU doesn't support bf16
   gradient_checkpointing: true
-  dataloader_num_workers: 2  # CPU-friendly
+  dataloader_num_workers: 1  # Reduced for 2-core limit
   dataloader_pin_memory: false  # CPU doesn't need pinning
 
 # CPU-Specific Settings
 cpu:
   use_cpu: true  # Force CPU usage
-  max_threads: null  # null = auto-detect
+  max_threads: 2  # Use 2 cores (50% of 4 cores)
   prefer_cpu: true
+  max_memory_gb: 16  # Use max 16GB (50% of 32GB)
 
 # GPU Settings (Optional)
 gpu:

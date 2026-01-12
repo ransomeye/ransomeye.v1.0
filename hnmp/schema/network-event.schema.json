@@ -1,0 +1,109 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RansomEye Network Event",
+  "description": "Frozen schema for network events. All fields are mandatory. Zero optional fields allowed.",
+  "type": "object",
+  "required": [
+    "event_id",
+    "event_type",
+    "flow_id",
+    "src_ip",
+    "dst_ip",
+    "src_port",
+    "dst_port",
+    "protocol",
+    "timestamp",
+    "event_data",
+    "source_agent",
+    "immutable_hash",
+    "ledger_entry_id"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this event (UUID v4)"
+    },
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "flow_start",
+        "flow_end",
+        "dns_query",
+        "dns_response",
+        "protocol_detection",
+        "tls_metadata"
+      ],
+      "description": "Type of network event (explicit enumeration)"
+    },
+    "flow_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Flow identifier (UUID v4)"
+    },
+    "src_ip": {
+      "type": "string",
+      "format": "ipv4",
+      "description": "Source IP address"
+    },
+    "dst_ip": {
+      "type": "string",
+      "format": "ipv4",
+      "description": "Destination IP address"
+    },
+    "src_port": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 65535,
+      "description": "Source port number"
+    },
+    "dst_port": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 65535,
+      "description": "Destination port number"
+    },
+    "protocol": {
+      "type": "string",
+      "enum": [
+        "tcp",
+        "udp",
+        "icmp",
+        "other"
+      ],
+      "description": "Network protocol"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp of event (canonical)"
+    },
+    "event_data": {
+      "type": "object",
+      "description": "Event-specific data (immutable, no optional fields)",
+      "minProperties": 1,
+      "additionalProperties": true
+    },
+    "source_agent": {
+      "type": "string",
+      "enum": [
+        "dpi_probe",
+        "network_scanner",
+        "linux_agent",
+        "windows_agent"
+      ],
+      "description": "Source agent that generated this event"
+    },
+    "immutable_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA256 hash of event record (immutability guarantee)"
+    },
+    "ledger_entry_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Audit ledger entry ID for this event"
+    }
+  }
+}
