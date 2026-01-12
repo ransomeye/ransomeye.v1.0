@@ -1,0 +1,335 @@
+****Promot Start*****
+
+You are now implementing the **NEXT NON-OPTIONAL SUBSYSTEM** for **RansomEye v1.0**.
+
+Everything up to this point establishes **truth, authority, causality, explanation, and context**.
+
+What is still missing is **formally signed, regulator-safe, human-consumable output** derived from that truth — **without introducing interpretation, inference, or authority leakage**.
+
+This phase is **not UI**, **not summarization**, **not reporting logic**.
+It is **controlled rendering of already-assembled explanations**.
+
+---
+
+# PHASE M7 — Signed Reporting & Evidence Export Engine
+
+**(Deterministic, Non-Authoritative, Regulator-Grade)**
+
+---
+
+## AUTHORITATIVE INTENT
+
+RansomEye must be able to produce **court-admissible, regulator-verifiable reports** that:
+
+* Are **derived only** from:
+
+  * Explanation Assembly (M6)
+  * Audit Ledger
+* Are **signed**
+* Are **immutable**
+* Can be **re-verified years later**
+* Do **not reinterpret or summarize**
+* Do **not hide causality**
+* Do **not embed decision logic**
+
+This engine renders **views of truth**, not opinions.
+
+---
+
+## CORE PRINCIPLES (NON-NEGOTIABLE)
+
+1. **Rendering ≠ reasoning**
+2. **Export ≠ explanation**
+3. **Format ≠ meaning**
+4. **Signature = accountability**
+
+---
+
+## REQUIRED SUBSYSTEM NAME
+
+```
+/signed-reporting/
+```
+
+Do NOT name it:
+
+* reporting-engine
+* summarizer
+* exporter-only
+* pdf-engine
+
+Correct name: **Signed Reporting Engine**
+
+---
+
+## REQUIRED OUTPUT FORMATS (EXACTLY)
+
+The engine MUST support **exactly 3 formats**:
+
+1. **PDF** (Human, court / board)
+2. **HTML** (Human, internal review)
+3. **CSV** (Regulatory ingestion)
+
+No DOCX.
+No Markdown.
+No JSON (JSON remains internal truth only).
+
+---
+
+## REQUIRED INPUTS (READ-ONLY)
+
+The engine may ONLY read from:
+
+* Explanation Assembly Engine (M6)
+* Audit Ledger
+* Global Validator public keys
+
+It must NEVER:
+
+* Read raw incidents
+* Read alerts directly
+* Read UBA stores
+* Read risk engines directly
+
+All truth must already be assembled.
+
+---
+
+## REQUIRED DELIVERABLES
+
+### 1. Schema (Frozen, Zero Optional Fields)
+
+Path:
+
+```
+/signed-reporting/schema/
+```
+
+#### 1.1 `signed-report.schema.json`
+
+Required fields (ALL mandatory):
+
+1. `report_id` (UUID)
+2. `incident_id` (UUID)
+3. `assembled_explanation_id` (UUID)
+4. `view_type` (enum: SOC_ANALYST, INCIDENT_COMMANDER, EXECUTIVE, REGULATOR)
+5. `format` (enum: PDF, HTML, CSV)
+6. `content_hash` (SHA256)
+7. `signature` (Base64)
+8. `signing_key_id` (string)
+9. `generated_at` (RFC3339 UTC)
+10. `rendering_profile_id` (enum, frozen)
+11. `audit_ledger_anchor` (UUID)
+
+Zero optional fields.
+No free text fields.
+
+---
+
+### 2. Rendering Engine
+
+Path:
+
+```
+/signed-reporting/engine/
+```
+
+#### 2.1 `render_engine.py`
+
+Responsibilities:
+
+* Deterministically render content blocks **as-is**
+* Respect view_type ordering (from M6)
+* Apply **fixed rendering profiles**
+* No text rewriting
+* No summarization
+* No inference
+* No omission
+
+Rendering profiles are **static templates**, not logic.
+
+#### 2.2 `render_hasher.py`
+
+* SHA256 over canonical rendered output
+* Bit-for-bit reproducible
+
+---
+
+### 3. Cryptographic Signing
+
+Path:
+
+```
+/signed-reporting/crypto/
+```
+
+#### 3.1 `report_signer.py`
+
+* ed25519 or RSA-PSS (choose ONE, document why)
+* Separate keypair from:
+
+  * Audit Ledger
+  * Global Validator
+* Keys are **export-verifiable**
+
+#### 3.2 `report_verifier.py`
+
+* Offline verification
+* Deterministic
+* Used by auditors / courts
+
+---
+
+### 4. Storage (Immutable)
+
+Path:
+
+```
+/signed-reporting/storage/
+```
+
+#### 4.1 `report_store.py`
+
+* Append-only
+* Immutable
+* No update
+* No delete
+* Supports long-term archival
+
+---
+
+### 5. API
+
+Path:
+
+```
+/signed-reporting/api/
+```
+
+#### 5.1 `reporting_api.py`
+
+Required functions:
+
+* `generate_report(incident_id, view_type, format)`
+* `get_report(report_id)`
+* `list_reports(incident_id)`
+
+Rules:
+
+* Read-only inputs
+* Write-only storage
+* Emit ledger events:
+
+  * `REPORT_GENERATED`
+  * `REPORT_VERIFIED`
+  * `REPORT_EXPORTED`
+
+---
+
+### 6. CLI Tools
+
+Path:
+
+```
+/signed-reporting/cli/
+```
+
+Required:
+
+1. `generate_report.py`
+2. `verify_report.py`
+3. `export_report.py`
+
+Must be:
+
+* Offline
+* Deterministic
+* Validator-replayable
+
+---
+
+### 7. Audit Ledger Integration (MANDATORY)
+
+Each report generation must emit:
+
+* report_id
+* incident_id
+* assembled_explanation_id
+* format
+* content_hash
+* signing_key_id
+
+---
+
+### 8. Documentation
+
+Create:
+
+```
+/signed-reporting/README.md
+```
+
+Must include:
+
+* Why reports are not explanations
+* Why reports are signed
+* Court / regulator positioning
+* Chain-of-custody guarantees
+* Long-term verification model
+* Failure semantics
+
+Include this **exact sentence**:
+
+> “Signed reports present truth for humans without changing truth.”
+
+---
+
+## EXPLICITLY FORBIDDEN
+
+You MUST NOT:
+
+* Generate summaries
+* Rewrite explanations
+* Hide causality
+* Add interpretation
+* Add opinions
+* Allow customization
+* Allow partial export
+* Mix view types
+* Mix incidents
+
+---
+
+## VALIDATION REQUIREMENTS
+
+The Global Validator must be able to:
+
+* Recompute content_hash
+* Verify signature
+* Trace report → explanation → ledger
+* Detect any alteration
+* Re-verify after export
+
+---
+
+## FINAL SYSTEM STATEMENT
+
+> Reporting is the last mile of truth — not a new source of truth.
+
+---
+
+### COMPLETION EXPECTATION
+
+On completion, report:
+
+* File tree
+* Schema field counts
+* Cryptographic choice justification
+* Explicit guarantees
+* Verification results
+
+No placeholders.
+No TODOs.
+No partials.
+
+****promot end*****

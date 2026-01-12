@@ -1,0 +1,88 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RansomEye Signed Report",
+  "description": "Frozen schema for signed, regulator-verifiable reports. All fields are mandatory. No optional fields allowed.",
+  "type": "object",
+  "required": [
+    "report_id",
+    "incident_id",
+    "assembled_explanation_id",
+    "view_type",
+    "format",
+    "content_hash",
+    "signature",
+    "signing_key_id",
+    "generated_at",
+    "rendering_profile_id",
+    "audit_ledger_anchor"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "report_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this signed report (UUID v4)"
+    },
+    "incident_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Incident identifier (read-only reference)"
+    },
+    "assembled_explanation_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Assembled explanation identifier (read-only reference to Explanation Assembly Engine)"
+    },
+    "view_type": {
+      "type": "string",
+      "enum": [
+        "SOC_ANALYST",
+        "INCIDENT_COMMANDER",
+        "EXECUTIVE",
+        "REGULATOR"
+      ],
+      "description": "View type from assembled explanation (exactly 4 types, no others)"
+    },
+    "format": {
+      "type": "string",
+      "enum": [
+        "PDF",
+        "HTML",
+        "CSV"
+      ],
+      "description": "Report format (exactly 3 formats: PDF for court/board, HTML for internal review, CSV for regulatory ingestion)"
+    },
+    "content_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA256 hash of canonical rendered output (bit-for-bit reproducible)"
+    },
+    "signature": {
+      "type": "string",
+      "description": "Base64-encoded cryptographic signature (ed25519)"
+    },
+    "signing_key_id": {
+      "type": "string",
+      "description": "Signing key identifier (export-verifiable, separate from Audit Ledger and Global Validator)"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp of report generation"
+    },
+    "rendering_profile_id": {
+      "type": "string",
+      "enum": [
+        "STANDARD_PDF",
+        "STANDARD_HTML",
+        "STANDARD_CSV"
+      ],
+      "description": "Rendering profile identifier (frozen, static templates, no logic)"
+    },
+    "audit_ledger_anchor": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Audit ledger entry identifier anchoring this report generation"
+    }
+  }
+}
