@@ -8,9 +8,24 @@ from typing import Dict, Any, Optional
 from datetime import datetime, timezone
 from pathlib import Path
 import json
+import sys
+import importlib.util
 
-from crypto.human_key_manager import HumanKeyManager
-from crypto.verifier import Verifier
+# Add parent directory to path for imports
+_authority_dir = Path(__file__).parent.parent
+if str(_authority_dir) not in sys.path:
+    sys.path.insert(0, str(_authority_dir))
+
+# Import crypto modules using importlib to ensure proper path resolution
+_key_manager_spec = importlib.util.spec_from_file_location("human_key_manager", _authority_dir / "crypto" / "human_key_manager.py")
+_key_manager_module = importlib.util.module_from_spec(_key_manager_spec)
+_key_manager_spec.loader.exec_module(_key_manager_module)
+HumanKeyManager = _key_manager_module.HumanKeyManager
+
+_verifier_spec = importlib.util.spec_from_file_location("verifier", _authority_dir / "crypto" / "verifier.py")
+_verifier_module = importlib.util.module_from_spec(_verifier_spec)
+_verifier_spec.loader.exec_module(_verifier_module)
+Verifier = _verifier_module.Verifier
 
 
 class ValidationError(Exception):

@@ -1,0 +1,112 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RansomEye Playbook",
+  "description": "Frozen schema for playbooks. All fields are mandatory. No optional fields allowed. Declarative only, no scripting.",
+  "type": "object",
+  "required": [
+    "playbook_id",
+    "playbook_name",
+    "playbook_version",
+    "scope",
+    "steps",
+    "playbook_signature",
+    "playbook_key_id",
+    "created_at",
+    "created_by"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "playbook_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this playbook (UUID v4)"
+    },
+    "playbook_name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Human-readable playbook name"
+    },
+    "playbook_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "description": "Playbook version (semantic versioning)"
+    },
+    "scope": {
+      "type": "string",
+      "enum": [
+        "incident",
+        "policy",
+        "campaign",
+        "risk",
+        "global"
+      ],
+      "description": "Scope of playbook"
+    },
+    "steps": {
+      "type": "array",
+      "description": "Ordered list of playbook steps (sequential execution only, no loops or branching)",
+      "items": {
+        "$ref": "#/$defs/playbook_step"
+      },
+      "minItems": 1
+    },
+    "playbook_signature": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9+/=]+$",
+      "description": "Base64-encoded signature of playbook"
+    },
+    "playbook_key_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Identifier of key used to sign playbook"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp of playbook creation"
+    },
+    "created_by": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Human identifier who created playbook"
+    },
+    "$defs": {
+      "playbook_step": {
+        "type": "object",
+        "required": [
+          "step_id",
+          "step_type",
+          "step_order",
+          "parameters"
+        ],
+        "properties": {
+          "step_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "step_type": {
+            "type": "string",
+            "enum": [
+              "isolate_host",
+              "block_ip",
+              "disable_account",
+              "snapshot_memory",
+              "snapshot_disk",
+              "notify_human"
+            ]
+          },
+          "step_order": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "parameters": {
+            "type": "object"
+          }
+        }
+      }
+    }
+  }
+}

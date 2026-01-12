@@ -1,0 +1,142 @@
+Promot Start
+
+You are continuing RansomEye — Military-Grade Enterprise Security Platform.
+
+This is PHASE E (MANDATORY).
+
+You are building SOC Copilot (Basic) with Offline RAG.
+
+WORK UNIT E1 — SOC COPILOT (BASIC, READ-ONLY)
+ABSOLUTE CONSTRAINTS
+
+❌ No enforcement
+
+❌ No policy changes
+
+❌ No playbook execution
+
+❌ No automation
+
+❌ No internet access
+
+❌ No external LLM APIs
+
+This is assistive intelligence only.
+
+REQUIRED STRUCTURE
+/soc-copilot/
+  schema/
+    query.schema.json
+    response.schema.json
+    feedback.schema.json
+  rag/
+    document_ingestor.py
+    vector_store.py        # FAISS
+    retriever.py
+  llm/
+    offline_model_loader.py   # GGUF
+    prompt_builder.py
+  engine/
+    query_engine.py
+    citation_builder.py
+  api/
+    copilot_api.py
+  cli/
+    ask_soc.py
+  README.md
+
+KNOWLEDGE SOURCES (READ-ONLY)
+
+Audit Ledger
+
+KillChain timelines
+
+Threat Graph
+
+Risk Index history
+
+Explanation bundles (SEE)
+
+Playbook metadata (NOT execution)
+
+MITRE ATT&CK docs (offline snapshot)
+
+All sources must be verifiable and immutable.
+
+REQUIRED GUARANTEES
+
+Offline-only operation
+
+Deterministic retrieval
+
+No hallucinated facts
+
+All answers must have:
+
+Citations
+
+Source references
+
+Explicit uncertainty allowed ("insufficient data")
+
+Analyst feedback is stored but:
+
+Does NOT alter models
+
+Is bundled for later retraining
+
+OUTPUT RULES
+
+Structured answers (not free prose)
+
+Confidence level per answer
+
+Explicit source list
+
+No decision language
+
+No recommendations phrased as commands
+
+PASS / FAIL
+
+PASS only if:
+
+Copilot answers are reproducible
+
+All claims are cited
+
+No enforcement possible
+
+Validator can replay answers
+
+FAIL if:
+
+Any hallucination
+
+Any hidden inference
+
+Any implicit recommendation
+
+Any mutable knowledge source
+
+OUTPUT EXPECTATION
+
+Production-grade offline SOC copilot
+
+Frozen schemas
+
+Deterministic RAG
+
+FAISS-backed vector store
+
+GGUF LLM loader
+
+Audit-safe feedback loop
+
+Complete documentation
+
+No shortcuts.
+No cloud dependencies.
+Build SOC Copilot (Basic) only.
+
+promot end

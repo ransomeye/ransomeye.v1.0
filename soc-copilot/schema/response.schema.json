@@ -1,0 +1,191 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RansomEye SOC Copilot Response",
+  "description": "Frozen schema for SOC copilot responses. All fields are mandatory. No optional fields allowed.",
+  "type": "object",
+  "required": [
+    "response_id",
+    "query_id",
+    "response_timestamp",
+    "answer",
+    "confidence_level",
+    "citations",
+    "source_references",
+    "uncertainty_indicators"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "response_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this response (UUID v4)"
+    },
+    "query_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Query identifier this response answers"
+    },
+    "response_timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp of response"
+    },
+    "answer": {
+      "type": "object",
+      "description": "Structured answer (not free prose)",
+      "required": [
+        "summary",
+        "facts",
+        "data_points"
+      ],
+      "properties": {
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "description": "Summary of answer"
+        },
+        "facts": {
+          "type": "array",
+          "description": "List of facts (each fact must have citation)",
+          "items": {
+            "type": "object",
+            "required": ["fact_text", "citation_id"],
+            "properties": {
+              "fact_text": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512
+              },
+              "citation_id": {
+                "type": "string",
+                "format": "uuid"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "data_points": {
+          "type": "array",
+          "description": "Data points extracted from sources",
+          "items": {
+            "type": "object",
+            "required": ["data_type", "data_value", "source_id"],
+            "properties": {
+              "data_type": {
+                "type": "string",
+                "enum": ["timestamp", "identifier", "score", "count", "status", "other"]
+              },
+              "data_value": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "source_id": {
+                "type": "string",
+                "format": "uuid"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "confidence_level": {
+      "type": "string",
+      "enum": ["high", "medium", "low", "insufficient_data"],
+      "description": "Confidence level of answer"
+    },
+    "citations": {
+      "type": "array",
+      "description": "Citations for all claims",
+      "items": {
+        "type": "object",
+        "required": [
+          "citation_id",
+          "source_type",
+          "source_id",
+          "source_location",
+          "excerpt"
+        ],
+        "properties": {
+          "citation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "source_type": {
+            "type": "string",
+            "enum": [
+              "audit_ledger",
+              "killchain_timeline",
+              "threat_graph",
+              "risk_index",
+              "explanation_bundle",
+              "playbook_metadata",
+              "mitre_attck"
+            ]
+          },
+          "source_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "source_location": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "excerpt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "source_references": {
+      "type": "array",
+      "description": "Explicit list of all sources used",
+      "items": {
+        "type": "object",
+        "required": ["source_type", "source_id", "source_path"],
+        "properties": {
+          "source_type": {
+            "type": "string",
+            "enum": [
+              "audit_ledger",
+              "killchain_timeline",
+              "threat_graph",
+              "risk_index",
+              "explanation_bundle",
+              "playbook_metadata",
+              "mitre_attck"
+            ]
+          },
+          "source_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "source_path": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "uncertainty_indicators": {
+      "type": "array",
+      "description": "Indicators of uncertainty or insufficient data",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 256
+      }
+    }
+  }
+}

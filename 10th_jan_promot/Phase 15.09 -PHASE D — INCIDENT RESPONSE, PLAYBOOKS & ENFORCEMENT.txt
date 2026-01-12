@@ -1,0 +1,167 @@
+Promot Start
+
+You are continuing RansomEye — Military-Grade Enterprise Security Platform.
+
+This is PHASE D (MANDATORY).
+
+This phase builds Incident Response, Playbooks, and Enforcement, but:
+
+❌ No implicit execution
+
+❌ No silent automation
+
+❌ No unsigned actions
+
+❌ No authority bypass
+
+Every enforcement must be:
+
+Explained (SEE)
+
+Authorized (HAF)
+
+Audited (Audit Ledger)
+
+Verifiable (Global Validator)
+
+WORK UNIT D1 — INCIDENT RESPONSE & PLAYBOOK ENGINE
+ABSOLUTE CONSTRAINTS
+
+Playbooks are data, not code
+
+No shell execution
+
+No arbitrary scripts
+
+No runtime mutation
+
+No background autonomy
+
+Execution is deterministic, sandboxed, and replayable.
+
+REQUIRED STRUCTURE
+/incident-response/
+  schema/
+    playbook.schema.json
+    playbook-step.schema.json
+    execution-record.schema.json
+  crypto/
+    playbook_signer.py
+    playbook_verifier.py
+  engine/
+    playbook_registry.py
+    execution_engine.py
+    rollback_engine.py
+  api/
+    ir_api.py
+  cli/
+    register_playbook.py
+    execute_playbook.py
+    rollback_playbook.py
+  README.md
+
+PLAYBOOK MODEL (STRICT)
+
+Declarative only (JSON / YAML)
+
+Steps are:
+
+isolate_host
+
+block_ip
+
+disable_account
+
+snapshot_memory
+
+snapshot_disk
+
+notify_human
+
+No loops
+
+No branching
+
+No conditionals
+
+No variables
+
+No scripting
+
+EXECUTION RULES
+
+Execution requires:
+
+Valid playbook signature
+
+Valid authority action (HAF)
+
+Matching scope
+
+Explanation bundle reference
+
+Execution emits:
+
+Execution record
+
+Audit ledger entry
+
+Rollback must be:
+
+Explicit
+
+Signed
+
+Logged
+
+Sandbox enforcement:
+
+No system calls
+
+No network access
+
+No privilege escalation
+
+PASS / FAIL
+
+PASS only if:
+
+Playbooks are immutable
+
+Execution is reproducible
+
+Authority is mandatory
+
+Rollback is provable
+
+Validator can replay everything
+
+FAIL if:
+
+Any execution is unsigned
+
+Any action is implicit
+
+Any authority is assumed
+
+Any step is opaque
+
+OUTPUT EXPECTATION
+
+Production-grade engine
+
+Frozen schemas
+
+Cryptographic enforcement
+
+Audit ledger integration
+
+Validator compatibility
+
+Complete documentation
+
+No placeholders.
+No shortcuts.
+Build Incident Response & Playbook Engine only.
+
+promot end

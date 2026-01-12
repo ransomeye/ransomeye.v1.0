@@ -1,0 +1,66 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RansomEye SOC Copilot Feedback",
+  "description": "Frozen schema for analyst feedback. All fields are mandatory. No optional fields allowed.",
+  "type": "object",
+  "required": [
+    "feedback_id",
+    "response_id",
+    "query_id",
+    "feedback_timestamp",
+    "analyst_identifier",
+    "feedback_type",
+    "feedback_content",
+    "bundled_for_retraining"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "feedback_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this feedback (UUID v4)"
+    },
+    "response_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Response identifier this feedback relates to"
+    },
+    "query_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Query identifier this feedback relates to"
+    },
+    "feedback_timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp of feedback"
+    },
+    "analyst_identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Analyst identifier"
+    },
+    "feedback_type": {
+      "type": "string",
+      "enum": [
+        "helpful",
+        "not_helpful",
+        "incorrect",
+        "incomplete",
+        "clarification_needed"
+      ],
+      "description": "Type of feedback"
+    },
+    "feedback_content": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048,
+      "description": "Feedback content (structured, not free-text)"
+    },
+    "bundled_for_retraining": {
+      "type": "boolean",
+      "description": "Whether feedback is bundled for later retraining (does NOT alter models)"
+    }
+  }
+}

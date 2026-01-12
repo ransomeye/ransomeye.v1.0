@@ -1,0 +1,52 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RansomEye SOC Copilot Query",
+  "description": "Frozen schema for SOC copilot queries. All fields are mandatory. No optional fields allowed.",
+  "type": "object",
+  "required": [
+    "query_id",
+    "query_text",
+    "query_timestamp",
+    "query_context"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "query_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this query (UUID v4)"
+    },
+    "query_text": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048,
+      "description": "Query text from analyst"
+    },
+    "query_timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp of query"
+    },
+    "query_context": {
+      "type": "object",
+      "description": "Query context (incident ID, subject ID, etc.)",
+      "required": [],
+      "properties": {
+        "incident_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "subject_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "subject_type": {
+          "type": "string",
+          "enum": ["incident", "campaign", "risk", "playbook", "other"]
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

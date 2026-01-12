@@ -1,0 +1,43 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RansomEye Playbook Step",
+  "description": "Frozen schema for playbook steps. All fields are mandatory. No optional fields allowed. Declarative only, no scripting.",
+  "type": "object",
+  "required": [
+    "step_id",
+    "step_type",
+    "step_order",
+    "parameters"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "step_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this step (UUID v4)"
+    },
+    "step_type": {
+      "type": "string",
+      "enum": [
+        "isolate_host",
+        "block_ip",
+        "disable_account",
+        "snapshot_memory",
+        "snapshot_disk",
+        "notify_human"
+      ],
+      "description": "Type of playbook step (frozen enum, no custom types)"
+    },
+    "step_order": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Order of step execution (0-based, sequential only)"
+    },
+    "parameters": {
+      "type": "object",
+      "description": "Step-specific parameters (declarative only, no variables or scripting)",
+      "minProperties": 0,
+      "additionalProperties": true
+    }
+  }
+}

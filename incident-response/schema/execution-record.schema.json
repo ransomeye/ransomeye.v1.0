@@ -1,0 +1,139 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "description": "Frozen schema for playbook execution records. All fields are mandatory. No optional fields allowed.",
+  "type": "object",
+  "required": [
+    "execution_id",
+    "playbook_id",
+    "playbook_version",
+    "authority_action_id",
+    "explanation_bundle_id",
+    "scope",
+    "subject_id",
+    "execution_timestamp",
+    "executed_by",
+    "execution_status",
+    "step_results",
+    "rollback_available",
+    "ledger_entry_id"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "execution_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this execution (UUID v4)"
+    },
+    "playbook_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Playbook identifier"
+    },
+    "playbook_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "description": "Playbook version executed"
+    },
+    "authority_action_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Human authority action identifier (HAF)"
+    },
+    "explanation_bundle_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Explanation bundle identifier (SEE)"
+    },
+    "scope": {
+      "type": "string",
+      "enum": [
+        "incident",
+        "policy",
+        "campaign",
+        "risk",
+        "global"
+      ],
+      "description": "Scope of execution"
+    },
+    "subject_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Subject identifier (incident ID, etc.)"
+    },
+    "execution_timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp of execution start"
+    },
+    "executed_by": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Human identifier who executed playbook"
+    },
+    "execution_status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "running",
+        "completed",
+        "failed",
+        "rolled_back"
+      ],
+      "description": "Execution status"
+    },
+    "step_results": {
+      "type": "array",
+      "description": "Results of each step execution",
+      "items": {
+        "type": "object",
+        "required": [
+          "step_id",
+          "step_type",
+          "step_status",
+          "step_timestamp",
+          "step_output"
+        ],
+        "properties": {
+          "step_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "step_type": {
+            "type": "string",
+            "enum": [
+              "isolate_host",
+              "block_ip",
+              "disable_account",
+              "snapshot_memory",
+              "snapshot_disk",
+              "notify_human"
+            ]
+          },
+          "step_status": {
+            "type": "string",
+            "enum": ["success", "failed", "skipped"]
+          },
+          "step_timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "step_output": {
+            "type": "object",
+            "description": "Step execution output (declarative only)"
+          }
+        }
+      }
+    },
+    "rollback_available": {
+      "type": "boolean",
+      "description": "Whether rollback is available for this execution"
+    },
+    "ledger_entry_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Audit ledger entry ID for this execution"
+    }
+  }
+}
