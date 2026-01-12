@@ -4214,3 +4214,301 @@ Do NOT explain verbally.
 Build the Threat Correlation Graph Engine only.
 
 Promot end
+
+Promot Start
+
+You are continuing RansomEye — Military-Grade Enterprise Security Platform.
+
+This is PHASE C3 (MANDATORY, BLOCKING).
+
+No other subsystem may be built until this phase is complete, validated, and frozen.
+
+WORK UNIT C3 — SYSTEM EXPLANATION ENGINE (SEE)
+ABSOLUTE CONSTRAINTS
+
+❌ NO modification to existing subsystems
+
+❌ NO ML inference
+
+❌ NO heuristics
+
+❌ NO UI
+
+❌ NO free-text generation
+
+❌ NO assumptions
+
+This subsystem reconstructs reasoning, it does not invent it.
+
+OBJECTIVE
+
+Build a System Explanation Engine that produces end-to-end, signed, validator-verifiable explanation bundles explaining why the system acted.
+
+REQUIRED INPUT SOURCES (READ-ONLY)
+
+Audit Ledger (root of truth)
+
+KillChain & Forensics
+
+Threat Correlation Graph
+
+Risk Index Engine
+
+Policy Engine decisions
+
+(Later) Human Override records
+
+REQUIRED OUTPUT
+Signed Explanation Bundle
+
+Explains:
+
+Why an incident existed
+
+Why a KillChain stage advanced
+
+Why campaign inference occurred
+
+Why risk score changed
+
+Why policy recommendation escalated
+
+Whether a human overrode it (if applicable)
+
+REQUIRED STRUCTURE
+/system-explainer/
+  schema/
+    explanation-bundle.schema.json
+  engine/
+    explanation_builder.py
+    reasoning_reconstructor.py
+  crypto/
+    signer.py
+    verifier.py
+  api/
+    explainer_api.py
+  cli/
+    build_explanation.py
+  README.md
+
+NON-NEGOTIABLE GUARANTEES
+
+Deterministic
+
+Fully reconstructable from ledger
+
+Signed with dedicated keypair
+
+Validator-verifiable
+
+Immutable bundles
+
+Zero ambiguity
+
+PASS / FAIL
+
+PASS only if:
+
+Same inputs → same explanation
+
+Explanation can be rebuilt from scratch
+
+Validator verifies reasoning chain
+
+No missing causal links
+
+FAIL if:
+
+Any step is implicit
+
+Any reasoning is inferred without evidence
+
+Any explanation cannot be cryptographically verified
+
+OUTPUT EXPECTATION
+
+Produce:
+
+Full production code
+
+Frozen schemas
+
+Cryptographic signing
+
+Documentation
+
+No summaries.
+No shortcuts.
+Build the System Explanation Engine only.
+
+promot end
+
+Promot Start
+
+You are continuing RansomEye — Military-Grade Enterprise Security Platform.
+
+This is PHASE C4 (MANDATORY, BLOCKING).
+
+No enforcement, automation, playbooks, or advanced AI may be built until this phase is complete, validated, and frozen.
+
+WORK UNIT C4 — HUMAN AUTHORITY & OVERRIDE FRAMEWORK (HAF)
+ABSOLUTE CONSTRAINTS
+
+❌ NO UI
+
+❌ NO workflow engine
+
+❌ NO assumptions about humans
+
+❌ NO implicit trust
+
+❌ NO free-text decisions
+
+❌ NO shared keys with other subsystems
+
+This subsystem records authority, it does not decide policy.
+
+OBJECTIVE
+
+Build a Human Authority Framework that provides:
+
+Cryptographic proof of human decisions
+
+Explicit override semantics
+
+Role-based authority validation
+
+Non-repudiation
+
+Audit-ledger anchoring
+
+Validator-verifiable accountability
+
+REQUIRED STRUCTURE
+/human-authority/
+  schema/
+    authority-action.schema.json
+    role-assertion.schema.json
+  crypto/
+    human_key_manager.py
+    signer.py
+    verifier.py
+  engine/
+    authority_validator.py
+    override_processor.py
+  api/
+    authority_api.py
+  cli/
+    sign_override.py
+    verify_override.py
+  README.md
+
+REQUIRED ACTION TYPES (ENUM, FROZEN)
+
+POLICY_OVERRIDE
+
+INCIDENT_ESCALATION
+
+INCIDENT_SUPPRESSION
+
+PLAYBOOK_APPROVAL
+
+PLAYBOOK_ABORT
+
+RISK_ACCEPTANCE
+
+FALSE_POSITIVE_DECLARATION
+
+No others.
+
+REQUIRED GUARANTEES
+
+Every human action is:
+
+Signed with a human-specific keypair
+
+Bound to a role assertion
+
+Bound to a scope (incident / policy / campaign)
+
+Recorded in Audit Ledger
+
+Overrides are explicit, never implicit
+
+Overrides never erase automated decisions — they supersede them
+
+Authority is validated before acceptance
+
+No anonymous actions
+
+No shared keys
+
+No revocation ambiguity
+
+CRYPTOGRAPHIC MODEL
+
+Per-human keypair (ed25519 or RSA-PSS, choose and justify)
+
+Separate trust root from:
+
+Audit Ledger
+
+Model Registry
+
+System Explainer
+
+Role assertion must be signed and verifiable
+
+Override invalid if:
+
+Role is insufficient
+
+Signature invalid
+
+Scope mismatch
+
+Timestamp invalid
+
+PASS / FAIL
+
+PASS only if:
+
+A human override can be proven, reconstructed, and verified
+
+Responsibility is unambiguous
+
+Overrides are replayable from ledger
+
+Validator can verify authority chain end-to-end
+
+FAIL if:
+
+Any decision lacks a signer
+
+Any override lacks role proof
+
+Any action can be denied later
+
+Any authority is implicit
+
+OUTPUT EXPECTATION
+
+Produce:
+
+Production-grade code
+
+Frozen schemas
+
+Cryptographic enforcement
+
+Audit ledger integration
+
+Deterministic validation
+
+Complete documentation
+
+No placeholders.
+No shortcuts.
+Build the Human Authority Framework only.
+
+promot end

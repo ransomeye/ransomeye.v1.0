@@ -1,0 +1,114 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RansomEye Human Authority Action",
+  "description": "Frozen schema for human authority actions. All fields are mandatory. No optional fields allowed.",
+  "type": "object",
+  "required": [
+    "action_id",
+    "action_type",
+    "human_identifier",
+    "human_signature",
+    "human_key_id",
+    "role_assertion_id",
+    "scope",
+    "subject_id",
+    "subject_type",
+    "reason",
+    "timestamp",
+    "supersedes_automated_decision",
+    "ledger_entry_id"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "action_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this authority action (UUID v4)"
+    },
+    "action_type": {
+      "type": "string",
+      "enum": [
+        "POLICY_OVERRIDE",
+        "INCIDENT_ESCALATION",
+        "INCIDENT_SUPPRESSION",
+        "PLAYBOOK_APPROVAL",
+        "PLAYBOOK_ABORT",
+        "RISK_ACCEPTANCE",
+        "FALSE_POSITIVE_DECLARATION"
+      ],
+      "description": "Type of authority action (frozen enum)"
+    },
+    "human_identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Human identifier (username, email, or unique ID)"
+    },
+    "human_signature": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9+/=]+$",
+      "description": "Base64-encoded signature of action by human"
+    },
+    "human_key_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Identifier of human's signing key"
+    },
+    "role_assertion_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Role assertion identifier that authorizes this action"
+    },
+    "scope": {
+      "type": "string",
+      "enum": [
+        "incident",
+        "policy",
+        "campaign",
+        "risk",
+        "playbook",
+        "global"
+      ],
+      "description": "Scope of action"
+    },
+    "subject_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Identifier of subject (incident ID, policy ID, etc.)"
+    },
+    "subject_type": {
+      "type": "string",
+      "enum": [
+        "incident",
+        "policy",
+        "campaign",
+        "risk_computation",
+        "playbook",
+        "other"
+      ],
+      "description": "Type of subject"
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "description": "Structured reason for action (not free-text, structured enum or code)"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp of action"
+    },
+    "supersedes_automated_decision": {
+      "type": "boolean",
+      "description": "Whether this action supersedes an automated decision (never erases, only supersedes)"
+    },
+    "ledger_entry_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Audit ledger entry ID for this action"
+    }
+  }
+}

@@ -1,0 +1,169 @@
+Promot Start
+
+You are continuing RansomEye — Military-Grade Enterprise Security Platform.
+
+This is PHASE C4 (MANDATORY, BLOCKING).
+
+No enforcement, automation, playbooks, or advanced AI may be built until this phase is complete, validated, and frozen.
+
+WORK UNIT C4 — HUMAN AUTHORITY & OVERRIDE FRAMEWORK (HAF)
+ABSOLUTE CONSTRAINTS
+
+❌ NO UI
+
+❌ NO workflow engine
+
+❌ NO assumptions about humans
+
+❌ NO implicit trust
+
+❌ NO free-text decisions
+
+❌ NO shared keys with other subsystems
+
+This subsystem records authority, it does not decide policy.
+
+OBJECTIVE
+
+Build a Human Authority Framework that provides:
+
+Cryptographic proof of human decisions
+
+Explicit override semantics
+
+Role-based authority validation
+
+Non-repudiation
+
+Audit-ledger anchoring
+
+Validator-verifiable accountability
+
+REQUIRED STRUCTURE
+/human-authority/
+  schema/
+    authority-action.schema.json
+    role-assertion.schema.json
+  crypto/
+    human_key_manager.py
+    signer.py
+    verifier.py
+  engine/
+    authority_validator.py
+    override_processor.py
+  api/
+    authority_api.py
+  cli/
+    sign_override.py
+    verify_override.py
+  README.md
+
+REQUIRED ACTION TYPES (ENUM, FROZEN)
+
+POLICY_OVERRIDE
+
+INCIDENT_ESCALATION
+
+INCIDENT_SUPPRESSION
+
+PLAYBOOK_APPROVAL
+
+PLAYBOOK_ABORT
+
+RISK_ACCEPTANCE
+
+FALSE_POSITIVE_DECLARATION
+
+No others.
+
+REQUIRED GUARANTEES
+
+Every human action is:
+
+Signed with a human-specific keypair
+
+Bound to a role assertion
+
+Bound to a scope (incident / policy / campaign)
+
+Recorded in Audit Ledger
+
+Overrides are explicit, never implicit
+
+Overrides never erase automated decisions — they supersede them
+
+Authority is validated before acceptance
+
+No anonymous actions
+
+No shared keys
+
+No revocation ambiguity
+
+CRYPTOGRAPHIC MODEL
+
+Per-human keypair (ed25519 or RSA-PSS, choose and justify)
+
+Separate trust root from:
+
+Audit Ledger
+
+Model Registry
+
+System Explainer
+
+Role assertion must be signed and verifiable
+
+Override invalid if:
+
+Role is insufficient
+
+Signature invalid
+
+Scope mismatch
+
+Timestamp invalid
+
+PASS / FAIL
+
+PASS only if:
+
+A human override can be proven, reconstructed, and verified
+
+Responsibility is unambiguous
+
+Overrides are replayable from ledger
+
+Validator can verify authority chain end-to-end
+
+FAIL if:
+
+Any decision lacks a signer
+
+Any override lacks role proof
+
+Any action can be denied later
+
+Any authority is implicit
+
+OUTPUT EXPECTATION
+
+Produce:
+
+Production-grade code
+
+Frozen schemas
+
+Cryptographic enforcement
+
+Audit ledger integration
+
+Deterministic validation
+
+Complete documentation
+
+No placeholders.
+No shortcuts.
+Build the Human Authority Framework only.
+
+promot end

@@ -1,0 +1,89 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RansomEye Human Authority Role Assertion",
+  "description": "Frozen schema for role assertions. All fields are mandatory. No optional fields allowed.",
+  "type": "object",
+  "required": [
+    "assertion_id",
+    "human_identifier",
+    "role",
+    "scope",
+    "valid_from",
+    "valid_until",
+    "assertion_signature",
+    "assertion_key_id",
+    "issued_by",
+    "issued_at"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "assertion_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this role assertion (UUID v4)"
+    },
+    "human_identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Human identifier (username, email, or unique ID)"
+    },
+    "role": {
+      "type": "string",
+      "enum": [
+        "analyst",
+        "senior_analyst",
+        "incident_responder",
+        "security_manager",
+        "policy_admin",
+        "executive",
+        "auditor"
+      ],
+      "description": "Role assigned to human"
+    },
+    "scope": {
+      "type": "string",
+      "enum": [
+        "incident",
+        "policy",
+        "campaign",
+        "risk",
+        "playbook",
+        "global"
+      ],
+      "description": "Scope of authority"
+    },
+    "valid_from": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp when assertion becomes valid"
+    },
+    "valid_until": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp when assertion expires (null for no expiration)"
+    },
+    "assertion_signature": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9+/=]+$",
+      "description": "Base64-encoded signature of role assertion"
+    },
+    "assertion_key_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Identifier of key used to sign assertion"
+    },
+    "issued_by": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Entity that issued this role assertion"
+    },
+    "issued_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp when assertion was issued"
+    }
+  }
+}

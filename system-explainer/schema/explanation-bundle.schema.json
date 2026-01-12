@@ -1,0 +1,192 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RansomEye System Explanation Bundle",
+  "description": "Frozen schema for signed explanation bundles. All fields are mandatory. No optional fields allowed.",
+  "type": "object",
+  "required": [
+    "bundle_id",
+    "timestamp",
+    "explanation_type",
+    "subject_id",
+    "reasoning_chain",
+    "evidence_references",
+    "causal_links",
+    "signature",
+    "public_key_id"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "bundle_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this explanation bundle (UUID v4)"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp of bundle creation"
+    },
+    "explanation_type": {
+      "type": "string",
+      "enum": [
+        "incident_explanation",
+        "killchain_stage_advancement",
+        "campaign_inference",
+        "risk_score_change",
+        "policy_recommendation",
+        "human_override"
+      ],
+      "description": "Type of explanation"
+    },
+    "subject_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Identifier of subject being explained (incident ID, killchain event ID, etc.)"
+    },
+    "reasoning_chain": {
+      "type": "array",
+      "description": "Ordered chain of reasoning steps (immutable, deterministic)",
+      "items": {
+        "type": "object",
+        "required": [
+          "step_id",
+          "step_type",
+          "description",
+          "evidence_source",
+          "evidence_id",
+          "timestamp"
+        ],
+        "properties": {
+          "step_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "step_type": {
+            "type": "string",
+            "enum": [
+              "ledger_entry",
+              "killchain_event",
+              "graph_relationship",
+              "risk_computation",
+              "policy_decision",
+              "human_override"
+            ]
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024
+          },
+          "evidence_source": {
+            "type": "string",
+            "enum": [
+              "audit_ledger",
+              "killchain_forensics",
+              "threat_graph",
+              "risk_index",
+              "policy_engine",
+              "human_override"
+            ]
+          },
+          "evidence_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "evidence_references": {
+      "type": "array",
+      "description": "References to all evidence used in explanation",
+      "items": {
+        "type": "object",
+        "required": [
+          "source",
+          "reference_id",
+          "reference_type"
+        ],
+        "properties": {
+          "source": {
+            "type": "string",
+            "enum": [
+              "audit_ledger",
+              "killchain_forensics",
+              "threat_graph",
+              "risk_index",
+              "policy_engine",
+              "human_override"
+            ]
+          },
+          "reference_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "reference_type": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "causal_links": {
+      "type": "array",
+      "description": "Explicit causal links between reasoning steps",
+      "items": {
+        "type": "object",
+        "required": [
+          "from_step_id",
+          "to_step_id",
+          "link_type",
+          "explanation"
+        ],
+        "properties": {
+          "from_step_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "to_step_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "link_type": {
+            "type": "string",
+            "enum": [
+              "triggers",
+              "enables",
+              "causes",
+              "correlates_with",
+              "precedes"
+            ]
+          },
+          "explanation": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "signature": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9+/=]+$",
+      "description": "Base64-encoded cryptographic signature of bundle"
+    },
+    "public_key_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Identifier of public key used for signature verification"
+    }
+  }
+}
