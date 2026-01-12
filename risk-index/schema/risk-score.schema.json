@@ -1,0 +1,258 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RansomEye Enterprise Risk Index Score",
+  "description": "Frozen schema for risk score records. All fields are mandatory. No optional fields allowed.",
+  "type": "object",
+  "required": [
+    "score_id",
+    "timestamp",
+    "risk_score",
+    "severity_band",
+    "component_scores",
+    "signal_sources",
+    "computation_metadata",
+    "confidence_score",
+    "decay_applied",
+    "weights_used"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "score_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this risk score computation (UUID v4)"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp of score computation"
+    },
+    "risk_score": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100,
+      "description": "Normalized risk score (0-100)"
+    },
+    "severity_band": {
+      "type": "string",
+      "enum": [
+        "LOW",
+        "MODERATE",
+        "HIGH",
+        "CRITICAL"
+      ],
+      "description": "Severity band classification"
+    },
+    "component_scores": {
+      "type": "object",
+      "description": "Individual component risk scores (explainable contributions)",
+      "required": [
+        "incidents",
+        "ai_metadata",
+        "policy_decisions",
+        "threat_correlation",
+        "uba"
+      ],
+      "properties": {
+        "incidents": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Risk contribution from incidents"
+        },
+        "ai_metadata": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Risk contribution from AI metadata (novelty, clusters, drift)"
+        },
+        "policy_decisions": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Risk contribution from policy decisions"
+        },
+        "threat_correlation": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Risk contribution from threat correlation (future)"
+        },
+        "uba": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Risk contribution from User Behavior Analytics (future)"
+        }
+      },
+      "additionalProperties": false
+    },
+    "signal_sources": {
+      "type": "object",
+      "description": "Signal sources used in computation (read-only references)",
+      "required": [
+        "incident_ids",
+        "ai_metadata_ids",
+        "policy_decision_ids",
+        "threat_correlation_ids",
+        "uba_ids"
+      ],
+      "properties": {
+        "incident_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "description": "Incident identifiers (read-only references)"
+        },
+        "ai_metadata_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "description": "AI metadata identifiers (read-only references)"
+        },
+        "policy_decision_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "description": "Policy decision identifiers (read-only references)"
+        },
+        "threat_correlation_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "description": "Threat correlation identifiers (read-only references, future)"
+        },
+        "uba_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "description": "UBA identifiers (read-only references, future)"
+        }
+      },
+      "additionalProperties": false
+    },
+    "computation_metadata": {
+      "type": "object",
+      "description": "Metadata about computation process",
+      "required": [
+        "computation_version",
+        "signals_processed",
+        "signals_missing",
+        "temporal_decay_applied",
+        "confidence_adjustment_applied"
+      ],
+      "properties": {
+        "computation_version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+          "description": "Risk computation engine version"
+        },
+        "signals_processed": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of signals processed"
+        },
+        "signals_missing": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of expected signals that were missing"
+        },
+        "temporal_decay_applied": {
+          "type": "boolean",
+          "description": "Whether temporal decay was applied"
+        },
+        "confidence_adjustment_applied": {
+          "type": "boolean",
+          "description": "Whether confidence adjustment was applied"
+        }
+      },
+      "additionalProperties": false
+    },
+    "confidence_score": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Confidence in computed risk score (0-1)"
+    },
+    "decay_applied": {
+      "type": "object",
+      "description": "Temporal decay function parameters applied",
+      "required": [
+        "decay_function",
+        "decay_parameters"
+      ],
+      "properties": {
+        "decay_function": {
+          "type": "string",
+          "enum": [
+            "exponential",
+            "linear",
+            "step",
+            "none"
+          ],
+          "description": "Type of decay function applied"
+        },
+        "decay_parameters": {
+          "type": "object",
+          "description": "Decay function parameters",
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "weights_used": {
+      "type": "object",
+      "description": "Weight configuration used in aggregation",
+      "required": [
+        "incidents",
+        "ai_metadata",
+        "policy_decisions",
+        "threat_correlation",
+        "uba"
+      ],
+      "properties": {
+        "incidents": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Weight for incidents component"
+        },
+        "ai_metadata": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Weight for AI metadata component"
+        },
+        "policy_decisions": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Weight for policy decisions component"
+        },
+        "threat_correlation": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Weight for threat correlation component"
+        },
+        "uba": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Weight for UBA component"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

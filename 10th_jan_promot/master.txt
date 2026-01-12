@@ -3782,3 +3782,148 @@ Do NOT explain verbally.
 Build the AI Model Registry only.
 
 promot end
+
+
+
+
+Promot Start
+
+You are continuing RansomEye — Enterprise & Military-Grade Platform Expansion.
+
+This is PHASE B2 (MANDATORY).
+
+No other work is allowed until this phase is fully complete, validated, and frozen.
+
+WORK UNIT B2 — ENTERPRISE RISK INDEX ENGINE
+ABSOLUTE CONTEXT (DO NOT VIOLATE)
+
+❌ NO modification to v1.0 Core, Agents, DPI
+
+❌ NO modification to Audit Ledger, Global Validator, AI Model Registry
+
+❌ NO UI
+
+❌ NO alerting
+
+❌ NO enforcement
+
+❌ NO heuristics without justification
+
+This phase builds risk computation only.
+
+OBJECTIVE
+
+Build the Enterprise Risk Index, a deterministic engine that computes a global, normalized (0–100) risk score representing the security posture of the entire enterprise.
+
+This score is:
+
+The single executive truth
+
+The input to board reporting
+
+The baseline for automation thresholds
+
+MANDATORY CAPABILITIES
+1. Signal Ingestion (READ-ONLY)
+
+Consume signals from:
+
+Incidents (correlation engine)
+
+AI metadata (novelty, clusters, drift markers)
+
+Policy decisions
+
+Threat correlation (future)
+
+UBA (future)
+
+No signal mutation allowed.
+
+2. Risk Model (DETERMINISTIC)
+
+Weighted aggregation
+
+Explicit weight configuration
+
+Temporal decay functions
+
+Confidence-aware scoring
+
+No randomness
+
+3. Normalization
+
+Output strictly in range 0–100
+
+Defined severity bands (LOW / MODERATE / HIGH / CRITICAL)
+
+Explainable component contributions
+
+4. Audit & Assurance
+
+Every score computation emits:
+
+Audit Ledger entry
+
+Global Validator must be able to:
+
+Recompute score deterministically
+
+Verify no missing signals
+
+5. Historical Tracking
+
+Maintain historical risk timeline
+
+Immutable records
+
+No retroactive mutation
+
+REQUIRED OUTPUT STRUCTURE
+/risk-index/
+  schema/
+    risk-score.schema.json
+  engine/
+    aggregator.py
+    decay.py
+    normalizer.py
+  storage/
+    risk_store.py
+  api/
+    risk_api.py
+  cli/
+    compute_risk.py
+  README.md
+
+PASS / FAIL CRITERIA
+
+PASS only if:
+
+Same inputs always produce same score
+
+Score is explainable
+
+Missing signals are detected
+
+No mutation of source data
+
+All computations are auditable
+
+FAIL if:
+
+Any randomness exists
+
+Any silent assumptions exist
+
+Score cannot be recomputed by Global Validator
+
+DELIVERABLE EXPECTATION
+
+Produce full production-grade code, schemas, and documentation.
+
+Do NOT summarize.
+Do NOT explain verbally.
+Build the Enterprise Risk Index only.
+
+promot end
