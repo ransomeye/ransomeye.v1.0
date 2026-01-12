@@ -1,0 +1,115 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RansomEye Policy Bundle",
+  "description": "Frozen schema for policy bundles. All fields are mandatory. No optional fields allowed.",
+  "type": "object",
+  "required": [
+    "bundle_id",
+    "bundle_version",
+    "authority_scope",
+    "created_at",
+    "created_by",
+    "rules",
+    "bundle_signature",
+    "bundle_key_id"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "bundle_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this bundle (UUID v4)"
+    },
+    "bundle_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "description": "Bundle version (semantic versioning)"
+    },
+    "authority_scope": {
+      "type": "string",
+      "enum": [
+        "incident",
+        "policy",
+        "campaign",
+        "risk",
+        "global"
+      ],
+      "description": "Authority scope (one bundle = one scope)"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp of bundle creation"
+    },
+    "created_by": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Human identifier who created bundle"
+    },
+    "rules": {
+      "type": "array",
+      "description": "List of policy rules (ordered by priority)",
+      "items": {
+        "$ref": "#/$defs/policy_rule"
+      },
+      "minItems": 1
+    },
+    "bundle_signature": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9+/=]+$",
+      "description": "Base64-encoded signature of bundle"
+    },
+    "bundle_key_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Identifier of key used to sign bundle"
+    },
+    "$defs": {
+      "policy_rule": {
+        "type": "object",
+        "required": [
+          "rule_id",
+          "match_conditions",
+          "severity_thresholds",
+          "risk_score_thresholds",
+          "allowed_actions",
+          "required_authority",
+          "explanation_template_id",
+          "priority"
+        ],
+        "properties": {
+          "rule_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "match_conditions": {
+            "type": "object"
+          },
+          "severity_thresholds": {
+            "type": "object"
+          },
+          "risk_score_thresholds": {
+            "type": "object"
+          },
+          "allowed_actions": {
+            "type": "array"
+          },
+          "required_authority": {
+            "type": "string",
+            "enum": ["NONE", "HUMAN", "ROLE"]
+          },
+          "explanation_template_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "priority": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    }
+  }
+}

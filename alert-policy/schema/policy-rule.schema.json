@@ -1,0 +1,170 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RansomEye Policy Rule",
+  "description": "Frozen schema for policy rules. All fields are mandatory. No optional fields allowed.",
+  "type": "object",
+  "required": [
+    "rule_id",
+    "match_conditions",
+    "severity_thresholds",
+    "risk_score_thresholds",
+    "allowed_actions",
+    "required_authority",
+    "explanation_template_id",
+    "priority"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "rule_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this rule (UUID v4)"
+    },
+    "match_conditions": {
+      "type": "object",
+      "description": "Explicit, typed match conditions (no free-text logic)",
+      "required": [
+        "condition_type",
+        "conditions"
+      ],
+      "properties": {
+        "condition_type": {
+          "type": "string",
+          "enum": [
+            "all",
+            "any"
+          ],
+          "description": "Logical operator for conditions"
+        },
+        "conditions": {
+          "type": "array",
+          "description": "List of typed conditions",
+          "items": {
+            "type": "object",
+            "required": [
+              "field",
+              "operator",
+              "value"
+            ],
+            "properties": {
+              "field": {
+                "type": "string",
+                "enum": [
+                  "alert_type",
+                  "severity",
+                  "risk_score",
+                  "source_component",
+                  "subject_type",
+                  "mitre_technique_id",
+                  "campaign_id"
+                ]
+              },
+              "operator": {
+                "type": "string",
+                "enum": [
+                  "equals",
+                  "not_equals",
+                  "greater_than",
+                  "less_than",
+                  "greater_than_or_equal",
+                  "less_than_or_equal",
+                  "in",
+                  "not_in"
+                ]
+              },
+              "value": {
+                "description": "Value to compare (type depends on field)"
+              }
+            },
+            "additionalProperties": false
+          },
+          "minItems": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "severity_thresholds": {
+      "type": "object",
+      "description": "Severity thresholds (explicit, no implicit defaults)",
+      "required": [
+        "min_severity",
+        "max_severity"
+      ],
+      "properties": {
+        "min_severity": {
+          "type": "string",
+          "enum": [
+            "LOW",
+            "MODERATE",
+            "HIGH",
+            "CRITICAL"
+          ]
+        },
+        "max_severity": {
+          "type": "string",
+          "enum": [
+            "LOW",
+            "MODERATE",
+            "HIGH",
+            "CRITICAL"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "risk_score_thresholds": {
+      "type": "object",
+      "description": "Risk score thresholds (explicit, no implicit defaults)",
+      "required": [
+        "min_risk_score",
+        "max_risk_score"
+      ],
+      "properties": {
+        "min_risk_score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "max_risk_score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        }
+      },
+      "additionalProperties": false
+    },
+    "allowed_actions": {
+      "type": "array",
+      "description": "Allowed actions (explicit list, no implicit actions)",
+      "items": {
+        "type": "string",
+        "enum": [
+          "route",
+          "escalate",
+          "suppress",
+          "notify"
+        ]
+      },
+      "minItems": 1
+    },
+    "required_authority": {
+      "type": "string",
+      "enum": [
+        "NONE",
+        "HUMAN",
+        "ROLE"
+      ],
+      "description": "Required authority level (explicit, no implicit)"
+    },
+    "explanation_template_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Explanation template identifier (for SEE)"
+    },
+    "priority": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Rule priority (explicit integer, no ties allowed)"
+    }
+  }
+}

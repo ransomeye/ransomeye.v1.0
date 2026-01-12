@@ -1,0 +1,87 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RansomEye Alert",
+  "description": "Frozen schema for alerts. All fields are mandatory. No optional fields allowed. Alerts are immutable facts.",
+  "type": "object",
+  "required": [
+    "alert_id",
+    "incident_id",
+    "policy_rule_id",
+    "severity",
+    "risk_score_at_emit",
+    "explanation_bundle_id",
+    "authority_required",
+    "routing_decision_id",
+    "emitted_at",
+    "immutable_hash",
+    "prev_alert_hash"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "alert_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this alert (UUID v4)"
+    },
+    "incident_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Incident identifier this alert relates to"
+    },
+    "policy_rule_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Policy rule identifier that triggered this alert"
+    },
+    "severity": {
+      "type": "string",
+      "enum": [
+        "LOW",
+        "MODERATE",
+        "HIGH",
+        "CRITICAL"
+      ],
+      "description": "Alert severity"
+    },
+    "risk_score_at_emit": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100,
+      "description": "Risk score at time of alert emission"
+    },
+    "explanation_bundle_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Explanation bundle identifier (SEE) - mandatory, no alert without explanation"
+    },
+    "authority_required": {
+      "type": "string",
+      "enum": [
+        "NONE",
+        "HUMAN",
+        "ROLE"
+      ],
+      "description": "Required authority level"
+    },
+    "routing_decision_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Routing decision identifier from policy engine"
+    },
+    "emitted_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp of alert emission"
+    },
+    "immutable_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA256 hash of alert content (immutability guarantee)"
+    },
+    "prev_alert_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA256 hash of previous alert for same incident (chainable per incident)"
+    }
+  }
+}

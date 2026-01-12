@@ -1,0 +1,168 @@
+****Promot Start****
+
+You are continuing **RansomEye — Military-Grade Enterprise Security Platform**.
+You are the same system, same codebase, same constraints. No assumptions. No shortcuts.
+
+This is **PHASE F-1 — Alert Engine & Policy Routing (Policy Bundle Core)**.
+
+This phase is **FOUNDATIONAL**. Nothing downstream is allowed to exist without this.
+
+---
+
+## OBJECTIVE
+
+Build the **Policy Bundle Core** that governs **how alerts are routed, escalated, suppressed, or forwarded** at scale (**10k+ alerts/min**), with **cryptographic trust**, **hot-reload**, and **deterministic behavior**.
+
+This engine does **NOT detect** threats.
+It **routes and governs** outcomes produced by Correlation, Risk, Graph, SEE, IR, and HAF.
+
+---
+
+## ABSOLUTE CONSTRAINTS (NON-NEGOTIABLE)
+
+* ❌ No ML
+* ❌ No heuristics
+* ❌ No free-text logic
+* ❌ No implicit defaults
+* ❌ No silent fallbacks
+* ❌ No runtime mutation of policies
+* ❌ No human-invisible behavior
+
+Every decision must be:
+
+* deterministic
+* explainable
+* auditable
+* replayable
+* authority-aware
+
+---
+
+## REQUIRED STRUCTURE
+
+```
+/alert-policy/
+  schema/
+    policy-bundle.schema.json
+    policy-rule.schema.json
+    routing-decision.schema.json
+  crypto/
+    bundle_signer.py
+    bundle_verifier.py
+  engine/
+    bundle_loader.py          # hot-reload, atomic
+    rule_evaluator.py         # deterministic
+    router.py                 # high-throughput routing
+  api/
+    policy_api.py
+  cli/
+    verify_bundle.py
+    load_bundle.py
+  README.md
+```
+
+---
+
+## POLICY BUNDLE REQUIREMENTS
+
+### Policy Bundle (Immutable, Signed)
+
+* YAML input → parsed → validated → frozen
+* Cryptographically signed (ed25519)
+* One bundle = one authority scope
+* No partial loading
+* No mixed trust roots
+
+### Each policy rule MUST specify:
+
+* rule_id (UUID)
+* match_conditions (explicit, typed)
+* severity_thresholds
+* risk_score_thresholds
+* allowed_actions (route, escalate, suppress, notify)
+* required_authority (NONE | HUMAN | ROLE)
+* explanation_template_id (for SEE)
+* priority (explicit integer, no ties)
+
+No optional fields.
+
+---
+
+## HOT-RELOAD RULES
+
+* Reload is **atomic**
+* Old bundle remains active until new bundle is:
+
+  * schema-valid
+  * signature-valid
+  * authority-valid
+* Reload failure = no change
+* Reload emits Audit Ledger entry
+* Reload is Validator-replayable
+
+---
+
+## ROUTING ENGINE REQUIREMENTS
+
+* Stateless per decision
+* Deterministic ordering
+* Supports ≥10,000 alerts/min
+* No shared mutable state
+* All outputs produce:
+
+  * routing decision
+  * explanation reference (SEE)
+  * audit entry
+  * authority requirement (if any)
+
+---
+
+## REQUIRED INTEGRATIONS
+
+Policy Engine MUST integrate with:
+
+* Audit Ledger (every decision)
+* System Explanation Engine (explanation templates)
+* Human Authority Framework (when authority required)
+* Global Validator (replay)
+* Incident Response Engine (future handoff, NOT execution)
+
+---
+
+## PASS / FAIL
+
+PASS only if:
+
+* Same input → same routing decision
+* Bundle tampering is detected
+* Reload failures do not affect running system
+* Validator can replay routing decisions
+* No action bypasses authority model
+* No alert is routed without explanation reference
+
+FAIL if:
+
+* Any implicit default exists
+* Any rule ambiguity exists
+* Any unsigned policy is accepted
+* Any silent reload failure
+* Any performance-driven shortcut
+
+---
+
+## OUTPUT EXPECTATION
+
+* Production-grade Policy Bundle Core
+* Frozen schemas
+* Deterministic engine
+* Cryptographic trust
+* Full documentation
+* Ready for Phase F-2 (Alert Engine proper)
+
+Do **not** build alert ingestion yet.
+Do **not** build UI.
+Do **not** build enforcement.
+
+Build **Policy Bundle Core only**.
+
+****promot end****

@@ -1,0 +1,172 @@
+****Promot Start****
+
+You are continuing **RansomEye — Military-Grade Enterprise Security Platform**.
+
+This is **PHASE F-2 — Alert Engine (Execution-Free Decision Engine)**.
+
+This phase builds the **Alert Engine proper**, which consumes validated incidents + policy routing decisions and produces **alerts as immutable facts**.
+This engine **does not notify**, **does not enforce**, and **does not execute** anything.
+
+---
+
+## OBJECTIVE
+
+Build the **Alert Engine** that:
+
+* Converts **incidents + policy routing decisions** into **alerts**
+* Enforces **cardinality, deduplication, suppression, escalation**
+* Produces **alert facts only**
+* Anchors **every alert to explanation bundles, authority state, and audit ledger**
+
+Alerts are **facts**, not messages.
+
+---
+
+## ABSOLUTE CONSTRAINTS (NON-NEGOTIABLE)
+
+* ❌ No notifications
+* ❌ No UI
+* ❌ No enforcement
+* ❌ No retries
+* ❌ No ML
+* ❌ No heuristics
+* ❌ No mutable alert state
+* ❌ No background schedulers
+* ❌ No silent suppression
+
+Every alert must be:
+
+* deterministic
+* immutable
+* explainable
+* replayable
+* authority-aware
+* validator-reconstructable
+
+---
+
+## REQUIRED STRUCTURE
+
+```
+/alert-engine/
+  schema/
+    alert.schema.json
+    alert-suppression.schema.json
+    alert-escalation.schema.json
+  engine/
+    alert_builder.py
+    deduplicator.py
+    suppressor.py
+    escalator.py
+  api/
+    alert_api.py
+  cli/
+    replay_alerts.py
+  README.md
+```
+
+---
+
+## ALERT FACT REQUIREMENTS
+
+Each alert MUST include:
+
+* alert_id (UUID)
+* incident_id
+* policy_rule_id
+* severity
+* risk_score_at_emit
+* explanation_bundle_id (SEE)
+* authority_required (NONE | HUMAN | ROLE)
+* routing_decision_id
+* emitted_at (RFC3339 UTC)
+* immutable_hash
+* prev_alert_hash (chainable per incident)
+
+No optional fields.
+
+---
+
+## DEDUPLICATION RULES
+
+* Deduplication is **content-based**, not time-based
+* Identical alert facts = single alert
+* Deduplication MUST be deterministic
+* Deduplication emits audit ledger entry
+
+---
+
+## SUPPRESSION RULES
+
+* Suppression must be:
+
+  * explicit
+  * policy-driven
+  * reason-coded
+* Suppressed alerts are still recorded as facts
+* Suppression reason is mandatory
+* Suppression is replayable
+
+---
+
+## ESCALATION RULES
+
+* Escalation is deterministic
+* Escalation requires:
+
+  * policy match
+  * explanation reference
+* Escalation NEVER auto-executes IR
+* Escalation MAY require HAF authority
+
+---
+
+## REQUIRED INTEGRATIONS
+
+Alert Engine MUST integrate with:
+
+* Alert Policy Engine (routing decisions)
+* System Explanation Engine (bundle references)
+* Audit Ledger (every alert, suppression, escalation)
+* Human Authority Framework (authority requirement)
+* Global Validator (replay)
+
+---
+
+## PASS / FAIL
+
+PASS only if:
+
+* Same incident + same policy = same alert
+* No alert exists without explanation reference
+* No suppression without explicit reason
+* No escalation without explanation
+* Validator can rebuild alerts from ledger
+* Disabling Alert Engine does not break detection
+
+FAIL if:
+
+* Any mutable alert state exists
+* Any alert bypasses policy engine
+* Any silent suppression
+* Any implicit escalation
+
+---
+
+## OUTPUT EXPECTATION
+
+* Production-grade Alert Engine
+* Frozen schemas
+* Deterministic execution
+* Fully auditable
+* Replayable
+* Authority-aware
+* Ready for Phase F-3 (Notification & Delivery)
+
+Do **not** build notifications yet.
+Do **not** integrate UI.
+Do **not** trigger playbooks.
+
+Build **Alert Engine only**.
+
+****promot end****

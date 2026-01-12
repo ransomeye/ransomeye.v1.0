@@ -1,0 +1,82 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RansomEye Routing Decision",
+  "description": "Frozen schema for routing decisions. All fields are mandatory. No optional fields allowed.",
+  "type": "object",
+  "required": [
+    "decision_id",
+    "alert_id",
+    "rule_id",
+    "routing_action",
+    "required_authority",
+    "explanation_reference",
+    "decision_timestamp",
+    "ledger_entry_id"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "decision_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this decision (UUID v4)"
+    },
+    "alert_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Alert identifier"
+    },
+    "rule_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Policy rule identifier that matched"
+    },
+    "routing_action": {
+      "type": "string",
+      "enum": [
+        "route",
+        "escalate",
+        "suppress",
+        "notify"
+      ],
+      "description": "Routing action determined by rule"
+    },
+    "required_authority": {
+      "type": "string",
+      "enum": [
+        "NONE",
+        "HUMAN",
+        "ROLE"
+      ],
+      "description": "Required authority level"
+    },
+    "explanation_reference": {
+      "type": "object",
+      "description": "Reference to explanation (SEE)",
+      "required": [
+        "explanation_template_id",
+        "explanation_bundle_id"
+      ],
+      "properties": {
+        "explanation_template_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "explanation_bundle_id": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "additionalProperties": false
+    },
+    "decision_timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp of decision"
+    },
+    "ledger_entry_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Audit ledger entry ID for this decision"
+    }
+  }
+}
