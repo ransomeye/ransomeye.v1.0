@@ -42,7 +42,7 @@ class ReportSigner:
             private_key_path: Path to ed25519 private key file
             key_id: Signing key identifier
         """
-        self.private_key_path = Path(private_key_key_path)
+        self.private_key_path = Path(private_key_path)
         self.key_id = key_id
         
         # Load or generate private key
@@ -60,9 +60,6 @@ class ReportSigner:
         """
         try:
             # Generate ed25519 keypair using cryptography library
-            from cryptography.hazmat.primitives.asymmetric import ed25519
-            from cryptography.hazmat.primitives import serialization
-            from cryptography.hazmat.backends import default_backend
             
             private_key = ed25519.Ed25519PrivateKey.generate()
             public_key = private_key.public_key()
@@ -134,7 +131,6 @@ class ReportSigner:
             Public key as PEM-encoded bytes
         """
         try:
-            from cryptography.hazmat.primitives import serialization
             
             public_key = self.private_key.public_key()
             return public_key.public_bytes(

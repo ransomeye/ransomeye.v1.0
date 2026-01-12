@@ -1,0 +1,71 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RansomEye Artifact Manifest",
+  "description": "Frozen schema for supply-chain artifact manifests. All fields are mandatory. No optional fields allowed.",
+  "type": "object",
+  "required": [
+    "artifact_id",
+    "artifact_name",
+    "artifact_type",
+    "version",
+    "build_timestamp",
+    "sha256",
+    "signing_key_id",
+    "signature",
+    "toolchain_fingerprint",
+    "build_host_fingerprint"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "artifact_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this artifact (UUID v4)"
+    },
+    "artifact_name": {
+      "type": "string",
+      "description": "Artifact name (e.g., ransomeye-core-installer, ransomeye-linux-agent)"
+    },
+    "artifact_type": {
+      "type": "string",
+      "enum": [
+        "CORE_INSTALLER",
+        "LINUX_AGENT",
+        "WINDOWS_AGENT",
+        "DPI_PROBE",
+        "RELEASE_BUNDLE"
+      ],
+      "description": "Artifact type (exactly 5 types, no others)"
+    },
+    "version": {
+      "type": "string",
+      "description": "Artifact version (semver format)"
+    },
+    "build_timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp of build"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA256 hash of artifact content"
+    },
+    "signing_key_id": {
+      "type": "string",
+      "description": "Signing key identifier (vendor key ID)"
+    },
+    "signature": {
+      "type": "string",
+      "description": "Base64-encoded ed25519 signature of manifest hash"
+    },
+    "toolchain_fingerprint": {
+      "type": "string",
+      "description": "SHA256 hash of toolchain configuration (build environment fingerprint)"
+    },
+    "build_host_fingerprint": {
+      "type": "string",
+      "description": "SHA256 hash of build host identity (hostname, OS, architecture)"
+    }
+  }
+}

@@ -8546,3 +8546,186 @@ No partials.
 
 
 
+****Promot Start****
+
+Implement **Supply-Chain Signing & Verification Framework** across RansomEye (MANDATORY, NON-OPTIONAL).
+
+You must implement this as a **first-class security subsystem**, not ad-hoc scripts.
+
+### Objective
+
+Provide **cryptographic supply-chain integrity** for:
+
+* Core installer
+* Linux Agent installer
+* Windows Agent installer
+* DPI Probe installer
+* Release bundle artifacts
+
+This is **integrity proof**, not trust assertion. Customers may replace trust roots.
+
+---
+
+## 1. New Subsystem: `/supply-chain/`
+
+### Structure (must match exactly)
+
+```
+supply-chain/
+├── schema/
+│   └── artifact-manifest.schema.json
+├── crypto/
+│   ├── vendor_key_manager.py
+│   ├── artifact_signer.py
+│   └── artifact_verifier.py
+├── engine/
+│   ├── manifest_builder.py
+│   └── verification_engine.py
+├── cli/
+│   ├── sign_artifacts.py
+│   └── verify_artifacts.py
+└── README.md
+```
+
+---
+
+## 2. Artifact Manifest (Frozen, Zero Optional Fields)
+
+Create `artifact-manifest.schema.json` with **exactly these required fields**:
+
+* artifact_id (UUID)
+* artifact_name
+* artifact_type (ENUM: CORE_INSTALLER, LINUX_AGENT, WINDOWS_AGENT, DPI_PROBE, RELEASE_BUNDLE)
+* version
+* build_timestamp (RFC3339 UTC)
+* sha256
+* signing_key_id
+* signature
+* toolchain_fingerprint
+* build_host_fingerprint
+
+❌ No optional fields
+❌ No placeholders
+❌ No environment-specific values hardcoded
+
+---
+
+## 3. Cryptographic Requirements
+
+* Algorithm: **ed25519**
+* Vendor signing key:
+
+  * Generated once per release toolchain
+  * Stored offline (document this)
+* Separate keys from:
+
+  * Audit Ledger
+  * Global Validator
+  * Reporting
+  * Model Registry
+
+**Never reuse keys across subsystems.**
+
+---
+
+## 4. Signing Flow (Deterministic)
+
+1. Hash artifact (SHA256)
+2. Build canonical manifest (sorted JSON)
+3. Hash manifest
+4. Sign manifest hash
+5. Store:
+
+   * `<artifact>.sha256`
+   * `<artifact>.manifest.json`
+   * `<artifact>.manifest.sig`
+
+All steps must be reproducible.
+
+---
+
+## 5. Verification Flow
+
+`verify_artifacts.py` must:
+
+* Verify SHA256
+* Verify manifest hash
+* Verify signature
+* Support **external public key injection** (customer trust root)
+* Produce PASS / FAIL with explicit failure reason
+
+No silent failures.
+
+---
+
+## 6. Installer Integration (MANDATORY)
+
+Each installer **must**:
+
+* Verify its own manifest before execution
+* Abort installation on failure
+* Emit Audit Ledger entry:
+
+  * `SUPPLY_CHAIN_VERIFICATION_PASSED`
+  * `SUPPLY_CHAIN_VERIFICATION_FAILED`
+
+No bypass flags. No “continue anyway”.
+
+---
+
+## 7. Global Validator Integration
+
+Global Validator must add checks:
+
+* Installer integrity
+* Binary integrity
+* Manifest continuity
+
+Validator must be able to:
+
+* Re-verify artifacts **offline**
+* Use alternate trusted public keys
+
+---
+
+## 8. Documentation (REQUIRED)
+
+README must explicitly document:
+
+* Why self-signing exists
+* Difference between integrity vs trust
+* How customers replace trust roots
+* Air-gapped verification
+* Legal / regulatory positioning
+
+Include this statement verbatim:
+
+> “RansomEye self-signs for integrity, not authority. Final trust always belongs to the operator.”
+
+---
+
+## 9. Forbidden
+
+❌ No PKI assumptions
+❌ No internet calls
+❌ No hardcoded paths
+❌ No optional fields
+❌ No skipping verification
+❌ No shared keys
+
+---
+
+## 10. Validation Criteria
+
+You are done **only if**:
+
+* All schemas frozen, zero optional fields
+* CLI tools functional
+* Installers fail closed
+* Validator can re-verify everything
+* Documentation complete
+* Code compiles cleanly
+
+This is **release-blocking**.
+
+****Promot End****

@@ -5,7 +5,6 @@ AUTHORITATIVE: Deterministic SHA256 hashing for rendered reports
 """
 
 import hashlib
-from typing import bytes as BytesType
 
 
 class RenderHasherError(Exception):
@@ -24,7 +23,7 @@ class RenderHasher:
     """
     
     @staticmethod
-    def hash_content(content: BytesType) -> str:
+    def hash_content(content: bytes) -> str:
         """
         Compute deterministic SHA256 hash of rendered content.
         
@@ -39,7 +38,7 @@ class RenderHasher:
         return hash_obj.hexdigest()
     
     @staticmethod
-    def verify_content(content: BytesType, expected_hash: str) -> bool:
+    def verify_content(content: bytes, expected_hash: str) -> bool:
         """
         Verify rendered content hash.
         

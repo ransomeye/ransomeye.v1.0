@@ -6,7 +6,8 @@ AUTHORITATIVE: Offline verification of signed reports
 
 import base64
 from pathlib import Path
-from typing import bytes as BytesType
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.backends import default_backend
 
 
 class VerificationError(Exception):
@@ -47,8 +48,6 @@ class ReportVerifier:
             VerificationError: If key loading fails
         """
         try:
-            from cryptography.hazmat.primitives import serialization
-            from cryptography.hazmat.backends import default_backend
             
             public_key_bytes = self.public_key_path.read_bytes()
             self.public_key = serialization.load_pem_public_key(
@@ -59,7 +58,7 @@ class ReportVerifier:
         except Exception as e:
             raise VerificationError(f"Failed to load public key: {e}") from e
     
-    def verify_signature(self, content: BytesType, signature: str) -> bool:
+    def verify_signature(self, content: bytes, signature: str) -> bool:
         """
         Verify signature against content.
         
