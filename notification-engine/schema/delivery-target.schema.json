@@ -1,0 +1,58 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RansomEye Delivery Target",
+  "description": "Frozen schema for delivery targets. All fields are mandatory. No optional fields allowed.",
+  "type": "object",
+  "required": [
+    "target_id",
+    "target_type",
+    "target_name",
+    "target_config",
+    "authority_required",
+    "created_at"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "target_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this delivery target (UUID v4)"
+    },
+    "target_type": {
+      "type": "string",
+      "enum": [
+        "email",
+        "webhook",
+        "ticket",
+        "siem"
+      ],
+      "description": "Type of delivery target"
+    },
+    "target_name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Human-readable target name"
+    },
+    "target_config": {
+      "type": "object",
+      "description": "Target-specific configuration (immutable after creation)",
+      "minProperties": 1,
+      "additionalProperties": true
+    },
+    "authority_required": {
+      "type": "string",
+      "enum": [
+        "NONE",
+        "HUMAN",
+        "ROLE"
+      ],
+      "description": "Required authority level for delivery to this target"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp of target creation"
+    }
+  }
+}

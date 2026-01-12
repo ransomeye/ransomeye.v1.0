@@ -1,0 +1,60 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RansomEye Alert Suppression",
+  "description": "Frozen schema for alert suppressions. All fields are mandatory. No optional fields allowed.",
+  "type": "object",
+  "required": [
+    "suppression_id",
+    "alert_id",
+    "policy_rule_id",
+    "suppression_reason",
+    "suppressed_at",
+    "suppressed_by",
+    "ledger_entry_id"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "suppression_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this suppression (UUID v4)"
+    },
+    "alert_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Alert identifier being suppressed"
+    },
+    "policy_rule_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Policy rule identifier that triggered suppression"
+    },
+    "suppression_reason": {
+      "type": "string",
+      "enum": [
+        "false_positive",
+        "duplicate",
+        "policy_suppression",
+        "human_override",
+        "risk_acceptance"
+      ],
+      "description": "Suppression reason (explicit, reason-coded, no free-text)"
+    },
+    "suppressed_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp of suppression"
+    },
+    "suppressed_by": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Entity that suppressed alert (human identifier or system)"
+    },
+    "ledger_entry_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Audit ledger entry ID for this suppression"
+    }
+  }
+}

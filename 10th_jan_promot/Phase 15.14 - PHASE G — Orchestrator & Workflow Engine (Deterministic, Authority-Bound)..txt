@@ -1,0 +1,178 @@
+****Promot Start****
+
+You are continuing **RansomEye — Military-Grade Enterprise Cyber Defense Platform**.
+All prior subsystems are **authoritative, frozen, validated, and replayable**.
+
+This is **PHASE G — Orchestrator & Workflow Engine (Deterministic, Authority-Bound)**.
+
+This phase builds the **system spine** that coordinates **when and how subsystems run**, **in what order**, and **under what authority**, without embedding any detection, policy, or enforcement logic.
+
+The Orchestrator is **not intelligence**.
+It is **deterministic workflow control**.
+
+---
+
+## OBJECTIVE
+
+Build a **Workflow Orchestrator** that:
+
+* Coordinates execution of subsystems (Alert → Notification → IR → Validation)
+* Manages **job lifecycles**, **dependencies**, and **replay**
+* Guarantees **no implicit execution**
+* Enforces **authority + explanation prerequisites**
+* Is fully **audit-anchored** and **validator-replayable**
+
+---
+
+## ABSOLUTE CONSTRAINTS (NON-NEGOTIABLE)
+
+* ❌ No hidden schedulers
+* ❌ No cron-like behavior
+* ❌ No background autonomy
+* ❌ No ML / heuristics
+* ❌ No retries with implicit state
+* ❌ No execution without authority proof
+* ❌ No workflow without explanation reference
+
+Every workflow must be:
+
+* explicit
+* deterministic
+* authority-validated
+* explanation-anchored
+* replayable
+* fail-closed
+
+---
+
+## REQUIRED STRUCTURE
+
+```
+/orchestrator/
+  schema/
+    workflow.schema.json
+    workflow-step.schema.json
+    job-record.schema.json
+  engine/
+    workflow_registry.py      # immutable workflows
+    dependency_resolver.py    # DAG validation
+    job_executor.py           # deterministic execution
+    replay_engine.py          # full rehydration
+  api/
+    orchestrator_api.py
+  cli/
+    run_workflow.py
+    replay_workflow.py
+  README.md
+```
+
+---
+
+## WORKFLOW REQUIREMENTS
+
+### Workflow Definition (Immutable)
+
+Each workflow MUST define:
+
+* workflow_id (UUID)
+* version (semver)
+* allowed_triggers (manual | alert | validator)
+* required_authority (NONE | HUMAN | ROLE)
+* required_explanation_type (SEE bundle type)
+* steps[] (ordered, typed)
+* failure_policy (STOP | ROLLBACK | RECORD_ONLY)
+
+No optional fields.
+
+---
+
+## WORKFLOW STEP REQUIREMENTS
+
+Each step MUST include:
+
+* step_id (UUID)
+* step_type (ALERT_DELIVERY | IR_EXECUTION | VALIDATION | REPORT_GEN)
+* input_refs (explicit data dependencies)
+* output_refs
+* authority_required (NONE | HUMAN | ROLE)
+* explanation_required (boolean)
+* deterministic_timeout (seconds)
+
+No step may execute implicitly.
+
+---
+
+## EXECUTION RULES
+
+* Execution is **pull-based**, never push
+* Each step produces a **job record**
+* Job records are immutable facts
+* Failures are explicit and terminal unless workflow defines rollback
+* Rollback steps MUST be explicitly defined and signed
+* No dynamic branching at runtime
+
+---
+
+## REPLAY & REHYDRATION
+
+* Entire workflows must be replayable from:
+
+  * Audit Ledger
+  * Job records
+  * Explanation bundles
+  * Authority actions
+* Replay must produce:
+
+  * identical job order
+  * identical outputs
+  * identical hashes
+
+---
+
+## REQUIRED INTEGRATIONS
+
+Orchestrator MUST integrate with:
+
+* Audit Ledger (every job start/finish/failure)
+* System Explanation Engine (pre-execution checks)
+* Human Authority Framework (execution permission)
+* Incident Response Engine (execution handoff only)
+* Global Validator (workflow replay & assurance)
+
+---
+
+## PASS / FAIL
+
+PASS only if:
+
+* No workflow runs without explanation + authority (if required)
+* Same workflow input → same execution graph
+* Validator can replay entire workflow deterministically
+* No background execution exists
+* No implicit retries or scheduling
+
+FAIL if:
+
+* Any step executes without job record
+* Any workflow bypasses authority
+* Any nondeterminism exists
+* Any hidden state exists
+
+---
+
+## OUTPUT EXPECTATION
+
+* Production-grade Orchestrator
+* Frozen schemas
+* Deterministic DAG execution
+* Authority-bound workflows
+* Replay & rehydration support
+* Ready for **Phase H — Network Scanner & Topology**
+
+Do **not** build scanners yet.
+Do **not** build UI triggers.
+Do **not** add cron.
+
+Build **Orchestrator & Workflow Engine only**.
+
+****promot end****

@@ -5170,3 +5170,331 @@ Build **Alert Engine only**.
 ****promot end****
 
 
+****Promot Start****
+
+You are continuing **RansomEye — Military-Grade Enterprise Security Platform**.
+
+This is **PHASE F-3 — Notification & Delivery Engine (Strictly Downstream, Non-Authoritative)**.
+
+This phase builds the **delivery layer only**.
+It consumes **immutable alert facts** and **does nothing else**.
+
+---
+
+## OBJECTIVE
+
+Build a **Notification & Delivery Engine** that:
+
+* Delivers alerts to external systems (email, webhook, ticketing, SIEM)
+* NEVER changes alerts
+* NEVER makes decisions
+* NEVER escalates, suppresses, deduplicates, or correlates
+* Is fully **policy-driven**, **authority-aware**, and **auditable**
+
+Delivery is **transport**, not logic.
+
+---
+
+## ABSOLUTE CONSTRAINTS (NON-NEGOTIABLE)
+
+* ❌ No alert creation
+* ❌ No alert mutation
+* ❌ No policy evaluation
+* ❌ No escalation logic
+* ❌ No retries with hidden state
+* ❌ No UI coupling
+* ❌ No delivery without alert fact
+
+Every delivery must be:
+
+* deterministic
+* idempotent
+* replayable
+* auditable
+* explanation-anchored
+
+---
+
+## REQUIRED STRUCTURE
+
+```
+/notification-engine/
+  schema/
+    delivery-target.schema.json
+    delivery-record.schema.json
+  engine/
+    dispatcher.py
+    target_resolver.py
+    formatter.py
+  adapters/
+    email_adapter.py
+    webhook_adapter.py
+    ticket_adapter.py
+    siem_adapter.py
+  api/
+    notification_api.py
+  cli/
+    replay_delivery.py
+  README.md
+```
+
+---
+
+## DELIVERY FACT REQUIREMENTS
+
+Each delivery record MUST include:
+
+* delivery_id (UUID)
+* alert_id
+* target_id
+* delivery_type (email | webhook | ticket | siem)
+* payload_hash
+* explanation_bundle_id
+* authority_state (NONE | REQUIRED | VERIFIED)
+* delivered_at (RFC3339 UTC)
+* status (DELIVERED | FAILED)
+* immutable_hash
+
+No optional fields.
+
+---
+
+## DELIVERY RULES
+
+* Delivery is **best-effort**, not guaranteed
+* Failure is recorded, not retried implicitly
+* Replays are explicit (CLI-driven)
+* Payload formatting is deterministic
+* Same alert + same target → same payload hash
+
+---
+
+## REQUIRED INTEGRATIONS
+
+Notification Engine MUST integrate with:
+
+* Alert Engine (alert facts only)
+* System Explanation Engine (bundle reference only)
+* Human Authority Framework (authority state)
+* Audit Ledger (every delivery attempt)
+* Global Validator (replayability)
+
+---
+
+## PASS / FAIL
+
+PASS only if:
+
+* No delivery exists without alert fact
+* No alert mutation occurs
+* Same alert replay → same payload hash
+* Failed delivery is recorded explicitly
+* Validator can replay deliveries from ledger
+
+FAIL if:
+
+* Any delivery logic affects alerts
+* Any retry hides failure
+* Any delivery bypasses audit ledger
+* Any delivery lacks explanation reference
+
+---
+
+## OUTPUT EXPECTATION
+
+* Production-grade Notification & Delivery Engine
+* Frozen schemas
+* Deterministic adapters
+* Fully auditable
+* Replay-safe
+* Ready for **Phase G — Orchestrator & Workflow**
+
+Do **not** build workflow logic yet.
+Do **not** build UI hooks.
+Do **not** auto-retry.
+
+Build **Notification & Delivery Engine only**.
+
+****promot end****
+
+
+****Promot Start****
+
+You are continuing **RansomEye — Military-Grade Enterprise Cyber Defense Platform**.
+All prior subsystems are **authoritative, frozen, validated, and replayable**.
+
+This is **PHASE G — Orchestrator & Workflow Engine (Deterministic, Authority-Bound)**.
+
+This phase builds the **system spine** that coordinates **when and how subsystems run**, **in what order**, and **under what authority**, without embedding any detection, policy, or enforcement logic.
+
+The Orchestrator is **not intelligence**.
+It is **deterministic workflow control**.
+
+---
+
+## OBJECTIVE
+
+Build a **Workflow Orchestrator** that:
+
+* Coordinates execution of subsystems (Alert → Notification → IR → Validation)
+* Manages **job lifecycles**, **dependencies**, and **replay**
+* Guarantees **no implicit execution**
+* Enforces **authority + explanation prerequisites**
+* Is fully **audit-anchored** and **validator-replayable**
+
+---
+
+## ABSOLUTE CONSTRAINTS (NON-NEGOTIABLE)
+
+* ❌ No hidden schedulers
+* ❌ No cron-like behavior
+* ❌ No background autonomy
+* ❌ No ML / heuristics
+* ❌ No retries with implicit state
+* ❌ No execution without authority proof
+* ❌ No workflow without explanation reference
+
+Every workflow must be:
+
+* explicit
+* deterministic
+* authority-validated
+* explanation-anchored
+* replayable
+* fail-closed
+
+---
+
+## REQUIRED STRUCTURE
+
+```
+/orchestrator/
+  schema/
+    workflow.schema.json
+    workflow-step.schema.json
+    job-record.schema.json
+  engine/
+    workflow_registry.py      # immutable workflows
+    dependency_resolver.py    # DAG validation
+    job_executor.py           # deterministic execution
+    replay_engine.py          # full rehydration
+  api/
+    orchestrator_api.py
+  cli/
+    run_workflow.py
+    replay_workflow.py
+  README.md
+```
+
+---
+
+## WORKFLOW REQUIREMENTS
+
+### Workflow Definition (Immutable)
+
+Each workflow MUST define:
+
+* workflow_id (UUID)
+* version (semver)
+* allowed_triggers (manual | alert | validator)
+* required_authority (NONE | HUMAN | ROLE)
+* required_explanation_type (SEE bundle type)
+* steps[] (ordered, typed)
+* failure_policy (STOP | ROLLBACK | RECORD_ONLY)
+
+No optional fields.
+
+---
+
+## WORKFLOW STEP REQUIREMENTS
+
+Each step MUST include:
+
+* step_id (UUID)
+* step_type (ALERT_DELIVERY | IR_EXECUTION | VALIDATION | REPORT_GEN)
+* input_refs (explicit data dependencies)
+* output_refs
+* authority_required (NONE | HUMAN | ROLE)
+* explanation_required (boolean)
+* deterministic_timeout (seconds)
+
+No step may execute implicitly.
+
+---
+
+## EXECUTION RULES
+
+* Execution is **pull-based**, never push
+* Each step produces a **job record**
+* Job records are immutable facts
+* Failures are explicit and terminal unless workflow defines rollback
+* Rollback steps MUST be explicitly defined and signed
+* No dynamic branching at runtime
+
+---
+
+## REPLAY & REHYDRATION
+
+* Entire workflows must be replayable from:
+
+  * Audit Ledger
+  * Job records
+  * Explanation bundles
+  * Authority actions
+* Replay must produce:
+
+  * identical job order
+  * identical outputs
+  * identical hashes
+
+---
+
+## REQUIRED INTEGRATIONS
+
+Orchestrator MUST integrate with:
+
+* Audit Ledger (every job start/finish/failure)
+* System Explanation Engine (pre-execution checks)
+* Human Authority Framework (execution permission)
+* Incident Response Engine (execution handoff only)
+* Global Validator (workflow replay & assurance)
+
+---
+
+## PASS / FAIL
+
+PASS only if:
+
+* No workflow runs without explanation + authority (if required)
+* Same workflow input → same execution graph
+* Validator can replay entire workflow deterministically
+* No background execution exists
+* No implicit retries or scheduling
+
+FAIL if:
+
+* Any step executes without job record
+* Any workflow bypasses authority
+* Any nondeterminism exists
+* Any hidden state exists
+
+---
+
+## OUTPUT EXPECTATION
+
+* Production-grade Orchestrator
+* Frozen schemas
+* Deterministic DAG execution
+* Authority-bound workflows
+* Replay & rehydration support
+* Ready for **Phase H — Network Scanner & Topology**
+
+Do **not** build scanners yet.
+Do **not** build UI triggers.
+Do **not** add cron.
+
+Build **Orchestrator & Workflow Engine only**.
+
+****promot end****
+
+

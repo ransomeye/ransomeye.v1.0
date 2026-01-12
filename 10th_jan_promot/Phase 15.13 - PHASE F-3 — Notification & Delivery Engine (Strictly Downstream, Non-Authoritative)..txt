@@ -1,0 +1,146 @@
+****Promot Start****
+
+You are continuing **RansomEye — Military-Grade Enterprise Security Platform**.
+
+This is **PHASE F-3 — Notification & Delivery Engine (Strictly Downstream, Non-Authoritative)**.
+
+This phase builds the **delivery layer only**.
+It consumes **immutable alert facts** and **does nothing else**.
+
+---
+
+## OBJECTIVE
+
+Build a **Notification & Delivery Engine** that:
+
+* Delivers alerts to external systems (email, webhook, ticketing, SIEM)
+* NEVER changes alerts
+* NEVER makes decisions
+* NEVER escalates, suppresses, deduplicates, or correlates
+* Is fully **policy-driven**, **authority-aware**, and **auditable**
+
+Delivery is **transport**, not logic.
+
+---
+
+## ABSOLUTE CONSTRAINTS (NON-NEGOTIABLE)
+
+* ❌ No alert creation
+* ❌ No alert mutation
+* ❌ No policy evaluation
+* ❌ No escalation logic
+* ❌ No retries with hidden state
+* ❌ No UI coupling
+* ❌ No delivery without alert fact
+
+Every delivery must be:
+
+* deterministic
+* idempotent
+* replayable
+* auditable
+* explanation-anchored
+
+---
+
+## REQUIRED STRUCTURE
+
+```
+/notification-engine/
+  schema/
+    delivery-target.schema.json
+    delivery-record.schema.json
+  engine/
+    dispatcher.py
+    target_resolver.py
+    formatter.py
+  adapters/
+    email_adapter.py
+    webhook_adapter.py
+    ticket_adapter.py
+    siem_adapter.py
+  api/
+    notification_api.py
+  cli/
+    replay_delivery.py
+  README.md
+```
+
+---
+
+## DELIVERY FACT REQUIREMENTS
+
+Each delivery record MUST include:
+
+* delivery_id (UUID)
+* alert_id
+* target_id
+* delivery_type (email | webhook | ticket | siem)
+* payload_hash
+* explanation_bundle_id
+* authority_state (NONE | REQUIRED | VERIFIED)
+* delivered_at (RFC3339 UTC)
+* status (DELIVERED | FAILED)
+* immutable_hash
+
+No optional fields.
+
+---
+
+## DELIVERY RULES
+
+* Delivery is **best-effort**, not guaranteed
+* Failure is recorded, not retried implicitly
+* Replays are explicit (CLI-driven)
+* Payload formatting is deterministic
+* Same alert + same target → same payload hash
+
+---
+
+## REQUIRED INTEGRATIONS
+
+Notification Engine MUST integrate with:
+
+* Alert Engine (alert facts only)
+* System Explanation Engine (bundle reference only)
+* Human Authority Framework (authority state)
+* Audit Ledger (every delivery attempt)
+* Global Validator (replayability)
+
+---
+
+## PASS / FAIL
+
+PASS only if:
+
+* No delivery exists without alert fact
+* No alert mutation occurs
+* Same alert replay → same payload hash
+* Failed delivery is recorded explicitly
+* Validator can replay deliveries from ledger
+
+FAIL if:
+
+* Any delivery logic affects alerts
+* Any retry hides failure
+* Any delivery bypasses audit ledger
+* Any delivery lacks explanation reference
+
+---
+
+## OUTPUT EXPECTATION
+
+* Production-grade Notification & Delivery Engine
+* Frozen schemas
+* Deterministic adapters
+* Fully auditable
+* Replay-safe
+* Ready for **Phase G — Orchestrator & Workflow**
+
+Do **not** build workflow logic yet.
+Do **not** build UI hooks.
+Do **not** auto-retry.
+
+Build **Notification & Delivery Engine only**.
+
+****promot end****

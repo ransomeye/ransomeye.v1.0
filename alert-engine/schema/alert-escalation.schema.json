@@ -1,0 +1,64 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RansomEye Alert Escalation",
+  "description": "Frozen schema for alert escalations. All fields are mandatory. No optional fields allowed.",
+  "type": "object",
+  "required": [
+    "escalation_id",
+    "alert_id",
+    "policy_rule_id",
+    "explanation_bundle_id",
+    "authority_required",
+    "escalated_at",
+    "escalated_by",
+    "ledger_entry_id"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "escalation_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this escalation (UUID v4)"
+    },
+    "alert_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Alert identifier being escalated"
+    },
+    "policy_rule_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Policy rule identifier that triggered escalation"
+    },
+    "explanation_bundle_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Explanation bundle identifier (SEE) - mandatory, no escalation without explanation"
+    },
+    "authority_required": {
+      "type": "string",
+      "enum": [
+        "NONE",
+        "HUMAN",
+        "ROLE"
+      ],
+      "description": "Required authority level for escalation"
+    },
+    "escalated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp of escalation"
+    },
+    "escalated_by": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Entity that escalated alert (human identifier or system)"
+    },
+    "ledger_entry_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Audit ledger entry ID for this escalation"
+    }
+  }
+}

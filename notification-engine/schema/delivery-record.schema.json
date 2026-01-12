@@ -1,0 +1,89 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RansomEye Delivery Record",
+  "description": "Frozen schema for delivery records. All fields are mandatory. No optional fields allowed.",
+  "type": "object",
+  "required": [
+    "delivery_id",
+    "alert_id",
+    "target_id",
+    "delivery_type",
+    "payload_hash",
+    "explanation_bundle_id",
+    "authority_state",
+    "delivered_at",
+    "status",
+    "immutable_hash",
+    "ledger_entry_id"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "delivery_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this delivery (UUID v4)"
+    },
+    "alert_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Alert identifier being delivered"
+    },
+    "target_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Delivery target identifier"
+    },
+    "delivery_type": {
+      "type": "string",
+      "enum": [
+        "email",
+        "webhook",
+        "ticket",
+        "siem"
+      ],
+      "description": "Type of delivery"
+    },
+    "payload_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA256 hash of delivery payload (deterministic)"
+    },
+    "explanation_bundle_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Explanation bundle identifier (SEE) - mandatory, no delivery without explanation"
+    },
+    "authority_state": {
+      "type": "string",
+      "enum": [
+        "NONE",
+        "REQUIRED",
+        "VERIFIED"
+      ],
+      "description": "Authority state at time of delivery"
+    },
+    "delivered_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp of delivery attempt"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "DELIVERED",
+        "FAILED"
+      ],
+      "description": "Delivery status"
+    },
+    "immutable_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA256 hash of delivery record (immutability guarantee)"
+    },
+    "ledger_entry_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Audit ledger entry ID for this delivery"
+    }
+  }
+}
