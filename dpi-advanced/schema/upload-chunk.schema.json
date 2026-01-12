@@ -1,0 +1,62 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RansomEye DPI Upload Chunk",
+  "description": "Frozen schema for upload chunks. All fields are mandatory. Zero optional fields allowed.",
+  "type": "object",
+  "required": [
+    "chunk_id",
+    "chunk_index",
+    "total_chunks",
+    "flow_records",
+    "chunk_hash",
+    "manifest_signature",
+    "uploaded_at",
+    "immutable_hash"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "chunk_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this chunk (UUID v4)"
+    },
+    "chunk_index": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Zero-based chunk index"
+    },
+    "total_chunks": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Total number of chunks in upload"
+    },
+    "flow_records": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "minItems": 1,
+      "description": "Flow records in this chunk"
+    },
+    "chunk_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA256 hash of chunk content"
+    },
+    "manifest_signature": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{128}$",
+      "description": "Ed25519 signature of chunk manifest (hex-encoded)"
+    },
+    "uploaded_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp of upload"
+    },
+    "immutable_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA256 hash of upload chunk record (immutability guarantee)"
+    }
+  }
+}

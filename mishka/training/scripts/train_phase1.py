@@ -206,11 +206,16 @@ class Phase1Trainer:
         return tokenized
     
     def prepare_dataset(self, dataset: Any) -> Any:
-        """Prepare dataset for training."""
+        """Prepare dataset for training with memory optimization."""
+        # Process in smaller batches to reduce memory spikes
+        batch_size = 32  # Smaller batches for memory efficiency
+        
         tokenized_dataset = dataset.map(
             self.tokenize_function,
             batched=True,
-            remove_columns=dataset.column_names
+            batch_size=batch_size,
+            remove_columns=dataset.column_names,
+            desc="Tokenizing dataset"
         )
         
         return tokenized_dataset
@@ -223,10 +228,28 @@ class Phase1Trainer:
         # Setup LoRA
         self.setup_lora()
         
-        # Load and prepare dataset
+        # Load and prepare dataset with memory management
+        print("Loading dataset...")
         dataset = self.load_dataset()
+        
+        # Limit dataset size if too large (for memory management)
+        max_samples = self.config['data'].get('max_samples')
+        if max_samples and len(dataset) > max_samples:
+            print(f"Limiting dataset to {max_samples} samples for memory efficiency")
+            dataset = dataset.select(range(max_samples))
+        
+        print("Tokenizing dataset (this may take a while and use memory)...")
+        # Force garbage collection before tokenization
+        import gc
+        gc.collect()
+        
         tokenized_dataset = self.prepare_dataset(dataset)
         
+        # Clear original dataset from memory
+        del dataset
+        gc.collect()
+        
+        print("Splitting dataset...")
         # Split into train/validation
         # For small datasets, ensure minimum samples
         min_test_samples = max(1, len(tokenized_dataset) // 10)
@@ -240,6 +263,10 @@ class Phase1Trainer:
             split_dataset = tokenized_dataset.train_test_split(test_size=test_size)
             train_dataset = split_dataset['train']
             eval_dataset = split_dataset['test']
+        
+        # Clear tokenized dataset from memory
+        del tokenized_dataset
+        gc.collect()
         
         # Training arguments with memory optimization
         use_cpu = self.config['cpu']['use_cpu']

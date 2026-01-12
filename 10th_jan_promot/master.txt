@@ -6291,3 +6291,244 @@ After completion, system proceeds to:
 
 ****Promot end****
 
+
+
+****Promot Start****
+
+You are continuing **RansomEye — Military-Grade Enterprise Cyber Defense Platform**.
+All previously completed subsystems are **frozen, authoritative, deterministic, replayable, validator-verifiable**.
+
+This is **PHASE L — DPI Probe Advanced Engine (10G / eBPF / AF_PACKET Fast-Path)**.
+
+This phase upgrades the DPI Probe from a **functional sensor** to a **carrier-grade, high-performance network intelligence engine** capable of sustaining **10G+ traffic** with **provable performance and privacy guarantees**.
+
+---
+
+## OBJECTIVE
+
+Build the **Advanced DPI Probe Engine** that provides:
+
+* Line-rate (10G+) traffic observation
+* Flow-level behavioral ML (local, bounded, explainable)
+* Asset classification (device / role inference)
+* Privacy-preserving redaction modes
+* Deterministic chunked upload with cryptographic enforcement
+* eBPF / AF_PACKET fast paths
+* Full integration with HNMP, Threat Graph, KillChain, Risk Index
+
+---
+
+## ABSOLUTE CONSTRAINTS (NON-NEGOTIABLE)
+
+* ❌ No payload storage
+* ❌ No packet replay
+* ❌ No MITM
+* ❌ No active traffic modification
+* ❌ No credential extraction
+* ❌ No decryption of encrypted payloads
+* ❌ No cloud dependency
+* ❌ No kernel patching
+
+This is **observation only**, at scale.
+
+---
+
+## REQUIRED STRUCTURE
+
+```
+/dpi-advanced/
+  schema/
+    flow-record.schema.json
+    asset-profile.schema.json
+    upload-chunk.schema.json
+    privacy-policy.schema.json
+  fastpath/
+    af_packet_capture.c
+    ebpf_flow_tracker.c
+  engine/
+    flow_assembler.py
+    behavior_model.py
+    asset_classifier.py
+    privacy_redactor.py
+    uploader.py
+  performance/
+    throughput_benchmark.py
+    latency_benchmark.py
+    cpu_profile.md
+  api/
+    dpi_api.py
+  cli/
+    run_probe.py
+    benchmark_probe.py
+  README.md
+```
+
+---
+
+## PERFORMANCE TARGETS (MANDATORY)
+
+You must **prove**, not claim:
+
+* **10 Gbps sustained throughput**
+* **<5% CPU per 1 Gbps**
+* **Zero packet drops at 64-byte packets (AF_PACKET)**
+* **Bounded memory (ring buffers only)**
+* **Backpressure under congestion (no OOM)**
+
+Benchmarks must be reproducible.
+
+---
+
+## FAST-PATH IMPLEMENTATION
+
+### AF_PACKET
+
+* PACKET_MMAP (TPACKET_V3)
+* RX ring only
+* Zero-copy
+* CPU affinity pinning
+
+### eBPF
+
+* Flow tuple extraction
+* L7 protocol fingerprinting (metadata only)
+* Per-flow counters
+* No loops
+* Verifier-safe
+
+---
+
+## FLOW-LEVEL ML (STRICTLY LOCAL)
+
+Allowed:
+
+* Sequence models on **flow metadata only**
+* Packet size, timing, flags, protocol hints
+
+Forbidden:
+
+* Payload inspection
+* Cross-host learning
+* Cloud inference
+
+Outputs:
+
+* **Behavioral profile IDs**
+* Confidence bands
+* Feature vectors only (stored in HNMP-compatible form)
+
+---
+
+## ASSET CLASSIFICATION
+
+Infer:
+
+* Device type (server, workstation, IoT, network device)
+* Role (DB, DC, proxy, printer)
+
+Based on:
+
+* Port behavior
+* Protocol mix
+* Flow directionality
+
+Must be:
+
+* Deterministic
+* Explainable
+* Replayable
+
+---
+
+## PRIVACY MODES (MANDATORY)
+
+Implement **policy-driven redaction**:
+
+* **STRICT**
+
+  * Hash IPs
+  * Truncate ports
+  * No DNS labels
+* **BALANCED**
+
+  * Partial IP retention
+  * Domain second-level only
+* **FORENSIC**
+
+  * Full metadata (no payload)
+
+Redaction happens **before storage and upload**.
+
+---
+
+## UPLOAD PIPELINE
+
+* Chunked uploads
+* Per-chunk SHA256
+* Signed chunk manifests
+* Backpressure-aware
+* Resume-safe
+* Offline buffering (bounded)
+
+No silent drops.
+
+---
+
+## REQUIRED INTEGRATIONS
+
+Must integrate with:
+
+* HNMP Engine (flow → network facts)
+* Threat Graph (asset & flow edges)
+* KillChain & Forensics (evidence references)
+* Risk Index (signals only)
+* Alert Engine (context only)
+* Audit Ledger (all actions)
+* Global Validator (full replay)
+
+---
+
+## DETERMINISM RULES
+
+* Same packets → same flows
+* Same flows → same features
+* Same policies → same redaction
+* Same input → same output hashes
+
+No entropy.
+
+---
+
+## PASS / FAIL
+
+PASS only if:
+
+* 10G benchmark is reproducible
+* CPU & memory profiles documented
+* Privacy redaction provably enforced
+* Upload integrity is cryptographically verifiable
+* No payload is ever persisted
+* Validator can replay outputs
+
+FAIL if:
+
+* Any payload leaks
+* Any inference is implicit
+* Any performance claim is unproven
+* Any privacy mode is bypassable
+
+---
+
+## OUTPUT EXPECTATION
+
+* **Carrier-grade DPI engine**
+* Privacy-first by design
+* Deterministic, replayable, explainable
+* Suitable for regulated and military environments
+
+After completion, system proceeds to:
+
+**PHASE M — Advanced UBA (Insider Threat & Identity-Behavior Fusion)**
+
+****Promot end****
+

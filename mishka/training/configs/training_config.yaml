@@ -33,7 +33,7 @@ training:
   learning_rate: 2.0e-4
   warmup_steps: 50  # Reduced for smaller dataset
   max_steps: -1  # -1 means use num_train_epochs
-  max_length: 1024  # Reduced for CPU memory
+  max_length: 512  # Further reduced for memory (was 1024)
   temperature: 0.0  # Deterministic
   top_p: 1.0
   logging_steps: 10
@@ -69,7 +69,7 @@ data:
   train_file: "./data/processed/train_expanded.jsonl"
   validation_file: "./data/processed/validation.jsonl"
   test_file: "./data/processed/test.jsonl"
-  max_samples: null  # null = use all samples
+  max_samples: 1000  # Limit to 1000 samples for memory (can increase if needed)
 
 # Evaluation
 evaluation:

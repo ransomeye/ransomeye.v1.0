@@ -1,0 +1,75 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RansomEye DPI Privacy Policy",
+  "description": "Frozen schema for privacy policies. All fields are mandatory. Zero optional fields allowed.",
+  "type": "object",
+  "required": [
+    "policy_id",
+    "policy_name",
+    "privacy_mode",
+    "ip_redaction",
+    "port_redaction",
+    "dns_redaction",
+    "created_at",
+    "immutable_hash"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "policy_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this privacy policy (UUID v4)"
+    },
+    "policy_name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Human-readable policy name"
+    },
+    "privacy_mode": {
+      "type": "string",
+      "enum": [
+        "STRICT",
+        "BALANCED",
+        "FORENSIC"
+      ],
+      "description": "Privacy mode"
+    },
+    "ip_redaction": {
+      "type": "string",
+      "enum": [
+        "hash",
+        "partial",
+        "none"
+      ],
+      "description": "IP redaction method"
+    },
+    "port_redaction": {
+      "type": "string",
+      "enum": [
+        "truncate",
+        "none"
+      ],
+      "description": "Port redaction method"
+    },
+    "dns_redaction": {
+      "type": "string",
+      "enum": [
+        "none",
+        "second_level_only",
+        "hash"
+      ],
+      "description": "DNS redaction method"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp of policy creation"
+    },
+    "immutable_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA256 hash of privacy policy (immutability guarantee)"
+    }
+  }
+}

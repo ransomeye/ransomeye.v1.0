@@ -1,0 +1,82 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RansomEye DPI Asset Profile",
+  "description": "Frozen schema for asset profiles. All fields are mandatory. Zero optional fields allowed.",
+  "type": "object",
+  "required": [
+    "profile_id",
+    "asset_ip",
+    "device_type",
+    "role",
+    "confidence",
+    "classification_features",
+    "first_seen",
+    "last_seen",
+    "immutable_hash"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "profile_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this asset profile (UUID v4)"
+    },
+    "asset_ip": {
+      "type": "string",
+      "format": "ipv4",
+      "description": "Asset IP address"
+    },
+    "device_type": {
+      "type": "string",
+      "enum": [
+        "server",
+        "workstation",
+        "iot",
+        "network_device",
+        "unknown"
+      ],
+      "description": "Inferred device type"
+    },
+    "role": {
+      "type": "string",
+      "enum": [
+        "database",
+        "domain_controller",
+        "proxy",
+        "printer",
+        "web_server",
+        "mail_server",
+        "dns_server",
+        "unknown"
+      ],
+      "description": "Inferred role"
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Classification confidence (0.0 to 1.0)"
+    },
+    "classification_features": {
+      "type": "object",
+      "description": "Features used for classification (deterministic, explainable)",
+      "minProperties": 1,
+      "additionalProperties": true
+    },
+    "first_seen": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp of first observation"
+    },
+    "last_seen": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp of last observation"
+    },
+    "immutable_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA256 hash of asset profile (immutability guarantee)"
+    }
+  }
+}
