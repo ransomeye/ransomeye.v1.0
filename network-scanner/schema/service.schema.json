@@ -1,0 +1,64 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RansomEye Network Service",
+  "description": "Frozen schema for network services. All fields are mandatory. No optional fields allowed.",
+  "type": "object",
+  "required": [
+    "service_id",
+    "asset_id",
+    "port",
+    "protocol",
+    "service_name",
+    "banner",
+    "discovered_at",
+    "immutable_hash"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "service_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this service (UUID v4)"
+    },
+    "asset_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Asset identifier hosting this service"
+    },
+    "port": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 65535,
+      "description": "Port number"
+    },
+    "protocol": {
+      "type": "string",
+      "enum": [
+        "tcp",
+        "udp"
+      ],
+      "description": "Protocol (TCP or UDP)"
+    },
+    "service_name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Service name (e.g., ssh, http, mysql)"
+    },
+    "banner": {
+      "type": "string",
+      "maxLength": 4096,
+      "description": "Service banner (if available)"
+    },
+    "discovered_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp of discovery"
+    },
+    "immutable_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA256 hash of service record (immutability guarantee)"
+    }
+  }
+}

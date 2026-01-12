@@ -1,0 +1,60 @@
+{
+  "metadata": {
+    "name": "RansomEye Platform Test Set",
+    "count": 5,
+    "purpose": "Evaluate RansomEye platform knowledge"
+  },
+  "test_queries": [
+    {
+      "query": "What is the Audit Ledger in RansomEye?",
+      "expected_topics": [
+        "audit ledger",
+        "system actions",
+        "immutable",
+        "append-only"
+      ],
+      "category": "ransomeye_architecture"
+    },
+    {
+      "query": "How does the Threat Graph work?",
+      "expected_topics": [
+        "threat graph",
+        "entities",
+        "relationships",
+        "correlation"
+      ],
+      "category": "ransomeye_architecture"
+    },
+    {
+      "query": "What is the Risk Index?",
+      "expected_topics": [
+        "risk index",
+        "risk score",
+        "confidence",
+        "computation"
+      ],
+      "category": "ransomeye_architecture"
+    },
+    {
+      "query": "How do I check the risk score for an incident?",
+      "expected_topics": [
+        "risk score",
+        "incident",
+        "query",
+        "confidence_score"
+      ],
+      "category": "ransomeye_workflow"
+    },
+    {
+      "query": "What are the incident stages in RansomEye?",
+      "expected_topics": [
+        "incident stages",
+        "CLEAN",
+        "SUSPICIOUS",
+        "PROBABLE",
+        "CONFIRMED"
+      ],
+      "category": "ransomeye_concepts"
+    }
+  ]
+}

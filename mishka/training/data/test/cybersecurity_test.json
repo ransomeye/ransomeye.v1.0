@@ -1,0 +1,107 @@
+{
+  "metadata": {
+    "name": "Cybersecurity Concept Test Set",
+    "count": 10,
+    "purpose": "Evaluate cybersecurity domain knowledge"
+  },
+  "test_queries": [
+    {
+      "query": "What is lateral movement in cybersecurity?",
+      "expected_topics": [
+        "lateral movement",
+        "network",
+        "authentication",
+        "MITRE ATT&CK"
+      ],
+      "category": "cybersecurity_concept"
+    },
+    {
+      "query": "Explain what a zero-day vulnerability is.",
+      "expected_topics": [
+        "zero-day",
+        "vulnerability",
+        "exploit",
+        "patch"
+      ],
+      "category": "cybersecurity_concept"
+    },
+    {
+      "query": "What is the difference between authentication and authorization?",
+      "expected_topics": [
+        "authentication",
+        "authorization",
+        "access control"
+      ],
+      "category": "cybersecurity_concept"
+    },
+    {
+      "query": "What is a killchain in cybersecurity?",
+      "expected_topics": [
+        "killchain",
+        "attack stages",
+        "Lockheed Martin",
+        "MITRE ATT&CK"
+      ],
+      "category": "cybersecurity_concept"
+    },
+    {
+      "query": "How does ransomware work?",
+      "expected_topics": [
+        "ransomware",
+        "encryption",
+        "extortion",
+        "malware"
+      ],
+      "category": "cybersecurity_concept"
+    },
+    {
+      "query": "What is MITRE ATT&CK technique T1055?",
+      "expected_topics": [
+        "T1055",
+        "Process Injection",
+        "MITRE ATT&CK"
+      ],
+      "category": "mitre_attck"
+    },
+    {
+      "query": "What is a CVE and how is it structured?",
+      "expected_topics": [
+        "CVE",
+        "vulnerability",
+        "identifier",
+        "structure"
+      ],
+      "category": "vulnerability_management"
+    },
+    {
+      "query": "What does CVSS score 9.8 mean?",
+      "expected_topics": [
+        "CVSS",
+        "9.8",
+        "critical",
+        "severity"
+      ],
+      "category": "vulnerability_management"
+    },
+    {
+      "query": "What is digital forensics?",
+      "expected_topics": [
+        "forensics",
+        "evidence",
+        "investigation",
+        "analysis"
+      ],
+      "category": "forensics"
+    },
+    {
+      "query": "How do you detect SQL injection attacks?",
+      "expected_topics": [
+        "SQL injection",
+        "detection",
+        "web application",
+        "database"
+      ],
+      "category": "detection"
+    }
+  ]
+}

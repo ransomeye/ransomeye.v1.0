@@ -1,0 +1,109 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RansomEye Job Record",
+  "description": "Frozen schema for job records. All fields are mandatory. No optional fields allowed.",
+  "type": "object",
+  "required": [
+    "job_id",
+    "workflow_id",
+    "step_id",
+    "step_type",
+    "status",
+    "started_at",
+    "finished_at",
+    "input_refs",
+    "output_refs",
+    "authority_state",
+    "explanation_bundle_id",
+    "immutable_hash",
+    "ledger_entry_id"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "job_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this job (UUID v4)"
+    },
+    "workflow_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Workflow identifier"
+    },
+    "step_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Step identifier"
+    },
+    "step_type": {
+      "type": "string",
+      "enum": [
+        "ALERT_DELIVERY",
+        "IR_EXECUTION",
+        "VALIDATION",
+        "REPORT_GEN"
+      ],
+      "description": "Type of workflow step"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "PENDING",
+        "RUNNING",
+        "COMPLETED",
+        "FAILED",
+        "TIMEOUT",
+        "ROLLED_BACK"
+      ],
+      "description": "Job execution status"
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp of job start"
+    },
+    "finished_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp of job completion (or null if not finished)"
+    },
+    "input_refs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Input references used by this job"
+    },
+    "output_refs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Output references produced by this job"
+    },
+    "authority_state": {
+      "type": "string",
+      "enum": [
+        "NONE",
+        "REQUIRED",
+        "VERIFIED"
+      ],
+      "description": "Authority state at time of execution"
+    },
+    "explanation_bundle_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Explanation bundle identifier (SEE) - mandatory if explanation_required"
+    },
+    "immutable_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA256 hash of job record (immutability guarantee)"
+    },
+    "ledger_entry_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Audit ledger entry ID for this job"
+    }
+  }
+}

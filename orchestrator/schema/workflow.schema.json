@@ -1,0 +1,140 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RansomEye Workflow",
+  "description": "Frozen schema for workflows. All fields are mandatory. No optional fields allowed.",
+  "type": "object",
+  "required": [
+    "workflow_id",
+    "version",
+    "allowed_triggers",
+    "required_authority",
+    "required_explanation_type",
+    "steps",
+    "failure_policy"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "workflow_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this workflow (UUID v4)"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "Semantic version (semver)"
+    },
+    "allowed_triggers": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "manual",
+          "alert",
+          "validator"
+        ]
+      },
+      "minItems": 1,
+      "uniqueItems": true,
+      "description": "Allowed trigger types for this workflow"
+    },
+    "required_authority": {
+      "type": "string",
+      "enum": [
+        "NONE",
+        "HUMAN",
+        "ROLE"
+      ],
+      "description": "Required authority level for workflow execution"
+    },
+    "required_explanation_type": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Required explanation bundle type (SEE bundle type)"
+    },
+    "steps": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/workflow_step"
+      },
+      "minItems": 1,
+      "description": "Ordered workflow steps"
+    },
+    "failure_policy": {
+      "type": "string",
+      "enum": [
+        "STOP",
+        "ROLLBACK",
+        "RECORD_ONLY"
+      ],
+      "description": "Failure handling policy"
+    }
+  },
+  "$defs": {
+    "workflow_step": {
+      "type": "object",
+      "required": [
+        "step_id",
+        "step_type",
+        "input_refs",
+        "output_refs",
+        "authority_required",
+        "explanation_required",
+        "deterministic_timeout"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "step_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique identifier for this step (UUID v4)"
+        },
+        "step_type": {
+          "type": "string",
+          "enum": [
+            "ALERT_DELIVERY",
+            "IR_EXECUTION",
+            "VALIDATION",
+            "REPORT_GEN"
+          ],
+          "description": "Type of workflow step"
+        },
+        "input_refs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Explicit data dependencies (references to previous step outputs)"
+        },
+        "output_refs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Output references (identifiers for step outputs)"
+        },
+        "authority_required": {
+          "type": "string",
+          "enum": [
+            "NONE",
+            "HUMAN",
+            "ROLE"
+          ],
+          "description": "Required authority level for step execution"
+        },
+        "explanation_required": {
+          "type": "boolean",
+          "description": "Whether explanation bundle is required for step execution"
+        },
+        "deterministic_timeout": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Deterministic timeout in seconds"
+        }
+      }
+    }
+  }
+}

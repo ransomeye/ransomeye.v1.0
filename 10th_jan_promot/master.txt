@@ -5498,3 +5498,179 @@ Build **Orchestrator & Workflow Engine only**.
 ****promot end****
 
 
+****Promot Start****
+
+You are continuing **RansomEye — Military-Grade Enterprise Cyber Defense Platform**.
+All prior subsystems are **authoritative, frozen, validated, replayable**.
+
+This is **PHASE H — Network Scanner & Topology Engine (Deterministic Discovery, Non-Intrusive)**.
+
+This phase builds **network discovery and topology intelligence** only.
+It does **NOT** exploit, **NOT** remediate, **NOT** enforce, and **NOT** modify hosts.
+
+---
+
+## OBJECTIVE
+
+Build a **Network Scanner & Topology Engine** that:
+
+* Discovers network assets (active + passive)
+* Builds **immutable topology maps**
+* Performs **offline CVE matching**
+* Produces **facts only**, not actions
+* Operates safely in enterprise & regulated environments
+
+---
+
+## ABSOLUTE CONSTRAINTS (NON-NEGOTIABLE)
+
+* ❌ No exploitation
+* ❌ No credential brute-force
+* ❌ No lateral movement
+* ❌ No remediation or blocking
+* ❌ No auto-scheduling
+* ❌ No background scanning
+* ❌ No ML inference during scan
+* ❌ No network mutation
+
+Scanning is **observation**, not attack.
+
+---
+
+## REQUIRED STRUCTURE
+
+```
+/network-scanner/
+  schema/
+    asset.schema.json
+    service.schema.json
+    topology-edge.schema.json
+    cve-match.schema.json
+  engine/
+    active_scanner.py        # nmap-based, bounded
+    passive_discoverer.py    # DPI / flow-based input
+    topology_builder.py      # immutable graph
+    cve_matcher.py           # offline CVE correlation
+  data/
+    cve_db/                  # offline NVD snapshot
+  api/
+    scanner_api.py
+  cli/
+    scan_network.py
+    build_topology.py
+  README.md
+```
+
+---
+
+## DISCOVERY REQUIREMENTS
+
+### Active Scanning (Bounded)
+
+* Uses **nmap only**
+* Explicit scan scope (CIDR, interface)
+* Explicit port list (no full sweep by default)
+* Rate-limited
+* Produces:
+
+  * assets
+  * open services
+  * banners
+* Scan execution must be **explicitly triggered**
+
+### Passive Discovery
+
+* Consumes:
+
+  * DPI Probe outputs
+  * flow metadata
+* No packet crafting
+* No injection
+* Read-only ingestion
+
+---
+
+## TOPOLOGY REQUIREMENTS
+
+* Topology is a **fact graph**
+* Nodes:
+
+  * hosts
+  * network devices
+  * services
+* Edges:
+
+  * communicates_with
+  * hosts_service
+  * routes_through
+* All edges are:
+
+  * directed
+  * timestamped
+  * immutable
+
+---
+
+## CVE MATCHING REQUIREMENTS
+
+* Uses **offline NVD snapshot**
+* Banner/service-based matching only
+* No exploitability scoring
+* Produces:
+
+  * possible_cve_id
+  * match_reason
+  * confidence (LOW | MEDIUM | HIGH)
+* Deterministic matching rules only
+
+---
+
+## REQUIRED INTEGRATIONS
+
+Network Scanner MUST integrate with:
+
+* Audit Ledger (scan start/end, scope, results)
+* Threat Graph Engine (entity + edges)
+* KillChain & Forensics (evidence references)
+* Global Validator (replayability)
+
+---
+
+## PASS / FAIL
+
+PASS only if:
+
+* Scans are explicit and bounded
+* Same scan → same results
+* No network mutation occurs
+* Topology can be rebuilt deterministically
+* CVE matching is offline and explainable
+* Validator can replay discovery
+
+FAIL if:
+
+* Any implicit scanning exists
+* Any exploit-like behavior exists
+* Any hidden scope expansion
+* Any nondeterminism
+
+---
+
+## OUTPUT EXPECTATION
+
+* Production-grade Network Scanner & Topology Engine
+* Frozen schemas
+* Deterministic discovery
+* Offline CVE matching
+* Immutable topology graphs
+* Ready for **Phase I — Deception Framework**
+
+Do **not** build deception yet.
+Do **not** add remediation.
+Do **not** add schedulers.
+
+Build **Network Scanner & Topology Engine only**.
+
+****Promot end****
+
+

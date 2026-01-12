@@ -1,0 +1,51 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RansomEye Topology Edge",
+  "description": "Frozen schema for topology edges. All fields are mandatory. No optional fields allowed.",
+  "type": "object",
+  "required": [
+    "edge_id",
+    "source_id",
+    "target_id",
+    "edge_type",
+    "discovered_at",
+    "immutable_hash"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "edge_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this edge (UUID v4)"
+    },
+    "source_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Source node identifier (asset, service, or network device)"
+    },
+    "target_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Target node identifier (asset, service, or network device)"
+    },
+    "edge_type": {
+      "type": "string",
+      "enum": [
+        "communicates_with",
+        "hosts_service",
+        "routes_through"
+      ],
+      "description": "Type of topology edge"
+    },
+    "discovered_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp of edge discovery"
+    },
+    "immutable_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA256 hash of edge record (immutability guarantee)"
+    }
+  }
+}

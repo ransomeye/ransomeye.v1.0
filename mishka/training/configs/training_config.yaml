@@ -1,0 +1,87 @@
+# MISHKA Training Configuration
+# CPU-first, GPU-optional training setup
+
+# Base Model Configuration
+base_model:
+  name: "mistralai/Mistral-7B-v0.1"  # Default, can be changed
+  # Alternatives:
+  # - "meta-llama/Llama-2-7b-hf"
+  # - "meta-llama/Llama-2-13b-hf"
+  # - "codellama/CodeLlama-7b-hf"
+  
+# LoRA/QLoRA Configuration
+lora:
+  method: "qlora"  # qlora or lora
+  r: 16  # Rank
+  alpha: 32  # LoRA alpha
+  dropout: 0.1
+  target_modules:
+    - "q_proj"
+    - "v_proj"
+    - "k_proj"
+    - "o_proj"
+    - "gate_proj"
+    - "up_proj"
+    - "down_proj"
+
+# Training Hyperparameters
+training:
+  output_dir: "./models"
+  num_train_epochs: 3
+  per_device_train_batch_size: 4
+  gradient_accumulation_steps: 4
+  learning_rate: 2.0e-4
+  warmup_steps: 100
+  max_steps: -1  # -1 means use num_train_epochs
+  max_length: 2048
+  temperature: 0.0  # Deterministic
+  top_p: 1.0
+  logging_steps: 10
+  save_steps: 500
+  eval_steps: 500
+  save_total_limit: 3
+  load_best_model_at_end: true
+  metric_for_best_model: "loss"
+  greater_is_better: false
+
+# Optimization
+optimization:
+  fp16: false  # Use bf16 if GPU available, false for CPU
+  bf16: false  # CPU doesn't support bf16
+  gradient_checkpointing: true
+  dataloader_num_workers: 2  # CPU-friendly
+  dataloader_pin_memory: false  # CPU doesn't need pinning
+
+# CPU-Specific Settings
+cpu:
+  use_cpu: true  # Force CPU usage
+  max_threads: null  # null = auto-detect
+  prefer_cpu: true
+
+# GPU Settings (Optional)
+gpu:
+  use_gpu: false  # Set to true if GPU available
+  gpu_ids: [0]  # GPU device IDs
+
+# Data Configuration
+data:
+  train_file: "./data/processed/train.jsonl"
+  validation_file: "./data/processed/validation.jsonl"
+  test_file: "./data/processed/test.jsonl"
+  max_samples: null  # null = use all samples
+
+# Evaluation
+evaluation:
+  metrics:
+    - "loss"
+    - "perplexity"
+  human_evaluation: true
+  test_set_path: "./data/test/"
+
+# Model Registry
+registry:
+  enabled: true
+  registry_path: "../../ai-model-registry"
+  model_name: "mishka"
+  model_version: "1.0.0"
+  sign_model: true

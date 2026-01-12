@@ -1,0 +1,43 @@
+{
+  "metadata": {
+    "name": "Conversational Test Set",
+    "count": 2,
+    "purpose": "Evaluate conversational quality"
+  },
+  "conversations": [
+    {
+      "conversation": [
+        {
+          "role": "user",
+          "content": "Hey, what is lateral movement?"
+        },
+        {
+          "role": "assistant",
+          "content": "Lateral movement is..."
+        },
+        {
+          "role": "user",
+          "content": "How do I detect it?"
+        },
+        {
+          "role": "assistant",
+          "content": "To detect lateral movement..."
+        }
+      ],
+      "category": "multi_turn"
+    },
+    {
+      "conversation": [
+        {
+          "role": "user",
+          "content": "What's up with incident abc-123?"
+        },
+        {
+          "role": "assistant",
+          "content": "Incident abc-123..."
+        }
+      ],
+      "category": "casual_query"
+    }
+  ]
+}
