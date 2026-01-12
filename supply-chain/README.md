@@ -280,6 +280,49 @@ This framework **MUST NOT**:
 - ❌ Skip verification
 - ❌ Share keys with other subsystems
 
+## Branding vs Integrity Boundary
+
+### Why Branding is Excluded from Cryptographic Scope
+
+Branding (logo, visual identity, evidence notices) is **presentation-only** and is **excluded from cryptographic scope** for the following reasons:
+
+1. **Integrity vs Identity**: Cryptographic hashes and signatures prove **integrity** (artifact has not been modified). Branding asserts **identity** (origin and visual recognition). These are separate concerns.
+
+2. **Deterministic Content**: Signed manifests must be **deterministic** and **reproducible**. Branding elements (logos, visual styling) may change for legal or operational reasons without affecting artifact integrity.
+
+3. **Legal Clarity**: Visual identity helps establish **legal clarity** and **chain-of-custody** in court/regulatory contexts, but does not affect the **cryptographic proof** of artifact integrity.
+
+4. **Customer Trust**: Customers may need to replace or modify branding for their own legal/operational requirements without invalidating cryptographic proofs.
+
+### Why Visual Identity Still Matters Legally
+
+Visual identity (logo, product name, evidence notices) matters legally because:
+
+- **Origin Assertion**: Visual identity asserts the origin of the artifact (RansomEye)
+- **Chain-of-Custody**: Visual markings help establish chain-of-custody in court
+- **Regulatory Compliance**: Visual identity helps meet regulatory requirements for evidence presentation
+- **Professional Standards**: Visual identity meets professional standards for evidence-grade artifacts
+
+### Court / Regulator Interpretation
+
+Courts and regulators interpret branding and integrity as follows:
+
+- **Cryptographic Proof**: SHA256 hashes and ed25519 signatures provide **cryptographic proof** of artifact integrity
+- **Visual Identity**: Logos and product names provide **visual proof** of origin and identity
+- **Separation**: The separation of branding from cryptographic scope is **intentional** and **documented**, allowing both to serve their respective purposes without interference
+
+### Implementation
+
+In RansomEye Supply-Chain Signing & Verification Framework:
+
+- **Manifest Signing**: Only manifest content (not branding) is signed
+- **Installer Display**: Branding is displayed **before** verification, not embedded in signed content
+- **Verification Output**: Branding in verification output is **presentation-only**, not part of verification logic
+
+**Manifest signature must NOT change if logo file is replaced.**
+
+> **"Branding asserts origin; cryptography asserts integrity. RansomEye separates both by design."**
+
 ## Final Statement
 
 > **"RansomEye self-signs for integrity, not authority. Final trust always belongs to the operator."**

@@ -12,9 +12,14 @@ import argparse
 _supply_chain_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(_supply_chain_dir))
 
+# Add branding module to path
+_branding_dir = Path(__file__).parent.parent.parent / "branding"
+sys.path.insert(0, str(_branding_dir))
+
 from crypto.vendor_key_manager import VendorKeyManager, VendorKeyManagerError
 from crypto.artifact_verifier import ArtifactVerifier, ArtifactVerificationError
 from engine.verification_engine import VerificationEngine, VerificationEngineError
+from branding.branding_utils import BrandingUtils
 
 
 def main():
@@ -74,14 +79,20 @@ def main():
         # Verify artifact
         result = verification_engine.verify_artifact(args.artifact, args.manifest)
         
-        # Output result
+        # Output result with branding
+        print(f"\n{BrandingUtils.get_product_name()} — Supply Chain Verification")
+        print("=" * 60)
+        
         if result.passed:
             print("PASS: Artifact verification successful")
             print(f"  Reason: {result.reason}")
             if result.details:
                 print(f"  Details:")
-                for key, value in result.details.items():
-                    print(f"    {key}: {value}")
+                print(f"    Artifact ID: {result.details.get('artifact_id', 'N/A')}")
+                print(f"    Artifact Name: {result.details.get('artifact_name', 'N/A')}")
+                print(f"    Version: {result.details.get('version', 'N/A')}")
+                print(f"    Signing Key ID: {result.details.get('signing_key_id', 'N/A')}")
+            print(f"\n{BrandingUtils.get_evidence_notice()}")
             sys.exit(0)
         else:
             print("FAIL: Artifact verification failed", file=sys.stderr)

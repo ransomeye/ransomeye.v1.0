@@ -306,6 +306,49 @@ signed-reporting/
 5. **Separate keys**: Signing keys separate from other subsystems
 6. **Offline verification**: Reports can be verified without RansomEye system
 
+## Branding vs Integrity Boundary
+
+### Why Branding is Excluded from Cryptographic Scope
+
+Branding (logo, visual identity, evidence notices) is **presentation-only** and is **excluded from cryptographic scope** for the following reasons:
+
+1. **Integrity vs Identity**: Cryptographic hashes and signatures prove **integrity** (content has not been modified). Branding asserts **identity** (origin and visual recognition). These are separate concerns.
+
+2. **Deterministic Content**: Signed content must be **deterministic** and **reproducible**. Branding elements (logos, visual styling) may change for legal or operational reasons without affecting content integrity.
+
+3. **Legal Clarity**: Visual identity helps establish **legal clarity** and **chain-of-custody** in court/regulatory contexts, but does not affect the **cryptographic proof** of content integrity.
+
+4. **Customer Trust**: Customers may need to replace or modify branding for their own legal/operational requirements without invalidating cryptographic proofs.
+
+### Why Visual Identity Still Matters Legally
+
+Visual identity (logo, product name, evidence notices) matters legally because:
+
+- **Origin Assertion**: Visual identity asserts the origin of the report (RansomEye)
+- **Chain-of-Custody**: Visual markings help establish chain-of-custody in court
+- **Regulatory Compliance**: Visual identity helps meet regulatory requirements for evidence presentation
+- **Professional Standards**: Visual identity meets professional standards for evidence-grade reporting
+
+### Court / Regulator Interpretation
+
+Courts and regulators interpret branding and integrity as follows:
+
+- **Cryptographic Proof**: SHA256 hashes and ed25519 signatures provide **cryptographic proof** of content integrity
+- **Visual Identity**: Logos and product names provide **visual proof** of origin and identity
+- **Separation**: The separation of branding from cryptographic scope is **intentional** and **documented**, allowing both to serve their respective purposes without interference
+
+### Implementation
+
+In RansomEye Signed Reporting Engine:
+
+- **PDF**: Branding in header/footer layer only (outside signed content hash boundary)
+- **HTML**: Branding in `<header>` and `<footer>` blocks only (outside `<main>` signed content)
+- **CSV**: Branding in comment header lines only (outside data rows)
+
+**Signed hash must NOT change if logo file is replaced.**
+
+> **"Branding asserts origin; cryptography asserts integrity. RansomEye separates both by design."**
+
 ## Final Statement
 
 > **Reporting is the last mile of truth — not a new source of truth.**
