@@ -6532,3 +6532,234 @@ After completion, system proceeds to:
 
 ****Promot end****
 
+****Promot Start****
+
+### PHASE M1 — Advanced UBA Core (Identity–Behavior Ground Truth Layer)
+
+**Objective (NON-NEGOTIABLE)**
+Build the **User Behavior Analytics Core** as a **purely factual, evidence-grade subsystem** that establishes **per-identity behavioral ground truth** without scoring, prediction, ML black boxes, or enforcement.
+
+This phase is the **foundation** for insider threat detection and must be **deterministic, replayable, and regulator-safe**.
+
+---
+
+## HARD CONSTRAINTS (ABSOLUTE)
+
+1. **NO hardcoded IPs, paths, users, domains, or interfaces**
+
+   * All paths, endpoints, and identifiers come from environment variables or manifests.
+2. **NO ML models in M1**
+
+   * This phase is **ground truth only**, not inference.
+3. **NO scoring, alerts, risk, or conclusions**
+
+   * Facts only.
+4. **NO optional fields in schemas**
+
+   * Zero ambiguity.
+5. **NO background schedulers**
+
+   * Explicit ingestion only.
+6. **Every action must emit an Audit Ledger entry**
+7. **Replayable from zero using Global Validator**
+
+---
+
+## SUBSYSTEM NAME (STRICT)
+
+**`uba-core`**
+(No “phase”, no numbers in names)
+
+---
+
+## DELIVERABLES TO BUILD
+
+### 1. Schemas (Frozen, Zero Optional Fields)
+
+Create under `/uba-core/schema/`
+
+1. `identity.schema.json`
+
+   * user_id
+   * identity_type (human / service / machine)
+   * auth_domain
+   * creation_timestamp
+   * source_system
+   * canonical_identity_hash
+
+2. `behavior-event.schema.json`
+
+   * event_id
+   * identity_id
+   * event_type (login, file_access, process_start, network_access, privilege_use, policy_override)
+   * source_component (linux-agent, windows-agent, dpi, hnmp, ir, deception)
+   * resource_id
+   * action
+   * timestamp
+   * host_id
+   * evidence_ref
+
+3. `identity-baseline.schema.json`
+
+   * identity_id
+   * baseline_window_start
+   * baseline_window_end
+   * observed_event_types
+   * observed_hosts
+   * observed_time_buckets
+   * observed_privileges
+   * baseline_hash
+
+---
+
+### 2. Engine Components
+
+Under `/uba-core/engine/`
+
+1. `identity_resolver.py`
+
+   * Deterministically map events → canonical identity
+   * No heuristics
+   * Explicit precedence rules only
+
+2. `behavior_normalizer.py`
+
+   * Canonicalize timestamps
+   * Canonicalize event types
+   * Canonicalize identity references
+
+3. `baseline_builder.py`
+
+   * Builds **historical baselines**
+   * Window is explicit (env-configured)
+   * Output is immutable
+   * No scoring, only aggregation
+
+4. `baseline_hasher.py`
+
+   * Deterministic SHA256 hash of baseline content
+   * Used for drift comparison later (Phase M2)
+
+---
+
+### 3. Storage (Immutable)
+
+Under `/uba-core/storage/`
+
+* `uba_store.py`
+
+  * Append-only storage
+  * No updates
+  * No deletes
+  * Baselines are versioned by time window
+
+---
+
+### 4. API Layer
+
+Under `/uba-core/api/uba_api.py`
+
+Endpoints (read/write split):
+
+* `ingest_behavior_event()`
+* `build_identity_baseline()`
+* `get_identity_baseline()`
+
+All API calls:
+
+* Require validated schema input
+* Emit audit ledger entries
+* Fail-closed
+
+---
+
+### 5. CLI Tools (Deterministic)
+
+Under `/uba-core/cli/`
+
+* `ingest_behavior.py`
+* `build_baseline.py`
+* `export_baseline.py`
+
+---
+
+### 6. Audit Ledger Integration (MANDATORY)
+
+Every one of the following emits a ledger entry:
+
+* Identity creation
+* Behavior event ingestion
+* Baseline build
+* Baseline export
+
+Ledger action types must be **new and explicit**:
+
+* `UBA_IDENTITY_CREATED`
+* `UBA_BEHAVIOR_INGESTED`
+* `UBA_BASELINE_BUILT`
+* `UBA_BASELINE_EXPORTED`
+
+---
+
+### 7. Global Validator Compatibility
+
+Validator must be able to:
+
+* Rebuild all baselines from raw events
+* Verify baseline hashes
+* Detect missing or altered events
+* Confirm no inference occurred
+
+---
+
+### 8. Documentation
+
+Create `/uba-core/README.md` with:
+
+* Threat model
+* What UBA Core **does NOT do**
+* Determinism guarantees
+* Replay guarantees
+* Regulatory posture (SOX, SOC2, ISO, Insider Threat compliance)
+* Clear statement: **“UBA Core establishes facts, not intent.”**
+
+---
+
+## EXPLICITLY FORBIDDEN
+
+* ❌ ML
+* ❌ Risk scoring
+* ❌ Alerts
+* ❌ Anomaly labels
+* ❌ “Suspicious” flags
+* ❌ Implicit inference
+* ❌ Background jobs
+* ❌ Optional fields
+* ❌ Human-readable free text reasoning
+
+---
+
+## SUCCESS CRITERIA (PASS / FAIL)
+
+PASS only if:
+
+* All schemas have **zero optional fields**
+* All outputs are replayable
+* No inference logic exists
+* Baselines rebuild bit-for-bit identical
+* Audit Ledger contains full chain
+* Validator passes reconstruction
+
+FAIL if:
+
+* Any heuristic exists
+* Any scoring exists
+* Any path/IP/interface is hardcoded
+* Any optional field exists
+
+---
+
+**NEXT PHASE (DO NOT BUILD YET):**
+PHASE M2 — Behavioral Drift Detection (Deterministic Delta Layer)
+
+****Promot end****

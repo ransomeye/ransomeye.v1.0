@@ -1,0 +1,97 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RansomEye UBA Identity Baseline",
+  "description": "Frozen schema for identity baselines. All fields are mandatory. Zero optional fields allowed.",
+  "type": "object",
+  "required": [
+    "baseline_id",
+    "identity_id",
+    "baseline_window_start",
+    "baseline_window_end",
+    "observed_event_types",
+    "observed_hosts",
+    "observed_time_buckets",
+    "observed_privileges",
+    "baseline_hash",
+    "immutable_hash",
+    "ledger_entry_id"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "baseline_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this baseline (UUID v4)"
+    },
+    "identity_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Identity identifier"
+    },
+    "baseline_window_start": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp of baseline window start"
+    },
+    "baseline_window_end": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp of baseline window end"
+    },
+    "observed_event_types": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "login",
+          "file_access",
+          "process_start",
+          "network_access",
+          "privilege_use",
+          "policy_override"
+        ]
+      },
+      "description": "Observed event types in baseline window (explicit enumeration)"
+    },
+    "observed_hosts": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "description": "Observed host identifiers in baseline window"
+    },
+    "observed_time_buckets": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$"
+      },
+      "description": "Observed time buckets (hourly) in baseline window (YYYY-MM-DDTHH:MM format)"
+    },
+    "observed_privileges": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 256
+      },
+      "description": "Observed privilege identifiers in baseline window"
+    },
+    "baseline_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA256 hash of baseline content (for drift comparison)"
+    },
+    "immutable_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA256 hash of baseline record (immutability guarantee)"
+    },
+    "ledger_entry_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Audit ledger entry ID for this baseline"
+    }
+  }
+}

@@ -1,0 +1,66 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RansomEye UBA Identity",
+  "description": "Frozen schema for identities. All fields are mandatory. Zero optional fields allowed.",
+  "type": "object",
+  "required": [
+    "identity_id",
+    "user_id",
+    "identity_type",
+    "auth_domain",
+    "creation_timestamp",
+    "source_system",
+    "canonical_identity_hash"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "identity_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this identity (UUID v4)"
+    },
+    "user_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "User identifier (username, SID, or service account name)"
+    },
+    "identity_type": {
+      "type": "string",
+      "enum": [
+        "human",
+        "service",
+        "machine"
+      ],
+      "description": "Type of identity (explicit enumeration)"
+    },
+    "auth_domain": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Authentication domain (AD domain, LDAP realm, or local)"
+    },
+    "creation_timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp of identity creation"
+    },
+    "source_system": {
+      "type": "string",
+      "enum": [
+        "linux-agent",
+        "windows-agent",
+        "dpi",
+        "hnmp",
+        "ir",
+        "deception"
+      ],
+      "description": "Source system that created this identity"
+    },
+    "canonical_identity_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA256 hash of canonical identity (deterministic)"
+    }
+  }
+}
