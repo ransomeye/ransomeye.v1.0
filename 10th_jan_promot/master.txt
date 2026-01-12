@@ -7051,3 +7051,300 @@ This is where **other engines** may consume drift — not here.
 ****Promot end****
 
 
+****Promot Start****
+
+### PHASE M3 — UBA Signal Interpretation Layer
+
+**(Risk-Consuming, Authority-Bound, Explanation-Anchored)**
+
+---
+
+## OBJECTIVE (ABSOLUTE)
+
+Build **UBA Signal Interpretation** as a **consumer-only layer** that interprets **UBA Drift deltas** in **context**, without producing *new facts*, *new risk*, or *new authority*.
+
+This layer answers **only**:
+
+> “How should downstream systems *understand* behavioral drift when combined with other verified facts?”
+
+It **does not**:
+
+* Generate risk scores
+* Create alerts
+* Escalate incidents
+* Modify baselines
+* Infer intent
+
+---
+
+## CORE ARCHITECTURAL POSITION
+
+```
+UBA Core (facts)
+   ↓
+UBA Drift (change deltas)
+   ↓
+UBA Signal Interpretation  ← YOU ARE HERE
+   ↓
+Risk Index / Policy / IR / SEE (consumers only)
+```
+
+This layer **never becomes a source of truth**.
+It is a **lens**, not an authority.
+
+---
+
+## HARD CONSTRAINTS (NON-NEGOTIABLE)
+
+1. **Consumes deltas, never produces facts**
+2. **No scoring, no thresholds, no probabilities**
+3. **No ML, no statistics**
+4. **No autonomous decisions**
+5. **No alerts, no enforcement**
+6. **No optional schema fields**
+7. **Environment-driven only**
+8. **Audit-anchored**
+9. **Explanation-first (SEE compatible)**
+10. **Human authority respected (HAF compatible)**
+
+---
+
+## SUBSYSTEM NAME (STRICT)
+
+**`uba-signal`**
+
+(No phase numbers. No shortcuts.)
+
+---
+
+## DELIVERABLES TO BUILD
+
+---
+
+## 1. Schemas (Frozen, Zero Optional Fields)
+
+Create under `/uba-signal/schema/`
+
+### 1. `interpreted-signal.schema.json`
+
+**ALL FIELDS REQUIRED**
+
+* signal_id
+* identity_id
+* delta_ids (array)
+* interpretation_type
+
+  * CONTEXTUAL_SHIFT
+  * ROLE_EXPANSION
+  * ACCESS_SURFACE_CHANGE
+  * TEMPORAL_BEHAVIOR_CHANGE
+* contextual_inputs
+
+  * references only (killchain_id, graph_id, incident_id, etc.)
+* explanation_bundle_id
+* authority_required (boolean)
+* downstream_consumers (array)
+* signal_hash
+* created_timestamp
+
+⚠️ **interpretation_type is descriptive, not evaluative**
+
+---
+
+### 2. `signal-summary.schema.json`
+
+* identity_id
+* observation_window
+* signal_count
+* interpretation_types_present
+* summary_hash
+
+---
+
+## 2. Engine Components
+
+Under `/uba-signal/engine/`
+
+### 1. `signal_interpreter.py`
+
+* Consumes:
+
+  * UBA Drift deltas
+  * Context references (read-only)
+* Produces:
+
+  * Interpreted signals
+* Rules:
+
+  * Explicit mappings only
+  * No implicit logic
+  * No thresholds unless env-defined
+
+---
+
+### 2. `context_resolver.py`
+
+* Pulls **read-only** context from:
+
+  * KillChain
+  * Threat Graph
+  * Incident Store
+* Never infers
+* Never mutates
+
+---
+
+### 3. `signal_hasher.py`
+
+* Deterministic SHA256 over canonical JSON
+
+---
+
+## 3. Storage (Immutable)
+
+Under `/uba-signal/storage/`
+
+### `signal_store.py`
+
+* Append-only
+* Versioned by observation window
+* No updates, no deletes
+
+---
+
+## 4. API Layer
+
+Under `/uba-signal/api/signal_api.py`
+
+Endpoints:
+
+* `interpret_deltas()`
+* `get_signals(identity_id)`
+* `get_signal_summary(identity_id)`
+
+All calls:
+
+* Schema-validated
+* Ledger-anchored
+* Deterministic
+
+---
+
+## 5. CLI Tools
+
+Under `/uba-signal/cli/`
+
+* `interpret_signals.py`
+* `export_signals.py`
+* `export_signal_summary.py`
+
+---
+
+## 6. Audit Ledger Integration (MANDATORY)
+
+New ledger actions:
+
+* `UBA_SIGNAL_INTERPRETED`
+* `UBA_SIGNAL_EXPORTED`
+* `UBA_SIGNAL_SUMMARY_BUILT`
+
+No silent interpretations.
+
+---
+
+## 7. SEE & HAF INTEGRATION (MANDATORY)
+
+### SEE (System Explanation Engine)
+
+* Every interpreted signal **must reference** an explanation bundle
+* Explanation must trace:
+
+  * Drift → Context → Interpretation
+
+### HAF (Human Authority Framework)
+
+* If `authority_required = true`
+
+  * Downstream execution **MUST require human signature**
+  * This layer **does not invoke authority itself**
+
+---
+
+## 8. GLOBAL VALIDATOR REQUIREMENTS
+
+Validator must be able to:
+
+* Rebuild signals from:
+
+  * Drift deltas
+  * Context references
+* Verify:
+
+  * Signal hashes
+  * Explanation references
+* Detect:
+
+  * Missing deltas
+  * Altered interpretation logic
+  * Unauthorized execution attempts
+
+---
+
+## 9. DOCUMENTATION
+
+Create `/uba-signal/README.md` with:
+
+* Clear statement:
+
+  > “Signals describe context, not danger.”
+* Explicit separation from:
+
+  * UBA Drift
+  * Risk Index
+  * Policy Engine
+* Regulatory interpretation guidance
+* Determinism guarantees
+
+---
+
+## EXPLICITLY FORBIDDEN
+
+* ❌ Risk scoring
+* ❌ Severity labels
+* ❌ Alert generation
+* ❌ Automatic escalation
+* ❌ “Suspicious” / “Threatening” language
+* ❌ Background execution
+* ❌ ML or heuristics
+* ❌ Threshold tuning logic
+
+---
+
+## SUCCESS CRITERIA (PASS / FAIL)
+
+### PASS only if:
+
+* Signals rebuild bit-for-bit
+* No scoring exists
+* All schemas have zero optional fields
+* No baseline or drift mutation
+* Ledger is complete
+* Validator replay passes
+
+### FAIL if:
+
+* Any implicit inference exists
+* Any alert logic appears
+* Any authority bypass exists
+* Any scoring appears
+
+---
+
+## NEXT PHASE (DO NOT BUILD YET)
+
+**PHASE M4 — UBA Risk Consumption (Enterprise Risk Index Integration)**
+Risk consumes signals — signals never produce risk.
+
+****Promot end****
+
+

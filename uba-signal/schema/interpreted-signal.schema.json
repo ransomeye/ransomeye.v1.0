@@ -1,0 +1,127 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RansomEye UBA Interpreted Signal",
+  "description": "Frozen schema for interpreted signals. All fields are mandatory. Zero optional fields allowed. Signals describe context, not danger.",
+  "type": "object",
+  "required": [
+    "signal_id",
+    "identity_id",
+    "delta_ids",
+    "interpretation_type",
+    "contextual_inputs",
+    "explanation_bundle_id",
+    "authority_required",
+    "downstream_consumers",
+    "signal_hash",
+    "created_timestamp",
+    "immutable_hash",
+    "ledger_entry_id"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "signal_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this signal (UUID v4)"
+    },
+    "identity_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Identity identifier"
+    },
+    "delta_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "minItems": 1,
+      "description": "Array of delta identifiers that contributed to this signal"
+    },
+    "interpretation_type": {
+      "type": "string",
+      "enum": [
+        "CONTEXTUAL_SHIFT",
+        "ROLE_EXPANSION",
+        "ACCESS_SURFACE_CHANGE",
+        "TEMPORAL_BEHAVIOR_CHANGE"
+      ],
+      "description": "Type of interpretation (descriptive, not evaluative)"
+    },
+    "contextual_inputs": {
+      "type": "object",
+      "description": "Context references (read-only references to other subsystems)",
+      "properties": {
+        "killchain_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "description": "KillChain evidence references (optional, read-only)"
+        },
+        "graph_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "description": "Threat Graph entity/edge references (optional, read-only)"
+        },
+        "incident_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "description": "Incident references (optional, read-only)"
+        }
+      },
+      "additionalProperties": false
+    },
+    "explanation_bundle_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "System Explanation Engine bundle identifier (mandatory)"
+    },
+    "authority_required": {
+      "type": "boolean",
+      "description": "Whether human authority is required for downstream execution"
+    },
+    "downstream_consumers": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "risk_index",
+          "policy_engine",
+          "ir_engine",
+          "alert_engine",
+          "see"
+        ]
+      },
+      "minItems": 1,
+      "description": "Downstream consumers that may use this signal (explicit enumeration)"
+    },
+    "signal_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA256 hash of signal content (for validation)"
+    },
+    "created_timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp of signal creation"
+    },
+    "immutable_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA256 hash of signal record (immutability guarantee)"
+    },
+    "ledger_entry_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Audit ledger entry ID for this signal"
+    }
+  }
+}

@@ -201,7 +201,11 @@ class Phase1Trainer:
         )
         
         # For causal LM, labels are the same as input_ids
-        tokenized['labels'] = tokenized['input_ids'].copy()
+        # Create labels by copying input_ids
+        labels = []
+        for input_ids in tokenized['input_ids']:
+            labels.append(input_ids.copy())
+        tokenized['labels'] = labels
         
         return tokenized
     
@@ -210,6 +214,8 @@ class Phase1Trainer:
         # Process in smaller batches to reduce memory spikes
         batch_size = 32  # Smaller batches for memory efficiency
         
+        print(f"Tokenizing {len(dataset)} samples...")
+        
         tokenized_dataset = dataset.map(
             self.tokenize_function,
             batched=True,
@@ -217,6 +223,21 @@ class Phase1Trainer:
             remove_columns=dataset.column_names,
             desc="Tokenizing dataset"
         )
+        
+        print(f"Tokenized dataset has {len(tokenized_dataset)} samples")
+        
+        # Filter out any empty or invalid samples
+        def filter_empty(example):
+            return len(example.get('input_ids', [])) > 0
+        
+        original_len = len(tokenized_dataset)
+        tokenized_dataset = tokenized_dataset.filter(filter_empty)
+        filtered_len = len(tokenized_dataset)
+        
+        if filtered_len < original_len:
+            print(f"Filtered out {original_len - filtered_len} empty samples")
+        
+        print(f"Final dataset size: {len(tokenized_dataset)} samples")
         
         return tokenized_dataset
     

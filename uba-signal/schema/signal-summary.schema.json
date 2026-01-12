@@ -1,0 +1,73 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RansomEye UBA Signal Summary",
+  "description": "Frozen schema for signal summaries. All fields are mandatory. Zero optional fields allowed.",
+  "type": "object",
+  "required": [
+    "summary_id",
+    "identity_id",
+    "observation_window_start",
+    "observation_window_end",
+    "signal_count",
+    "interpretation_types_present",
+    "summary_hash",
+    "immutable_hash",
+    "ledger_entry_id"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "summary_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this summary (UUID v4)"
+    },
+    "identity_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Identity identifier"
+    },
+    "observation_window_start": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp of observation window start"
+    },
+    "observation_window_end": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp of observation window end"
+    },
+    "signal_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Total number of signals in observation window"
+    },
+    "interpretation_types_present": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "CONTEXTUAL_SHIFT",
+          "ROLE_EXPANSION",
+          "ACCESS_SURFACE_CHANGE",
+          "TEMPORAL_BEHAVIOR_CHANGE"
+        ]
+      },
+      "description": "Interpretation types present in observation window (explicit enumeration)"
+    },
+    "summary_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA256 hash of summary content (for validation)"
+    },
+    "immutable_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA256 hash of summary record (immutability guarantee)"
+    },
+    "ledger_entry_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Audit ledger entry ID for this summary"
+    }
+  }
+}
