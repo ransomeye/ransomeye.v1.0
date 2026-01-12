@@ -1,0 +1,170 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RansomEye AI Model Registry Record",
+  "description": "Frozen schema for AI model registry records. All fields are mandatory. No optional fields allowed.",
+  "type": "object",
+  "required": [
+    "model_id",
+    "model_version",
+    "model_name",
+    "model_type",
+    "intended_use",
+    "artifact_hash",
+    "artifact_signature",
+    "signing_key_id",
+    "training_data_provenance",
+    "lifecycle_state",
+    "registered_at",
+    "registered_by",
+    "metadata",
+    "drift_metrics_schema"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "model_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this model (UUID v4)"
+    },
+    "model_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "description": "Model version (semantic versioning)"
+    },
+    "model_name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^[a-zA-Z0-9_-]+$",
+      "description": "Model name (alphanumeric, underscores, hyphens)"
+    },
+    "model_type": {
+      "type": "string",
+      "enum": [
+        "ML",
+        "DL",
+        "LLM",
+        "ruleset"
+      ],
+      "description": "Model type (Machine Learning, Deep Learning, Large Language Model, Ruleset)"
+    },
+    "intended_use": {
+      "type": "string",
+      "enum": [
+        "classification",
+        "clustering",
+        "summarization",
+        "anomaly_detection",
+        "threat_detection",
+        "policy_recommendation",
+        "forensic_analysis",
+        "correlation",
+        "other"
+      ],
+      "description": "Intended use case for this model"
+    },
+    "artifact_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA256 hash of model artifact (binary file)"
+    },
+    "artifact_signature": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9+/=]+$",
+      "description": "Base64-encoded ed25519 signature of artifact_hash"
+    },
+    "signing_key_id": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA256 hash of public key used to sign artifact"
+    },
+    "training_data_provenance": {
+      "type": "object",
+      "description": "Training data provenance (hash references, not raw data)",
+      "required": [
+        "data_hashes",
+        "data_sources"
+      ],
+      "properties": {
+        "data_hashes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "description": "SHA256 hashes of training data files"
+        },
+        "data_sources": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "description": "Descriptive identifiers for data sources"
+        }
+      },
+      "additionalProperties": false
+    },
+    "lifecycle_state": {
+      "type": "string",
+      "enum": [
+        "REGISTERED",
+        "PROMOTED",
+        "DEPRECATED",
+        "REVOKED"
+      ],
+      "description": "Current lifecycle state of model"
+    },
+    "registered_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp of registration"
+    },
+    "registered_by": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Identifier of entity that registered model (user, system, etc.)"
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Additional immutable model metadata",
+      "minProperties": 0,
+      "additionalProperties": true
+    },
+    "drift_metrics_schema": {
+      "type": "object",
+      "description": "Schema for drift metrics (foundation only, no detection logic)",
+      "required": [
+        "metrics_defined",
+        "schema_version"
+      ],
+      "properties": {
+        "metrics_defined": {
+          "type": "boolean",
+          "description": "Whether drift metrics are defined for this model"
+        },
+        "schema_version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+$",
+          "description": "Version of drift metrics schema"
+        },
+        "metric_fields": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "type"],
+            "properties": {
+              "name": {"type": "string"},
+              "type": {"type": "string", "enum": ["float", "integer", "string", "boolean"]},
+              "description": {"type": "string"}
+            }
+          },
+          "description": "Defined metric fields (placeholder for future drift detection)"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

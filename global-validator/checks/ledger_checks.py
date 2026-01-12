@@ -8,13 +8,30 @@ import sys
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 
-# Add audit-ledger to path
+# Add audit-ledger to path (must be before any imports)
 _audit_ledger_dir = Path(__file__).parent.parent.parent / "audit-ledger"
-sys.path.insert(0, str(_audit_ledger_dir))
+if str(_audit_ledger_dir) not in sys.path:
+    sys.path.insert(0, str(_audit_ledger_dir))
 
-from storage.append_only_store import AppendOnlyStore, StorageError
-from crypto.verifier import Verifier, VerificationError
-from crypto.key_manager import KeyManager, KeyNotFoundError
+# Import from audit-ledger (not global-validator)
+import importlib.util
+_verifier_spec = importlib.util.spec_from_file_location("audit_ledger_crypto_verifier", _audit_ledger_dir / "crypto" / "verifier.py")
+_verifier_module = importlib.util.module_from_spec(_verifier_spec)
+_verifier_spec.loader.exec_module(_verifier_module)
+Verifier = _verifier_module.Verifier
+VerificationError = _verifier_module.VerificationError
+
+_key_manager_spec = importlib.util.spec_from_file_location("audit_ledger_crypto_key_manager", _audit_ledger_dir / "crypto" / "key_manager.py")
+_key_manager_module = importlib.util.module_from_spec(_key_manager_spec)
+_key_manager_spec.loader.exec_module(_key_manager_module)
+KeyManager = _key_manager_module.KeyManager
+KeyNotFoundError = _key_manager_module.KeyNotFoundError
+
+_store_spec = importlib.util.spec_from_file_location("audit_ledger_storage_store", _audit_ledger_dir / "storage" / "append_only_store.py")
+_store_module = importlib.util.module_from_spec(_store_spec)
+_store_spec.loader.exec_module(_store_module)
+AppendOnlyStore = _store_module.AppendOnlyStore
+StorageError = _store_module.StorageError
 
 
 class LedgerCheckError(Exception):

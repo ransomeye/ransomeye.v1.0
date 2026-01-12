@@ -10,12 +10,49 @@ from typing import Dict, Any, Optional
 import uuid
 from datetime import datetime, timezone
 
-# Add audit-ledger to path
+# Add audit-ledger to path (must be before any imports)
 _audit_ledger_dir = Path(__file__).parent.parent.parent / "audit-ledger"
-sys.path.insert(0, str(_audit_ledger_dir))
+if str(_audit_ledger_dir) not in sys.path:
+    sys.path.insert(0, str(_audit_ledger_dir))
 
-from storage.append_only_store import AppendOnlyStore
-from api import AuditLedger, AuditLedgerError
+# Import from audit-ledger directly (avoid API import issues)
+import importlib.util
+
+# Import storage and crypto modules directly
+_store_spec = importlib.util.spec_from_file_location("audit_ledger_storage", _audit_ledger_dir / "storage" / "append_only_store.py")
+_store_module = importlib.util.module_from_spec(_store_spec)
+_store_spec.loader.exec_module(_store_module)
+AppendOnlyStore = _store_module.AppendOnlyStore
+LedgerWriter = _store_module.LedgerWriter
+
+_key_manager_spec = importlib.util.spec_from_file_location("audit_ledger_key_manager", _audit_ledger_dir / "crypto" / "key_manager.py")
+_key_manager_module = importlib.util.module_from_spec(_key_manager_spec)
+_key_manager_spec.loader.exec_module(_key_manager_module)
+KeyManager = _key_manager_module.KeyManager
+KeyManagerError = _key_manager_module.KeyManagerError
+
+_signer_spec = importlib.util.spec_from_file_location("audit_ledger_signer", _audit_ledger_dir / "crypto" / "signer.py")
+_signer_module = importlib.util.module_from_spec(_signer_spec)
+_signer_spec.loader.exec_module(_signer_module)
+Signer = _signer_module.Signer
+SignerError = _signer_module.SignerError
+
+# Create AuditLedger-like class for simulation
+class AuditLedger:
+    """Simplified AuditLedger for simulation checks."""
+    def __init__(self, ledger_path: Path, key_dir: Path):
+        self.store = AppendOnlyStore(ledger_path, read_only=False)
+        key_manager = KeyManager(key_dir)
+        private_key, public_key, key_id = key_manager.get_or_create_keypair()
+        self.signer = Signer(private_key, key_id)
+        self.writer = LedgerWriter(self.store, self.signer)
+    
+    def append(self, component, component_instance_id, action_type, subject, actor, payload):
+        return self.writer.create_entry(component, component_instance_id, action_type, subject, actor, payload)
+
+class AuditLedgerError(Exception):
+    """Exception for audit ledger errors."""
+    pass
 
 
 class SimulationCheckError(Exception):

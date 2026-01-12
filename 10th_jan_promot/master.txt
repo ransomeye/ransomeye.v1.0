@@ -3624,3 +3624,161 @@ Do NOT explain verbally.
 **Build the Global Validator subsystem only.**
 
 ****promot end****
+
+
+Promot Start
+
+You are continuing RansomEye — Enterprise & Military-Grade Platform Expansion.
+
+This is PHASE B1 (MANDATORY).
+
+No other work is allowed until this phase is complete, validated, and frozen.
+
+WORK UNIT B1 — AI MODEL REGISTRY & GOVERNANCE CORE
+ABSOLUTE CONTEXT (DO NOT VIOLATE)
+
+❌ NO modification to v1.0 Core, Agents, DPI, Audit Ledger, or Global Validator
+
+❌ NO AI inference logic inside this module
+
+❌ NO model execution
+
+❌ NO online dependencies
+
+❌ NO implicit model loading
+
+This phase builds governance only, not intelligence.
+
+OBJECTIVE
+
+Build a central AI Model Registry that provides full lifecycle governance for every AI/ML/LLM model used anywhere in RansomEye.
+
+No model may:
+
+Be loaded
+
+Be executed
+
+Be referenced
+without registry approval.
+
+MANDATORY CAPABILITIES
+1. Model Registry (Core)
+
+Versioned model records
+
+Immutable model metadata
+
+Cryptographic hash of model artifact
+
+Model type (ML / DL / LLM / ruleset)
+
+Intended use (classification, clustering, summarization, etc.)
+
+Training data provenance (hash references, not raw data)
+
+2. Lifecycle Management (NON-OPTIONAL)
+
+Support explicit state transitions:
+
+REGISTERED
+
+PROMOTED
+
+DEPRECATED
+
+REVOKED
+
+Rules:
+
+No implicit promotion
+
+No silent revocation
+
+Every transition MUST be written to the Audit Ledger
+
+3. Cryptographic Discipline
+
+Encrypted model bundle ingestion
+
+Signature verification before registry entry
+
+Hash verification at every load attempt
+
+Rejection on mismatch (fail-closed)
+
+4. Hot-Swap Governance (CONTROL PLANE ONLY)
+
+Registry allows marking a model as “active”
+
+No runtime loading logic yet
+
+Consumers will query registry later
+
+5. Drift Detection Metadata (FOUNDATION ONLY)
+
+Schema for drift metrics
+
+Storage of drift observations
+
+NO detection logic yet (future phase)
+
+REQUIRED OUTPUT STRUCTURE
+/ai-model-registry/
+  schema/
+    model-record.schema.json
+  crypto/
+    bundle_verifier.py
+    key_manager.py
+  registry/
+    registry_store.py
+    lifecycle.py
+  api/
+    registry_api.py
+  cli/
+    register_model.py
+    promote_model.py
+    revoke_model.py
+  README.md
+
+AUDIT & VALIDATION RULES
+
+Every registry action MUST emit an Audit Ledger entry
+
+Global Validator MUST be able to verify:
+
+No unregistered models exist
+
+No revoked model is active
+
+Registry integrity matches ledger
+
+PASS / FAIL CRITERIA
+
+PASS only if:
+
+No model can exist outside registry
+
+Lifecycle transitions are explicit and auditable
+
+Cryptographic checks are enforced
+
+Registry is deterministic and offline-capable
+
+FAIL if:
+
+Models can be loaded without registry
+
+Any lifecycle action is silent
+
+Any state is mutable without audit
+
+DELIVERABLE EXPECTATION
+
+Produce full production-grade governance code, schemas, and documentation.
+
+Do NOT summarize.
+Do NOT explain verbally.
+Build the AI Model Registry only.
+
+promot end
