@@ -4,7 +4,7 @@ RansomEye Enterprise Risk Index - Risk Aggregator
 AUTHORITATIVE: Deterministic weighted aggregation of risk signals
 """
 
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime, timezone
 
 

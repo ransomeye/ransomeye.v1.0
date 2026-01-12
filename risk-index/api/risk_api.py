@@ -34,6 +34,16 @@ _signer_module = importlib.util.module_from_spec(_signer_spec)
 _signer_spec.loader.exec_module(_signer_module)
 Signer = _signer_module.Signer
 
+# Import UBA Signal components (read-only)
+_uba_signal_dir = Path(__file__).parent.parent.parent / "uba-signal"
+if str(_uba_signal_dir) not in sys.path:
+    sys.path.insert(0, str(_uba_signal_dir))
+
+_signal_store_spec = importlib.util.spec_from_file_location("signal_store", _uba_signal_dir / "storage" / "signal_store.py")
+_signal_store_module = importlib.util.module_from_spec(_signal_store_spec)
+_signal_store_spec.loader.exec_module(_signal_store_module)
+SignalStore = _signal_store_module.SignalStore
+
 # Import risk index components
 _risk_index_dir = Path(__file__).parent.parent
 if str(_risk_index_dir) not in sys.path:
@@ -79,7 +89,9 @@ class RiskAPI:
         ledger_path: Path,
         ledger_key_dir: Path,
         weights: Optional[Dict[str, float]] = None,
-        decay_config: Optional[Dict[str, Any]] = None
+        decay_config: Optional[Dict[str, Any]] = None,
+        uba_signals_store_path: Optional[Path] = None,
+        uba_summaries_store_path: Optional[Path] = None
     ):
         """
         Initialize risk API.
@@ -104,6 +116,16 @@ class RiskAPI:
             }
         
         self.aggregator = Aggregator(weights, decay_config)
+        self.normalizer = Normalizer()
+        
+        # UBA Signal store (read-only, optional)
+        if uba_signals_store_path and uba_summaries_store_path:
+            self.uba_signal_store = SignalStore(
+                signals_store_path=uba_signals_store_path,
+                summaries_store_path=uba_summaries_store_path
+            )
+        else:
+            self.uba_signal_store = None
         
         # Initialize audit ledger
         try:
@@ -193,7 +215,11 @@ class RiskAPI:
             },
             'confidence_score': aggregation_result['confidence_score'],
             'decay_applied': decay_applied,
-            'weights_used': aggregation_result['weights_used']
+            'weights_used': aggregation_result['weights_used'],
+            'uba_signal_ids': [],
+            'uba_context_applied': False,
+            'risk_explanation_bundle_id': '',
+            'context_modifiers': []
         }
         
         # Store historical record (immutable)
@@ -250,3 +276,127 @@ class RiskAPI:
             return list(self.store.get_by_timestamp_range(start_timestamp, end_timestamp))
         else:
             return list(self.store.read_all())
+
+    def get_risk_with_context(
+        self,
+        identity_id: str,
+        incidents: List[Dict[str, Any]],
+        ai_metadata: List[Dict[str, Any]],
+        policy_decisions: List[Dict[str, Any]],
+        risk_explanation_bundle_id: str,
+        uba_signal_ids: Optional[List[str]] = None
+    ) -> Dict[str, Any]:
+        """
+        Compute risk with UBA context (UBA is modifier, never source).
+        
+        Args:
+            identity_id: Identity identifier
+            incidents: List of incident dictionaries
+            ai_metadata: List of AI metadata dictionaries
+            policy_decisions: List of policy decision dictionaries
+            risk_explanation_bundle_id: Explanation bundle identifier (SEE, mandatory)
+            uba_signal_ids: Optional list of UBA signal identifiers
+        
+        Returns:
+            Risk score record with UBA context applied
+        """
+        # Compute base risk (without UBA)
+        base_score_record = self.compute_risk(
+            incidents=incidents,
+            ai_metadata=ai_metadata,
+            policy_decisions=policy_decisions
+        )
+        
+        # Apply UBA context if signals provided
+        uba_context_applied = False
+        context_modifiers = []
+        uba_signal_list = []
+        
+        if uba_signal_ids and self.uba_signal_store:
+            # Load UBA signals (read-only)
+            for signal_id in uba_signal_ids:
+                signal = self.uba_signal_store.get_signal(signal_id)
+                if signal:
+                    uba_signal_list.append(signal)
+            
+            if uba_signal_list:
+                # Apply UBA context (modifies confidence, NOT base score)
+                base_score = base_score_record['risk_score']
+                base_confidence = base_score_record['confidence_score']
+                
+                adjusted_score, adjusted_confidence, modifiers = self.aggregator.apply_uba_context(
+                    base_score=base_score,
+                    base_confidence=base_confidence,
+                    uba_signals=uba_signal_list
+                )
+                
+                # Ensure bounds (UBA never pushes outside 0-100)
+                adjusted_score = self.normalizer.ensure_uba_context_bounds(
+                    adjusted_score,
+                    uba_context_applied=True
+                )
+                
+                uba_context_applied = True
+                context_modifiers = modifiers
+                
+                # Update score record with UBA context
+                base_score_record['risk_score'] = adjusted_score  # Should be unchanged
+                base_score_record['confidence_score'] = adjusted_confidence
+                base_score_record['uba_signal_ids'] = uba_signal_ids
+                base_score_record['uba_context_applied'] = True
+                base_score_record['context_modifiers'] = context_modifiers
+        
+        # Set explanation bundle (mandatory)
+        base_score_record['risk_explanation_bundle_id'] = risk_explanation_bundle_id
+        
+        # Emit audit ledger entry
+        try:
+            self.ledger_writer.create_entry(
+                component='risk-index',
+                component_instance_id='risk-index',
+                action_type='RISK_INDEX_COMPUTED_WITH_UBA_CONTEXT' if uba_context_applied else 'RISK_INDEX_COMPUTED',
+                subject={'type': 'identity', 'id': identity_id},
+                actor={'type': 'system', 'identifier': 'risk-index'},
+                payload={
+                    'score_id': base_score_record.get('score_id', ''),
+                    'risk_score': base_score_record.get('risk_score', 0.0),
+                    'uba_context_applied': uba_context_applied,
+                    'context_modifiers': context_modifiers,
+                    'explanation_bundle_id': risk_explanation_bundle_id
+                }
+            )
+        except Exception as e:
+            raise RiskAPIError(f"Failed to emit audit ledger entry: {e}") from e
+        
+        return base_score_record
+    
+    def get_risk_explanation(
+        self,
+        identity_id: str
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Get risk explanation for identity.
+        
+        Args:
+            identity_id: Identity identifier
+        
+        Returns:
+            Risk score record with explanation, or None if not found
+        """
+        # Get latest risk score (for now, get latest overall - identity filtering would need store enhancement)
+        latest_score = self.store.get_latest()
+        
+        if not latest_score:
+            return None
+        
+        # Return score with explanation bundle reference
+        return {
+            'score_id': latest_score.get('score_id', ''),
+            'identity_id': identity_id,
+            'risk_score': latest_score.get('risk_score', 0.0),
+            'severity_band': latest_score.get('severity_band', ''),
+            'uba_context_applied': latest_score.get('uba_context_applied', False),
+            'context_modifiers': latest_score.get('context_modifiers', []),
+            'risk_explanation_bundle_id': latest_score.get('risk_explanation_bundle_id', ''),
+            'explanation_chain': 'Incident → KillChain → Graph → UBA Signal → Risk Index'
+        }

@@ -7348,3 +7348,249 @@ Risk consumes signals — signals never produce risk.
 ****Promot end****
 
 
+****Promot Start****
+
+### PHASE M4 — UBA Risk Consumption
+
+**(Enterprise Risk Index Integration — Signal-Consuming Only)**
+
+---
+
+## OBJECTIVE (ABSOLUTE)
+
+Extend the **Enterprise Risk Index Engine** to **consume UBA Signals** as **contextual modifiers**, **never as risk producers**.
+
+UBA **must never raise risk by itself**.
+UBA **only explains why risk *already changed*** when correlated with other verified facts.
+
+This phase answers **only**:
+
+> “How does verified behavioral context *modulate* enterprise risk when other risk-producing systems already fired?”
+
+---
+
+## ARCHITECTURAL POSITION (DO NOT VIOLATE)
+
+```
+UBA Core        → facts
+UBA Drift       → change
+UBA Signal      → context
+                     ↓
+Enterprise Risk Index (THIS PHASE)
+                     ↓
+Policy / IR / Exec Reporting
+```
+
+UBA **does not generate risk**
+UBA **does not trigger alerts**
+UBA **does not escalate**
+
+---
+
+## HARD CONSTRAINTS (NON-NEGOTIABLE)
+
+1. **UBA is a modifier, never a source**
+2. **Risk Index remains the only risk authority**
+3. **No new scores, no weights from UBA**
+4. **UBA only adjusts confidence / explainability**
+5. **All effects must be explanation-traceable**
+6. **Deterministic, replayable**
+7. **Environment-driven**
+8. **Audit-ledger anchored**
+9. **Validator-verifiable**
+10. **Human authority preserved**
+
+---
+
+## CHANGES TO IMPLEMENT
+
+### LOCATION
+
+`/risk-index/`
+
+---
+
+## 1. Schema Extension (Frozen)
+
+### Update `risk-score.schema.json`
+
+Add **mandatory** fields:
+
+* uba_signal_ids (array)
+* uba_context_applied (boolean)
+* risk_explanation_bundle_id
+* context_modifiers (array of enums)
+
+  * ROLE_EXPANSION_PRESENT
+  * ACCESS_SURFACE_EXPANDED
+  * TEMPORAL_SHIFT_PRESENT
+  * CONTEXTUAL_SHIFT_PRESENT
+
+⚠️ These are **descriptive**, not numeric.
+
+No optional fields allowed.
+
+---
+
+## 2. Engine Changes
+
+### Update `/engine/aggregator.py`
+
+Add:
+
+#### `apply_uba_context()`
+
+Rules:
+
+* Consumes **UBA Signals**
+* Modifies:
+
+  * explanation richness
+  * confidence interpretation
+* NEVER modifies:
+
+  * base score calculation
+  * decay math
+  * normalization
+
+If no UBA signals → no change.
+
+---
+
+### Update `/engine/normalizer.py`
+
+* Ensure UBA context **cannot push score outside 0–100**
+* Ensure **risk bands remain unchanged**
+
+---
+
+## 3. Explanation Integration (MANDATORY)
+
+Every risk computation **must reference**:
+
+* SEE explanation bundle that chains:
+
+  ```
+  Incident → KillChain → Graph → UBA Signal → Risk Index
+  ```
+
+No explanation → computation fails.
+
+---
+
+## 4. Audit Ledger Integration
+
+New ledger events:
+
+* `RISK_INDEX_COMPUTED_WITH_UBA_CONTEXT`
+* `RISK_CONTEXT_APPLIED`
+
+Ledger must record:
+
+* Which UBA signals were consumed
+* Which context modifiers applied
+* Explanation bundle reference
+
+---
+
+## 5. API Changes
+
+Update `/api/risk_api.py`
+
+Expose:
+
+* `get_risk_with_context(identity_id)`
+* `get_risk_explanation(identity_id)`
+
+Responses must include:
+
+* base risk
+* UBA context applied (true/false)
+* explanation bundle ID
+
+---
+
+## 6. CLI Updates
+
+Add:
+
+* `compute_risk_with_uba.py`
+* `export_risk_with_context.py`
+
+---
+
+## 7. Global Validator Updates
+
+Validator must be able to:
+
+* Recompute risk **with and without** UBA context
+* Confirm:
+
+  * Base score unchanged
+  * Only context flags differ
+* Verify explanation bundle integrity
+* Detect unauthorized risk influence
+
+---
+
+## 8. DOCUMENTATION UPDATE
+
+Update `/risk-index/README.md`
+
+Add section:
+
+### “UBA Integration Model”
+
+Include explicit statement:
+
+> “UBA does not increase risk.
+> UBA explains *why* existing risk is interpreted the way it is.”
+
+Include regulatory positioning:
+
+* Insider threat ≠ malicious intent
+* Behavioral drift ≠ threat
+* Risk attribution remains multi-factor
+
+---
+
+## EXPLICITLY FORBIDDEN
+
+* ❌ UBA-driven scoring
+* ❌ UBA weight factors
+* ❌ UBA-only risk increase
+* ❌ Automatic escalation from UBA
+* ❌ Behavioral intent inference
+* ❌ ML involvement
+* ❌ Threshold tuning
+
+---
+
+## PASS / FAIL CRITERIA
+
+### PASS only if:
+
+* Risk score identical with and without UBA
+* Only explanation/context differs
+* Validator replay succeeds
+* No UBA influence without other risk signals
+* Ledger is complete
+
+### FAIL if:
+
+* UBA alone changes risk
+* Any scoring logic references UBA
+* Any implicit severity exists
+* Any authority bypass exists
+
+---
+
+## NEXT PHASE (DO NOT BUILD YET)
+
+**PHASE M5 — UBA → Alert Interpretation (Human-Centric Alert Framing)**
+UBA influences *how alerts are explained*, never when they are fired.
+
+****Promot End****
+
+
+

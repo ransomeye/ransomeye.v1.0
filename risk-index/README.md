@@ -324,4 +324,75 @@ risk-index/
 
 ---
 
+## UBA Integration Model
+
+### Overview
+
+The Enterprise Risk Index consumes **UBA Signals** as **contextual modifiers**, **never as risk producers**. UBA **must never raise risk by itself**. UBA **only explains why risk *already changed*** when correlated with other verified facts.
+
+### Core Principle
+
+> **"UBA does not increase risk. UBA explains *why* existing risk is interpreted the way it is."**
+
+### Architectural Position
+
+```
+UBA Core        → facts
+UBA Drift       → change
+UBA Signal      → context
+                     ↓
+Enterprise Risk Index (THIS SYSTEM)
+                     ↓
+Policy / IR / Exec Reporting
+```
+
+**UBA does not generate risk**  
+**UBA does not trigger alerts**  
+**UBA does not escalate**
+
+### How UBA Context Works
+
+1. **Base Risk Computation**: Risk is computed from incidents, AI metadata, and policy decisions (UBA-independent)
+2. **UBA Context Application**: UBA signals are consumed as contextual modifiers
+3. **Modification Scope**:
+   - ✅ **Modifies**: Explanation richness, confidence interpretation
+   - ❌ **NEVER modifies**: Base score calculation, decay math, normalization
+4. **Result**: Risk score remains identical with and without UBA (only context/explanation differs)
+
+### Context Modifiers
+
+UBA signals contribute descriptive context modifiers:
+
+- **ROLE_EXPANSION_PRESENT**: Role or privilege expansion detected
+- **ACCESS_SURFACE_EXPANDED**: Access surface change detected
+- **TEMPORAL_SHIFT_PRESENT**: Temporal behavior change detected
+- **CONTEXTUAL_SHIFT_PRESENT**: Contextual behavior change detected
+
+These modifiers are **descriptive**, not numeric. They enhance explainability but do not change risk scores.
+
+### Explanation Integration
+
+Every risk computation **must reference** a System Explanation Engine (SEE) bundle that chains:
+
+```
+Incident → KillChain → Graph → UBA Signal → Risk Index
+```
+
+No explanation → computation fails.
+
+### Regulatory Positioning
+
+- **Insider threat ≠ malicious intent**: Behavioral drift does not imply malicious intent
+- **Behavioral drift ≠ threat**: Behavioral change is context, not threat
+- **Risk attribution remains multi-factor**: Risk is always multi-factor, never UBA-only
+
+### Validation
+
+- **Risk score identical with and without UBA**: Base score unchanged
+- **Only explanation/context differs**: Context modifiers and explanation richness differ
+- **No UBA influence without other risk signals**: UBA never increases risk alone
+- **Validator replay succeeds**: All computations are replayable
+
+---
+
 **AUTHORITATIVE**: This is the single authoritative source for RansomEye Enterprise Risk Index documentation.

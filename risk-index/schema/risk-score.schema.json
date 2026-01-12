@@ -13,7 +13,11 @@
     "computation_metadata",
     "confidence_score",
     "decay_applied",
-    "weights_used"
+    "weights_used",
+    "uba_signal_ids",
+    "uba_context_applied",
+    "risk_explanation_bundle_id",
+    "context_modifiers"
   ],
   "additionalProperties": false,
   "properties": {
@@ -253,6 +257,36 @@
         }
       },
       "additionalProperties": false
+    },
+    "uba_signal_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "description": "UBA signal identifiers consumed as contextual modifiers (read-only references)"
+    },
+    "uba_context_applied": {
+      "type": "boolean",
+      "description": "Whether UBA context was applied to this risk computation"
+    },
+    "risk_explanation_bundle_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "System Explanation Engine bundle identifier (mandatory, chains Incident → KillChain → Graph → UBA Signal → Risk Index)"
+    },
+    "context_modifiers": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "ROLE_EXPANSION_PRESENT",
+          "ACCESS_SURFACE_EXPANDED",
+          "TEMPORAL_SHIFT_PRESENT",
+          "CONTEXTUAL_SHIFT_PRESENT"
+        ]
+      },
+      "description": "UBA context modifiers applied (descriptive, not numeric)"
     }
   }
 }

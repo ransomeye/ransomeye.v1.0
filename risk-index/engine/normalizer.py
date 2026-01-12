@@ -44,6 +44,22 @@ class Normalizer:
         return normalized
     
     @staticmethod
+    def ensure_uba_context_bounds(score: float, uba_context_applied: bool) -> float:
+        """
+        Ensure UBA context cannot push score outside 0-100.
+        
+        Args:
+            score: Risk score
+            uba_context_applied: Whether UBA context was applied
+        
+        Returns:
+            Bounded score (0-100)
+        """
+        # UBA context never modifies base score, but this ensures bounds
+        # Risk bands remain unchanged regardless of UBA context
+        return max(0.0, min(100.0, score))
+    
+    @staticmethod
     def determine_severity_band(score: float) -> str:
         """
         Determine severity band from normalized score.
