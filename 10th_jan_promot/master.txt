@@ -7594,3 +7594,303 @@ UBA influences *how alerts are explained*, never when they are fired.
 
 
 
+****Promot Start*****
+
+You are implementing the next **MANDATORY subsystem** for **RansomEye v1.0**.
+You are not allowed to ask questions, simplify scope, or introduce optional behavior.
+This is **military-grade, regulator-grade software**.
+Follow architecture strictly. No shortcuts.
+
+---
+
+# PHASE M5 — UBA Alert Context Engine (Human-Centric, Non-Triggering)
+
+## AUTHORITATIVE INTENT
+
+This subsystem **does NOT create alerts**.
+This subsystem **does NOT suppress alerts**.
+This subsystem **does NOT escalate alerts**.
+This subsystem **does NOT route alerts**.
+This subsystem **does NOT score risk**.
+
+**It ONLY explains alerts to humans using UBA context.**
+
+UBA **frames understanding**, never authority.
+
+---
+
+## CORE PRINCIPLE (NON-NEGOTIABLE)
+
+> **UBA may change how an alert is explained — never whether it exists.**
+
+---
+
+## REQUIRED SUBSYSTEM NAME
+
+**`/uba-alert-context/`**
+
+Do **NOT** name it:
+
+* analyzer
+* scorer
+* evaluator
+* enhancer
+* intelligence
+* inference
+
+Correct name: **UBA Alert Context Engine**
+
+---
+
+## REQUIRED DELIVERABLES
+
+### 1. Schema (Frozen, Zero Optional Fields)
+
+Create schemas under:
+
+```
+/uba-alert-context/schema/
+```
+
+#### 1.1 `alert-context.schema.json`
+
+**Purpose:** Human-facing contextual explanation attached to an alert
+
+Required fields (ALL mandatory):
+
+1. `alert_id` (UUID)
+2. `context_block_id` (UUID)
+3. `uba_signal_ids` (array of UUIDs)
+4. `context_types` (array of enums)
+
+   * CONTEXTUAL_SHIFT
+   * ROLE_EXPANSION
+   * ACCESS_SURFACE_CHANGE
+   * TEMPORAL_BEHAVIOR_CHANGE
+5. `human_readable_summary` (string, controlled vocabulary only)
+6. `what_changed` (array of strings, factual)
+7. `what_did_not_change` (array of strings, factual)
+8. `interpretation_guidance` (enum)
+
+   * INFORMATIONAL
+   * CONTEXT_ONLY
+   * REVIEW_RECOMMENDED
+9. `explanation_bundle_id` (UUID, SEE mandatory)
+10. `generated_at` (RFC3339 UTC)
+
+**STRICT RULES**
+
+* No judgment words (no suspicious, malicious, risky)
+* No severity labels
+* No probabilities
+* No free prose outside controlled strings
+
+---
+
+### 2. Engine Implementation
+
+Path:
+
+```
+/uba-alert-context/engine/
+```
+
+#### 2.1 `context_builder.py`
+
+* Input:
+
+  * Alert (read-only)
+  * UBA Signals (read-only)
+  * Explanation Bundle (SEE)
+* Output:
+
+  * Alert Context Block (immutable)
+
+Rules:
+
+* Deterministic
+* Same inputs → same output
+* Order-preserving
+* No branching logic
+* No ML
+* No heuristics
+
+#### 2.2 `context_hasher.py`
+
+* Deterministic SHA256 hash of the context block
+* Used for validator replay
+
+---
+
+### 3. Storage (Immutable)
+
+Path:
+
+```
+/uba-alert-context/storage/
+```
+
+#### 3.1 `context_store.py`
+
+* Append-only
+* No updates
+* No deletes
+* Alert context blocks are immutable facts
+
+---
+
+### 4. API
+
+Path:
+
+```
+/uba-alert-context/api/
+```
+
+#### 4.1 `alert_context_api.py`
+
+Required endpoints (read/write strictly controlled):
+
+* `build_context(alert_id)`
+* `get_alert_context(alert_id)`
+* `list_alert_contexts(incident_id)`
+
+Rules:
+
+* Read-only access to Alert Engine
+* Read-only access to UBA Signal Store
+* Write ONLY to context_store
+* Emit audit ledger events:
+
+  * `UBA_ALERT_CONTEXT_BUILT`
+  * `UBA_ALERT_CONTEXT_RETRIEVED`
+
+---
+
+### 5. CLI Tools
+
+Path:
+
+```
+/uba-alert-context/cli/
+```
+
+Required tools:
+
+1. `build_alert_context.py`
+2. `export_alert_context.py`
+
+Both must be:
+
+* Deterministic
+* Offline
+* Validator-replayable
+
+---
+
+### 6. Audit Ledger Integration (MANDATORY)
+
+Every operation must emit ledger entries:
+
+* Alert context build
+* Alert context export
+* Alert context retrieval
+
+Ledger must include:
+
+* alert_id
+* context_block_id
+* uba_signal_ids
+* explanation_bundle_id
+
+---
+
+### 7. Explicit NON-FEATURES (FORBIDDEN)
+
+You MUST NOT:
+
+* Change alert severity
+* Suppress alerts
+* Escalate alerts
+* Trigger notifications
+* Modify routing
+* Modify alert content
+* Introduce ML
+* Introduce risk math
+* Introduce policy logic
+* Introduce human authority
+* Introduce automation
+
+---
+
+### 8. Integration Guarantees
+
+* **Alert Engine remains authoritative**
+* **UBA remains non-authoritative**
+* **SEE remains explanation root**
+* **HAF remains authority root**
+* **Risk Index remains risk root**
+
+This engine is **purely explanatory**.
+
+---
+
+### 9. Documentation (MANDATORY)
+
+Create:
+
+```
+/uba-alert-context/README.md
+```
+
+Must include:
+
+* Purpose statement
+* Non-authority declaration
+* Regulatory positioning
+* Analyst guidance examples
+* Failure semantics
+* Validator replay guarantees
+
+Include explicit statement:
+
+> “Alert Context does not modify alerts. It explains alerts to humans using behavioral context.”
+
+---
+
+### 10. Validation Requirements
+
+Must be verifiable that:
+
+* Alerts exist without context
+* Context can be removed without affecting alerts
+* Validator can rebuild context from:
+
+  * Audit Ledger
+  * UBA Signals
+  * Explanation Bundles
+* Removing UBA does NOT break alert pipeline
+
+---
+
+## FINAL STATEMENT (MUST BE TRUE)
+
+> UBA Alert Context changes **understanding**, never **outcomes**.
+
+---
+
+### DELIVERABLE EXPECTATION
+
+When complete, you will report:
+
+* File structure
+* Schema field counts
+* Explicit guarantees
+* Verification results
+
+No placeholders.
+No TODOs.
+No partial work.
+
+****promot end*****
+

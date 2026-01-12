@@ -1,0 +1,92 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RansomEye UBA Alert Context Block",
+  "description": "Frozen schema for human-facing contextual explanation attached to an alert. All fields are mandatory. No optional fields allowed.",
+  "type": "object",
+  "required": [
+    "alert_id",
+    "context_block_id",
+    "uba_signal_ids",
+    "context_types",
+    "human_readable_summary",
+    "what_changed",
+    "what_did_not_change",
+    "interpretation_guidance",
+    "explanation_bundle_id",
+    "generated_at"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "alert_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Alert identifier (read-only reference to Alert Engine)"
+    },
+    "context_block_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this context block (UUID v4)"
+    },
+    "uba_signal_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "description": "UBA signal identifiers consumed for context (read-only references)"
+    },
+    "context_types": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "CONTEXTUAL_SHIFT",
+          "ROLE_EXPANSION",
+          "ACCESS_SURFACE_CHANGE",
+          "TEMPORAL_BEHAVIOR_CHANGE"
+        ]
+      },
+      "description": "Types of behavioral context present (descriptive, not evaluative)"
+    },
+    "human_readable_summary": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Human-readable summary using controlled vocabulary only (no judgment words, no severity labels, no probabilities)"
+    },
+    "what_changed": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "Factual statements about what changed (behavioral facts only)"
+    },
+    "what_did_not_change": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "Factual statements about what did not change (behavioral facts only)"
+    },
+    "interpretation_guidance": {
+      "type": "string",
+      "enum": [
+        "INFORMATIONAL",
+        "CONTEXT_ONLY",
+        "REVIEW_RECOMMENDED"
+      ],
+      "description": "Guidance for human interpretation (descriptive, not prescriptive)"
+    },
+    "explanation_bundle_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "System Explanation Engine bundle identifier (mandatory, chains Alert → UBA Signal → SEE)"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp of context block generation"
+    }
+  }
+}
