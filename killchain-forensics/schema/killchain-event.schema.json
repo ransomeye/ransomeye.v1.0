@@ -1,0 +1,181 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RansomEye KillChain Event",
+  "description": "Frozen schema for killchain timeline events. All fields are mandatory. No optional fields allowed.",
+  "type": "object",
+  "required": [
+    "event_id",
+    "timestamp",
+    "host_id",
+    "user_id",
+    "process_id",
+    "mitre_technique_id",
+    "mitre_tactic",
+    "mitre_stage",
+    "event_type",
+    "source_event_id",
+    "evidence_references",
+    "campaign_id",
+    "correlation_metadata"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this killchain event (UUID v4)"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp of event"
+    },
+    "host_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Host identifier (hostname, IP, or UUID)"
+    },
+    "user_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "User identifier (username, SID, or UUID)"
+    },
+    "process_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Process identifier (PID, process UUID, or path)"
+    },
+    "mitre_technique_id": {
+      "type": "string",
+      "pattern": "^T[0-9]{4}(\\.[0-9]{3})?$",
+      "description": "MITRE ATT&CK technique ID (e.g., T1055, T1055.001)"
+    },
+    "mitre_tactic": {
+      "type": "string",
+      "enum": [
+        "Reconnaissance",
+        "Resource Development",
+        "Initial Access",
+        "Execution",
+        "Persistence",
+        "Privilege Escalation",
+        "Defense Evasion",
+        "Credential Access",
+        "Discovery",
+        "Lateral Movement",
+        "Collection",
+        "Command and Control",
+        "Exfiltration",
+        "Impact"
+      ],
+      "description": "MITRE ATT&CK tactic category"
+    },
+    "mitre_stage": {
+      "type": "string",
+      "enum": [
+        "reconnaissance",
+        "resource_development",
+        "initial_access",
+        "execution",
+        "persistence",
+        "privilege_escalation",
+        "defense_evasion",
+        "credential_access",
+        "discovery",
+        "lateral_movement",
+        "collection",
+        "command_and_control",
+        "exfiltration",
+        "impact"
+      ],
+      "description": "MITRE ATT&CK stage (normalized)"
+    },
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "process_creation",
+        "file_access",
+        "network_connection",
+        "registry_modification",
+        "service_creation",
+        "scheduled_task",
+        "user_activity",
+        "memory_access",
+        "credential_access",
+        "lateral_movement",
+        "data_exfiltration",
+        "other"
+      ],
+      "description": "Type of security event"
+    },
+    "source_event_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Source event identifier (from correlation engine or ingest)"
+    },
+    "evidence_references": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "description": "References to evidence records (UUIDs)"
+    },
+    "campaign_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Campaign identifier (links events across hosts/users/IPs)"
+    },
+    "correlation_metadata": {
+      "type": "object",
+      "description": "Metadata for cross-host correlation",
+      "required": [
+        "ip_addresses",
+        "malware_families",
+        "indicators"
+      ],
+      "properties": {
+        "ip_addresses": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "ipv4"
+          },
+          "description": "IP addresses associated with event"
+        },
+        "malware_families": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "description": "Malware family identifiers"
+        },
+        "indicators": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["type", "value"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["hash", "domain", "url", "file_path", "registry_key", "other"]
+              },
+              "value": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512
+              }
+            }
+          },
+          "description": "IOC indicators"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

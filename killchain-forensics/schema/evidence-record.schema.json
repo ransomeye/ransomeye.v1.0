@@ -1,0 +1,106 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RansomEye Evidence Record",
+  "description": "Frozen schema for evidence records. All fields are mandatory. No optional fields allowed.",
+  "type": "object",
+  "required": [
+    "evidence_id",
+    "timestamp",
+    "evidence_type",
+    "artifact_path",
+    "artifact_hash",
+    "artifact_size",
+    "compression_applied",
+    "storage_location",
+    "access_log",
+    "integrity_verified"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "evidence_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this evidence record (UUID v4)"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp of evidence collection"
+    },
+    "evidence_type": {
+      "type": "string",
+      "enum": [
+        "memory_dump",
+        "disk_artifact",
+        "network_capture",
+        "log_file",
+        "registry_hive",
+        "process_image",
+        "other"
+      ],
+      "description": "Type of evidence"
+    },
+    "artifact_path": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "description": "Path to evidence artifact (reference, not blob)"
+    },
+    "artifact_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA256 hash of evidence artifact"
+    },
+    "artifact_size": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Size of evidence artifact in bytes"
+    },
+    "compression_applied": {
+      "type": "boolean",
+      "description": "Whether compression was applied to artifact"
+    },
+    "storage_location": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "description": "Storage location identifier (path, S3 bucket, etc.)"
+    },
+    "access_log": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "access_timestamp",
+          "accessed_by",
+          "access_type",
+          "ledger_entry_id"
+        ],
+        "properties": {
+          "access_timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "accessed_by": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "access_type": {
+            "type": "string",
+            "enum": ["read", "verify", "export"]
+          },
+          "ledger_entry_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "description": "Complete access log (chain-of-custody)"
+    },
+    "integrity_verified": {
+      "type": "boolean",
+      "description": "Whether artifact integrity has been verified"
+    }
+  }
+}

@@ -1,0 +1,147 @@
+Promot Start
+
+You are continuing RansomEye — Enterprise & Military-Grade Platform Expansion.
+
+This is PHASE C2 (MANDATORY).
+
+No other work is allowed until this phase is fully complete, validated, and frozen.
+
+WORK UNIT C2 — THREAT CORRELATION GRAPH ENGINE
+ABSOLUTE CONTEXT (DO NOT VIOLATE)
+
+❌ NO modification to v1.0 Core, Agents, DPI
+
+❌ NO modification to Audit Ledger, Global Validator, Model Registry, Risk Index, KillChain & Forensics
+
+❌ NO UI
+
+❌ NO alerts
+
+❌ NO automation
+
+❌ NO heuristics without justification
+
+This phase builds relationship intelligence only.
+
+OBJECTIVE
+
+Build the Threat Correlation Graph Engine that models entities and relationships across the enterprise to infer campaigns, lateral movement, and coordinated activity.
+
+MANDATORY CAPABILITIES
+1. Entity Graph (NON-OPTIONAL)
+
+Model entities:
+
+Host
+
+User
+
+Process
+
+File
+
+IP
+
+Domain
+
+Malware
+
+Incident
+
+Evidence artifact
+
+Edges must be:
+
+Typed
+
+Directed
+
+Timestamped
+
+Immutable
+
+2. Campaign Inference
+
+Deterministic graph traversal rules
+
+Explicit inference logic (no ML yet)
+
+Explainable path outputs
+
+3. Neo4j Export (MANDATORY)
+
+Export graph to Neo4j-compatible format
+
+No dependency on Neo4j runtime
+
+Deterministic export
+
+4. ML Confidence Placeholder (FOUNDATION ONLY)
+
+Schema for confidence scores
+
+No prediction logic yet
+
+To be used later by ML confidence predictor
+
+5. Assurance Integration
+
+Every graph mutation must emit Audit Ledger entry
+
+Global Validator must:
+
+Rebuild graph
+
+Verify edge completeness
+
+Detect missing relationships
+
+REQUIRED OUTPUT STRUCTURE
+/threat-graph/
+  schema/
+    entity.schema.json
+    edge.schema.json
+  engine/
+    graph_builder.py
+    campaign_inference.py
+  export/
+    neo4j_exporter.py
+  api/
+    graph_api.py
+  cli/
+    build_graph.py
+  README.md
+
+PASS / FAIL CRITERIA
+
+PASS only if:
+
+Graph is immutable
+
+Relationships are explainable
+
+Campaign inference is deterministic
+
+Neo4j export is lossless
+
+Validator can rebuild graph exactly
+
+FAIL if:
+
+Any edge is implicit
+
+Any inference is opaque
+
+Graph depends on runtime state
+
+Export loses information
+
+DELIVERABLE EXPECTATION
+
+Produce full production-grade code, schemas, and documentation.
+
+Do NOT summarize.
+Do NOT explain verbally.
+Build the Threat Correlation Graph Engine only.
+
+Promot end

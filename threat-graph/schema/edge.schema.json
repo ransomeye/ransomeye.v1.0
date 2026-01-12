@@ -1,0 +1,75 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RansomEye Threat Graph Edge",
+  "description": "Frozen schema for threat graph edges. All fields are mandatory. No optional fields allowed.",
+  "type": "object",
+  "required": [
+    "edge_id",
+    "source_entity_id",
+    "target_entity_id",
+    "edge_type",
+    "edge_label",
+    "properties",
+    "timestamp",
+    "inference_explanation"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "edge_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this edge (UUID v4)"
+    },
+    "source_entity_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Source entity identifier"
+    },
+    "target_entity_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Target entity identifier"
+    },
+    "edge_type": {
+      "type": "string",
+      "enum": [
+        "HOSTED_ON",
+        "EXECUTED_BY",
+        "ACCESSED_BY",
+        "COMMUNICATES_WITH",
+        "CONTAINS",
+        "BELONGS_TO",
+        "TRIGGERED",
+        "CORRELATED_WITH",
+        "EVIDENCE_OF",
+        "PART_OF_CAMPAIGN",
+        "LATERAL_MOVEMENT",
+        "DATA_FLOW"
+      ],
+      "description": "Type of relationship (directed edge)"
+    },
+    "edge_label": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Human-readable label for edge"
+    },
+    "properties": {
+      "type": "object",
+      "description": "Edge-specific properties (immutable after creation)",
+      "minProperties": 0,
+      "additionalProperties": true
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp of relationship occurrence"
+    },
+    "inference_explanation": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "description": "Explanation of how this relationship was inferred (deterministic rules)"
+    }
+  }
+}

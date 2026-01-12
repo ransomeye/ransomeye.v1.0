@@ -1,0 +1,83 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RansomEye Threat Graph Entity",
+  "description": "Frozen schema for threat graph entities. All fields are mandatory. No optional fields allowed.",
+  "type": "object",
+  "required": [
+    "entity_id",
+    "entity_type",
+    "entity_label",
+    "properties",
+    "created_at",
+    "ml_confidence_placeholder"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "entity_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this entity (UUID v4)"
+    },
+    "entity_type": {
+      "type": "string",
+      "enum": [
+        "Host",
+        "User",
+        "Process",
+        "File",
+        "IP",
+        "Domain",
+        "Malware",
+        "Incident",
+        "EvidenceArtifact"
+      ],
+      "description": "Type of entity"
+    },
+    "entity_label": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Human-readable label for entity"
+    },
+    "properties": {
+      "type": "object",
+      "description": "Entity-specific properties (immutable after creation)",
+      "minProperties": 0,
+      "additionalProperties": true
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp of entity creation"
+    },
+    "ml_confidence_placeholder": {
+      "type": "object",
+      "description": "Placeholder for ML confidence scores (foundation only, no prediction logic)",
+      "required": [
+        "confidence_defined",
+        "schema_version"
+      ],
+      "properties": {
+        "confidence_defined": {
+          "type": "boolean",
+          "description": "Whether confidence scores are defined for this entity"
+        },
+        "schema_version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+$",
+          "description": "Version of confidence schema"
+        },
+        "confidence_scores": {
+          "type": "object",
+          "description": "Confidence scores (placeholder, to be populated by ML predictor in future)",
+          "additionalProperties": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
