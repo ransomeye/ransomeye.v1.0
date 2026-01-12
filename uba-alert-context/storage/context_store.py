@@ -6,7 +6,7 @@ AUTHORITATIVE: Immutable, append-only storage for alert context blocks
 
 import json
 from pathlib import Path
-from typing import Dict, Any, Iterator, Optional
+from typing import Dict, Any, Iterator, Optional, List
 import os
 
 

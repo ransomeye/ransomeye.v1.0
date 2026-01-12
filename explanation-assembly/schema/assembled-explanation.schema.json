@@ -1,0 +1,160 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RansomEye Assembled Explanation",
+  "description": "Frozen schema for assembled explanation views. All fields are mandatory. No optional fields allowed.",
+  "type": "object",
+  "required": [
+    "assembled_explanation_id",
+    "incident_id",
+    "view_type",
+    "source_explanation_bundle_ids",
+    "source_alert_ids",
+    "source_context_block_ids",
+    "source_risk_ids",
+    "ordering_rules_applied",
+    "content_blocks",
+    "integrity_hash",
+    "generated_at"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "assembled_explanation_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this assembled explanation (UUID v4)"
+    },
+    "incident_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Incident identifier (read-only reference)"
+    },
+    "view_type": {
+      "type": "string",
+      "enum": [
+        "SOC_ANALYST",
+        "INCIDENT_COMMANDER",
+        "EXECUTIVE",
+        "REGULATOR"
+      ],
+      "description": "Audience-specific view type (exactly 4 types, no others)"
+    },
+    "source_explanation_bundle_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "description": "System Explanation Engine bundle identifiers (read-only references)"
+    },
+    "source_alert_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "description": "Alert identifiers (read-only references)"
+    },
+    "source_context_block_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "description": "UBA Alert Context block identifiers (read-only references)"
+    },
+    "source_risk_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "description": "Risk Index score identifiers (read-only references)"
+    },
+    "ordering_rules_applied": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "CHRONOLOGICAL",
+          "TECHNICAL_HIERARCHY",
+          "RISK_IMPACT",
+          "ACCOUNTABILITY_CHAIN",
+          "LEDGER_ORDER",
+          "CHAIN_OF_CUSTODY"
+        ]
+      },
+      "description": "Explicit ordering rules applied (descriptive, not prescriptive)"
+    },
+    "content_blocks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "block_id",
+          "source_type",
+          "source_id",
+          "content_type",
+          "content_reference",
+          "display_order"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "block_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique identifier for this content block"
+          },
+          "source_type": {
+            "type": "string",
+            "enum": [
+              "SEE_BUNDLE",
+              "ALERT",
+              "ALERT_CONTEXT",
+              "RISK_SCORE",
+              "KILLCHAIN",
+              "THREAT_GRAPH"
+            ],
+            "description": "Type of source explanation"
+          },
+          "source_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Source identifier (read-only reference)"
+          },
+          "content_type": {
+            "type": "string",
+            "enum": [
+              "TECHNICAL_DETAIL",
+              "BEHAVIORAL_CONTEXT",
+              "RISK_ASSESSMENT",
+              "TIMELINE",
+              "CAUSALITY",
+              "AUDIT_TRAIL"
+            ],
+            "description": "Type of content (descriptive)"
+          },
+          "content_reference": {
+            "type": "string",
+            "description": "Reference to original content (immutable, read-only)"
+          },
+          "display_order": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Display order within assembled explanation (deterministic)"
+          }
+        }
+      },
+      "description": "Structured content blocks (no prose generation, no paraphrasing, no new facts)"
+    },
+    "integrity_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA256 hash of canonical JSON representation (deterministic)"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp of assembly generation"
+    }
+  }
+}

@@ -1,0 +1,309 @@
+****Promot Start*****
+
+You are implementing the **NEXT MANDATORY SUBSYSTEM** for **RansomEye v1.0**.
+This is **not optional**, **not experimental**, and **not a UX feature**.
+You are operating under **military-grade, regulator-grade constraints**.
+
+You must **reason from architecture**, not just extend features.
+
+---
+
+# PHASE M6 — Human-Facing Explanation Assembly (Alert → Incident → Executive)
+
+## AUTHORITATIVE INTENT
+
+We now have **many correct explanation fragments**, but they are **scattered**:
+
+* Alert explanation (Alert Engine)
+* UBA Alert Context (M5)
+* System Explanation Engine (SEE)
+* Risk Index explanations
+* KillChain timelines
+* Threat Graph reasoning
+* Human overrides (HAF)
+
+This phase **does NOT create new explanations**.
+
+This phase **assembles** them into **audience-specific explanation views**.
+
+---
+
+## CORE PRINCIPLE (NON-NEGOTIABLE)
+
+> **One truth, many views. Never many truths.**
+
+This engine **reorders, filters, and presents explanations**
+without **changing meaning, authority, or causality**.
+
+---
+
+## REQUIRED SUBSYSTEM NAME
+
+**`/explanation-assembly/`**
+
+Do **NOT** name it:
+
+* summarizer
+* reporter
+* narrator
+* generator
+* formatter (alone)
+
+Correct name: **Explanation Assembly Engine**
+
+---
+
+## REQUIRED OUTPUT TYPES (STRICT)
+
+This engine produces **views**, not facts.
+
+### Supported views (EXACTLY these 4):
+
+1. **SOC Analyst View**
+2. **Incident Commander View**
+3. **Executive / Board View**
+4. **Regulator / Auditor View**
+
+No others.
+No free customization.
+No dynamic templates.
+
+---
+
+## REQUIRED DELIVERABLES
+
+### 1. Schema (Frozen, Zero Optional Fields)
+
+Path:
+
+```
+/explanation-assembly/schema/
+```
+
+#### 1.1 `assembled-explanation.schema.json`
+
+Required fields (ALL mandatory):
+
+1. `assembled_explanation_id` (UUID)
+2. `incident_id` (UUID)
+3. `view_type` (enum)
+
+   * SOC_ANALYST
+   * INCIDENT_COMMANDER
+   * EXECUTIVE
+   * REGULATOR
+4. `source_explanation_bundle_ids` (array of UUIDs)
+5. `source_alert_ids` (array of UUIDs)
+6. `source_context_block_ids` (array of UUIDs)
+7. `source_risk_ids` (array of UUIDs)
+8. `ordering_rules_applied` (array of enums)
+9. `content_blocks` (array of structured objects)
+10. `integrity_hash` (SHA256)
+11. `generated_at` (RFC3339 UTC)
+
+**STRICT RULES**
+
+* No prose generation
+* No paraphrasing
+* No new facts
+* No inference
+* No compression logic
+* No summarization logic
+
+---
+
+### 2. Engine Implementation
+
+Path:
+
+```
+/explanation-assembly/engine/
+```
+
+#### 2.1 `assembly_engine.py`
+
+Responsibilities:
+
+* Read-only access to:
+
+  * SEE bundles
+  * Alert Context blocks
+  * Risk explanations
+  * KillChain timelines
+  * Threat Graph paths
+* Deterministically assemble explanations by **view_type**
+* Apply **explicit ordering rules only**
+
+Examples:
+
+* SOC view → technical → chronological
+* Executive view → risk → impact → accountability
+* Regulator view → ledger → chain-of-custody → determinism
+
+No heuristics.
+No AI.
+No summarization.
+
+#### 2.2 `assembly_hasher.py`
+
+* Deterministic SHA256 over canonical JSON
+* Used by Global Validator
+
+---
+
+### 3. Storage (Immutable)
+
+Path:
+
+```
+/explanation-assembly/storage/
+```
+
+#### 3.1 `assembly_store.py`
+
+* Append-only
+* Immutable records
+* No updates
+* No deletes
+
+---
+
+### 4. API
+
+Path:
+
+```
+/explanation-assembly/api/
+```
+
+#### 4.1 `assembly_api.py`
+
+Required endpoints:
+
+* `assemble_incident_explanation(incident_id, view_type)`
+* `get_assembled_explanation(assembled_explanation_id)`
+* `list_assembled_explanations(incident_id)`
+
+Rules:
+
+* Read-only access to all upstream systems
+* Write ONLY to assembly_store
+* Emit audit ledger events:
+
+  * `EXPLANATION_ASSEMBLED`
+  * `EXPLANATION_RETRIEVED`
+
+---
+
+### 5. CLI Tools
+
+Path:
+
+```
+/explanation-assembly/cli/
+```
+
+Required:
+
+1. `assemble_explanation.py`
+2. `export_explanation.py`
+
+Must be:
+
+* Deterministic
+* Offline
+* Validator-replayable
+
+---
+
+### 6. Explicit NON-FEATURES (FORBIDDEN)
+
+You MUST NOT:
+
+* Generate text
+* Rewrite explanations
+* Collapse explanations
+* Hide causality
+* Create “TL;DR”
+* Score explanations
+* Decide importance
+* Introduce LLMs
+* Modify existing explanation content
+
+---
+
+### 7. Audit Ledger Integration (MANDATORY)
+
+Each assembly must emit:
+
+* incident_id
+* view_type
+* all source IDs used
+* integrity_hash
+
+Ledger events:
+
+* `EXPLANATION_ASSEMBLED`
+* `EXPLANATION_EXPORTED`
+
+---
+
+### 8. Documentation
+
+Create:
+
+```
+/explanation-assembly/README.md
+```
+
+Must include:
+
+* Difference between explanation and assembly
+* Why no summarization exists here
+* Regulatory positioning
+* Analyst vs Executive vs Regulator differences
+* Failure semantics
+* Validator guarantees
+
+Include this **exact sentence**:
+
+> “Explanation Assembly changes presentation, never meaning.”
+
+---
+
+### 9. Validation Requirements
+
+Validator must be able to:
+
+* Rebuild assembled explanations from:
+
+  * Audit Ledger
+  * SEE
+  * UBA Alert Context
+  * Risk Index
+  * KillChain
+* Verify integrity hash
+* Confirm no missing or reordered facts
+
+---
+
+## FINAL STATEMENT (MUST HOLD)
+
+> Explanation Assembly does not explain events — it arranges explanations for humans.
+
+---
+
+### COMPLETION EXPECTATION
+
+When complete, report:
+
+* File structure
+* Schema field counts
+* Explicit guarantees
+* Verification results
+
+No placeholders.
+No TODOs.
+No partials.
+
+****promot end*****
