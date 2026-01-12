@@ -65,7 +65,7 @@ gpu:
 
 # Data Configuration
 data:
-  train_file: "./data/processed/train.jsonl"
+  train_file: "./data/processed/train_expanded.jsonl"
   validation_file: "./data/processed/validation.jsonl"
   test_file: "./data/processed/test.jsonl"
   max_samples: null  # null = use all samples

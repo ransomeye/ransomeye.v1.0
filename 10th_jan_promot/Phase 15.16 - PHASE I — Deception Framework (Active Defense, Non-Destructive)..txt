@@ -1,0 +1,177 @@
+****Promot Start****
+
+You are continuing **RansomEye — Military-Grade Enterprise Cyber Defense Platform**.
+All previous subsystems are **authoritative, frozen, deterministic, validator-verifiable**.
+
+This is **PHASE I — Deception Framework (Active Defense, Non-Destructive)**.
+
+This phase introduces **controlled deception** to **observe attacker behavior**, not to block, exploit, or retaliate.
+
+---
+
+## OBJECTIVE
+
+Build a **Deception Framework** that:
+
+* Deploys **decoy assets** (hosts, services, credentials, files)
+* Attracts attacker interaction
+* Generates **high-confidence signals**
+* Produces **evidence-grade telemetry**
+* Never interferes with production assets
+
+Deception is **observation with intent**, not enforcement.
+
+---
+
+## ABSOLUTE CONSTRAINTS (NON-NEGOTIABLE)
+
+* ❌ No counter-attacks
+* ❌ No malware execution
+* ❌ No real credential exposure
+* ❌ No production host modification
+* ❌ No automatic blocking
+* ❌ No retaliation logic
+* ❌ No background autonomy
+* ❌ No dynamic learning or ML here
+
+Everything is **explicit, deterministic, reversible**.
+
+---
+
+## REQUIRED STRUCTURE
+
+```
+/deception/
+  schema/
+    decoy.schema.json
+    interaction.schema.json
+    deployment.schema.json
+  engine/
+    decoy_registry.py        # Immutable decoy definitions
+    deployment_engine.py     # Explicit deployment only
+    interaction_collector.py # Interaction capture
+    signal_builder.py        # High-confidence signals
+  integrations/
+    linux_agent_hooks.py
+    network_scanner_hooks.py
+  api/
+    deception_api.py
+  cli/
+    deploy_decoy.py
+    collect_interactions.py
+  README.md
+```
+
+---
+
+## DECOY TYPES (MANDATORY)
+
+Must support **all** below, each as **data-defined**, not code:
+
+1. **Host Decoys**
+
+   * Fake Linux/Windows hosts
+   * Never real production IPs
+
+2. **Service Decoys**
+
+   * Fake SSH / SMB / HTTP banners
+   * Banner-only, no real backend
+
+3. **Credential Decoys**
+
+   * Honey credentials
+   * Cryptographically tagged
+   * Never valid in real systems
+
+4. **File / Artifact Decoys**
+
+   * Fake configs, keys, documents
+   * Read-only access
+
+---
+
+## INTERACTION CAPTURE
+
+Every interaction must record:
+
+* Decoy ID
+* Interaction type (auth_attempt, scan, access, command)
+* Source (IP, host, process)
+* Timestamp
+* Evidence reference
+* Confidence level (HIGH by default)
+
+No interaction is dropped.
+No aggregation at capture time.
+
+---
+
+## SIGNAL REQUIREMENTS
+
+Signals produced by deception must be:
+
+* **High confidence by design**
+* Deterministic
+* Explicitly explainable
+* Chain-of-custody protected
+
+Signals flow into:
+
+* KillChain & Forensics
+* Threat Graph
+* Risk Index
+* Alert Engine
+* System Explanation Engine (SEE)
+
+---
+
+## REQUIRED INTEGRATIONS
+
+Deception Framework MUST integrate with:
+
+* Audit Ledger (deployment, interaction, teardown)
+* Network Scanner (topology-aware placement)
+* Linux Agent (host-level decoys)
+* Threat Graph (entity + edge creation)
+* KillChain & Forensics (evidence)
+* Global Validator (replayability)
+
+---
+
+## PASS / FAIL
+
+PASS only if:
+
+* Decoys are isolated from production
+* No real credentials are exposed
+* Same deployment → same behavior
+* Interactions are immutable facts
+* Signals are deterministic and explainable
+* Validator can replay interactions
+
+FAIL if:
+
+* Any real asset is touched
+* Any exploit logic exists
+* Any automatic retaliation exists
+* Any nondeterminism appears
+
+---
+
+## OUTPUT EXPECTATION
+
+* Production-grade **Deception Framework**
+* Frozen schemas
+* Explicit deployment
+* Evidence-grade interaction capture
+* High-confidence signals
+* Ready for **Phase J — Threat Intel Feed & IOC Engine**
+
+Do **not** build Threat Intel yet.
+Do **not** add blocking or remediation.
+Do **not** add ML.
+
+Build **Deception Framework only**.
+
+****Promot end****

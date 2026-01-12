@@ -1,0 +1,59 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RansomEye Decoy Deployment",
+  "description": "Frozen schema for decoy deployments. All fields are mandatory. No optional fields allowed.",
+  "type": "object",
+  "required": [
+    "deployment_id",
+    "decoy_id",
+    "deployment_status",
+    "deployed_at",
+    "deployed_by",
+    "immutable_hash",
+    "ledger_entry_id"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "deployment_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this deployment (UUID v4)"
+    },
+    "decoy_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Decoy identifier being deployed"
+    },
+    "deployment_status": {
+      "type": "string",
+      "enum": [
+        "PENDING",
+        "DEPLOYED",
+        "FAILED",
+        "TEARDOWN"
+      ],
+      "description": "Deployment status"
+    },
+    "deployed_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp of deployment"
+    },
+    "deployed_by": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Entity that deployed decoy (human identifier or system)"
+    },
+    "immutable_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA256 hash of deployment record (immutability guarantee)"
+    },
+    "ledger_entry_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Audit ledger entry ID for this deployment"
+    }
+  }
+}
