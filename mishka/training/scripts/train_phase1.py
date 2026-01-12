@@ -17,10 +17,12 @@ try:
         AutoTokenizer,
         TrainingArguments,
         Trainer,
-        DataCollatorForLanguageModeling
+        DataCollatorForLanguageModeling,
+        BitsAndBytesConfig
     )
     from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
     from datasets import load_dataset
+    import torch
     TRANSFORMERS_AVAILABLE = True
 except ImportError:
     TRANSFORMERS_AVAILABLE = False
@@ -49,7 +51,7 @@ class Phase1Trainer:
             return yaml.safe_load(f)
     
     def load_model_and_tokenizer(self):
-        """Load base model and tokenizer."""
+        """Load base model and tokenizer with memory optimization."""
         if not TRANSFORMERS_AVAILABLE:
             raise ImportError("Required libraries not installed")
         
@@ -65,18 +67,55 @@ class Phase1Trainer:
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
         
-        # Load model
-        device_map = "cpu" if self.config['cpu']['use_cpu'] else "auto"
+        # Memory-optimized loading for CPU
+        use_cpu = self.config['cpu']['use_cpu']
+        use_qlora = self.config['lora']['method'] == 'qlora'
         
-        self.model = AutoModelForCausalLM.from_pretrained(
-            model_name,
-            device_map=device_map,
-            torch_dtype="float32" if self.config['cpu']['use_cpu'] else "float16",
-            trust_remote_code=True,
-            low_cpu_mem_usage=True
-        )
-        
-        print(f"Model loaded on {device_map}")
+        if use_cpu:
+            # For CPU, try 8-bit quantization first, fallback to float32 if it fails
+            print("Attempting 8-bit quantization for CPU training (memory optimization)")
+            
+            try:
+                quantization_config = BitsAndBytesConfig(
+                    load_in_8bit=True,
+                    llm_int8_threshold=6.0,
+                )
+                
+                self.model = AutoModelForCausalLM.from_pretrained(
+                    model_name,
+                    quantization_config=quantization_config,
+                    device_map="auto",
+                    trust_remote_code=True,
+                    low_cpu_mem_usage=True
+                )
+                print("Model loaded with 8-bit quantization")
+            except Exception as e:
+                print(f"8-bit quantization failed: {e}")
+                print("Falling back to float32 with aggressive memory settings...")
+                
+                # Fallback: Use float32 with minimal memory settings
+                self.model = AutoModelForCausalLM.from_pretrained(
+                    model_name,
+                    device_map="cpu",
+                    torch_dtype=torch.float32,
+                    trust_remote_code=True,
+                    low_cpu_mem_usage=True,
+                    max_memory={0: "20GiB", "cpu": "20GiB"}  # Limit memory usage
+                )
+                print("Model loaded in float32 (memory-limited)")
+        else:
+            # GPU path
+            device_map = "auto"
+            dtype = torch.float16 if self.config['optimization']['fp16'] else torch.float32
+            
+            self.model = AutoModelForCausalLM.from_pretrained(
+                model_name,
+                device_map=device_map,
+                torch_dtype=dtype,
+                trust_remote_code=True,
+                low_cpu_mem_usage=True
+            )
+            print(f"Model loaded on {device_map}")
     
     def setup_lora(self):
         """Setup LoRA/QLoRA configuration."""
@@ -178,12 +217,15 @@ class Phase1Trainer:
         train_dataset = split_dataset['train']
         eval_dataset = split_dataset['test']
         
-        # Training arguments
+        # Training arguments with memory optimization
+        use_cpu = self.config['cpu']['use_cpu']
+        
         training_args = TrainingArguments(
             output_dir=str(Path(self.config['training']['output_dir']) / 'phase1'),
             num_train_epochs=self.config['training']['num_train_epochs'],
-            per_device_train_batch_size=self.config['training']['per_device_train_batch_size'],
-            gradient_accumulation_steps=self.config['training']['gradient_accumulation_steps'],
+            # Reduce batch size for CPU to save memory
+            per_device_train_batch_size=1 if use_cpu else self.config['training']['per_device_train_batch_size'],
+            gradient_accumulation_steps=8 if use_cpu else self.config['training']['gradient_accumulation_steps'],
             learning_rate=self.config['training']['learning_rate'],
             warmup_steps=self.config['training']['warmup_steps'],
             logging_steps=self.config['training']['logging_steps'],
@@ -194,12 +236,16 @@ class Phase1Trainer:
             load_best_model_at_end=self.config['training']['load_best_model_at_end'],
             metric_for_best_model=self.config['training']['metric_for_best_model'],
             greater_is_better=self.config['training']['greater_is_better'],
-            fp16=self.config['optimization']['fp16'],
-            bf16=self.config['optimization']['bf16'],
-            gradient_checkpointing=self.config['optimization']['gradient_checkpointing'],
-            dataloader_num_workers=self.config['optimization']['dataloader_num_workers'],
-            dataloader_pin_memory=self.config['optimization']['dataloader_pin_memory'],
+            # Disable fp16/bf16 on CPU (not supported)
+            fp16=False if use_cpu else self.config['optimization']['fp16'],
+            bf16=False,  # CPU doesn't support bf16
+            gradient_checkpointing=True,  # Always enable for memory savings
+            dataloader_num_workers=0 if use_cpu else self.config['optimization']['dataloader_num_workers'],
+            dataloader_pin_memory=False,  # CPU doesn't need pinning
             report_to=None,  # Disable wandb/mlflow for now
+            # Additional memory optimizations
+            max_grad_norm=1.0,
+            remove_unused_columns=False,
         )
         
         # Data collator

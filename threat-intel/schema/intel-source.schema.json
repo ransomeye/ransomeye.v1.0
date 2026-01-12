@@ -1,0 +1,68 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RansomEye Intelligence Source",
+  "description": "Frozen schema for intelligence sources. All fields are mandatory. No optional fields allowed.",
+  "type": "object",
+  "required": [
+    "source_id",
+    "source_name",
+    "source_type",
+    "source_version",
+    "signature",
+    "public_key_id",
+    "created_at",
+    "immutable_hash"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "source_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this intelligence source (UUID v4)"
+    },
+    "source_name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Human-readable source name"
+    },
+    "source_type": {
+      "type": "string",
+      "enum": [
+        "public_feed",
+        "internal_deception",
+        "internal_incident",
+        "internal_forensics",
+        "manual_analyst"
+      ],
+      "description": "Type of intelligence source"
+    },
+    "source_version": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "description": "Source version (semver or timestamp)"
+    },
+    "signature": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{128}$",
+      "description": "Ed25519 signature of source snapshot (hex-encoded)"
+    },
+    "public_key_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Public key identifier for signature verification"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp of source creation"
+    },
+    "immutable_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA256 hash of source record (immutability guarantee)"
+    }
+  }
+}

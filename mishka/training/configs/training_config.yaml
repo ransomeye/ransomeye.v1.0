@@ -27,19 +27,19 @@ lora:
 # Training Hyperparameters
 training:
   output_dir: "./models"
-  num_train_epochs: 3
-  per_device_train_batch_size: 4
-  gradient_accumulation_steps: 4
+  num_train_epochs: 2  # Reduced for CPU training
+  per_device_train_batch_size: 1  # Reduced for CPU memory
+  gradient_accumulation_steps: 8  # Increased to maintain effective batch size
   learning_rate: 2.0e-4
-  warmup_steps: 100
+  warmup_steps: 50  # Reduced for smaller dataset
   max_steps: -1  # -1 means use num_train_epochs
-  max_length: 2048
+  max_length: 1024  # Reduced for CPU memory
   temperature: 0.0  # Deterministic
   top_p: 1.0
   logging_steps: 10
-  save_steps: 500
-  eval_steps: 500
-  save_total_limit: 3
+  save_steps: 200  # More frequent saves
+  eval_steps: 200
+  save_total_limit: 2  # Keep fewer checkpoints
   load_best_model_at_end: true
   metric_for_best_model: "loss"
   greater_is_better: false

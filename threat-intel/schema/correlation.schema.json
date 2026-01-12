@@ -1,0 +1,70 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RansomEye IOC Correlation",
+  "description": "Frozen schema for IOC correlations. All fields are mandatory. No optional fields allowed.",
+  "type": "object",
+  "required": [
+    "correlation_id",
+    "ioc_id",
+    "evidence_type",
+    "evidence_id",
+    "correlation_method",
+    "correlated_at",
+    "immutable_hash",
+    "ledger_entry_id"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "correlation_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this correlation (UUID v4)"
+    },
+    "ioc_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "IOC identifier"
+    },
+    "evidence_type": {
+      "type": "string",
+      "enum": [
+        "forensic_artifact",
+        "network_scan",
+        "alert",
+        "deception_interaction",
+        "incident"
+      ],
+      "description": "Type of evidence correlated"
+    },
+    "evidence_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Evidence identifier"
+    },
+    "correlation_method": {
+      "type": "string",
+      "enum": [
+        "hash_match",
+        "exact_match",
+        "domain_match",
+        "ip_match"
+      ],
+      "description": "Method used for correlation (deterministic)"
+    },
+    "correlated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp of correlation"
+    },
+    "immutable_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA256 hash of correlation record (immutability guarantee)"
+    },
+    "ledger_entry_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Audit ledger entry ID for this correlation"
+    }
+  }
+}

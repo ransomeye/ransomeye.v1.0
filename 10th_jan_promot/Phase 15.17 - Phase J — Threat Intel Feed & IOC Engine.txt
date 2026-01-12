@@ -1,0 +1,82 @@
+Promot Start*
+
+You are continuing RansomEye v1.0 – Enterprise & Military-Grade Build.
+
+WORK UNIT: Core Installer Corrections (Blocking Fixes)
+
+STRICT CONTEXT (DO NOT VIOLATE)
+
+Core code is frozen
+
+Installer must NOT modify Core logic
+
+❌ No runtime fixes inside installer
+
+❌ No new features
+
+❌ No schema or contract changes
+
+This task is installer-only corrections.
+
+REQUIRED FIXES (ALL MANDATORY)
+1. Credential Correction (CRITICAL)
+
+Across the installer:
+
+Username must be exactly: gagan
+
+Password must be exactly: gagan
+
+Fix all occurrences including:
+
+env file generation
+
+DB config
+
+health checks
+
+README examples
+
+No variants. No hashes. No doubles.
+
+2. Remove Core Runtime Modification
+
+Revert any Core code changes introduced during installer creation
+
+Installer must:
+
+Copy pre-built Core artifacts
+
+Start Core as-is
+
+If Core startup requires uvicorn:
+
+Installer must call it
+
+NOT modify Core code
+
+3. Re-run Installer Validation
+
+Install on clean system
+
+Start Core
+
+Health check must pass
+
+Uninstall must fully clean system
+
+OUTPUT EXPECTATION
+
+Return:
+
+Confirmation of credential correction
+
+Confirmation no Core code was modified
+
+Confirmation installer works end-to-end
+
+Do NOT summarize code.
+
+Begin immediately.
+
+Promot end*

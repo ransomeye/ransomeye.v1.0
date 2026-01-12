@@ -1,0 +1,73 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RansomEye Indicator of Compromise (IOC)",
+  "description": "Frozen schema for IOCs. All fields are mandatory. No optional fields allowed.",
+  "type": "object",
+  "required": [
+    "ioc_id",
+    "ioc_type",
+    "ioc_value",
+    "normalized_value",
+    "intel_source_id",
+    "first_seen_at",
+    "last_seen_at",
+    "immutable_hash"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "ioc_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this IOC (UUID v4)"
+    },
+    "ioc_type": {
+      "type": "string",
+      "enum": [
+        "ip_address",
+        "domain",
+        "url",
+        "file_hash_md5",
+        "file_hash_sha1",
+        "file_hash_sha256",
+        "email_address",
+        "registry_key",
+        "process_name",
+        "mutex",
+        "user_agent"
+      ],
+      "description": "Type of IOC (explicit enumeration, no free-form)"
+    },
+    "ioc_value": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048,
+      "description": "Original IOC value"
+    },
+    "normalized_value": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048,
+      "description": "Canonical normalized IOC value"
+    },
+    "intel_source_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Intelligence source identifier"
+    },
+    "first_seen_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp of first observation"
+    },
+    "last_seen_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp of last observation"
+    },
+    "immutable_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA256 hash of IOC record (immutability guarantee)"
+    }
+  }
+}

@@ -1,0 +1,162 @@
+****Promot Start****
+
+You are continuing **RansomEye — Military-Grade Enterprise Cyber Defense Platform**.
+All prior subsystems are **authoritative, frozen, deterministic, validator-verifiable**.
+
+This is **PHASE J — Threat Intelligence Feed & IOC Engine (Deterministic, Offline-First)**.
+
+This phase establishes **trusted external and internal intelligence ingestion** without creating enforcement, bias, or hidden logic.
+
+---
+
+## OBJECTIVE
+
+Build a **Threat Intelligence & IOC Engine** that:
+
+* Ingests **external and internal intelligence feeds**
+* Normalizes indicators into **immutable facts**
+* Correlates IOCs with **existing evidence**
+* Feeds **KillChain, Threat Graph, Risk Index, Alert Engine**
+* Remains **offline-capable and deterministic**
+
+Threat intel **informs**, it never decides.
+
+---
+
+## ABSOLUTE CONSTRAINTS (NON-NEGOTIABLE)
+
+* ❌ No automatic blocking
+* ❌ No enrichment mutation of incidents
+* ❌ No trust escalation
+* ❌ No ML or heuristics
+* ❌ No live internet dependency at runtime
+* ❌ No prioritization logic
+* ❌ No scoring here
+
+IOC ingestion ≠ threat judgment.
+
+---
+
+## REQUIRED STRUCTURE
+
+```
+/threat-intel/
+  schema/
+    ioc.schema.json
+    intel-source.schema.json
+    correlation.schema.json
+  engine/
+    feed_ingestor.py        # Offline snapshot ingestion
+    normalizer.py           # Canonical IOC normalization
+    deduplicator.py         # Hash-based IOC deduplication
+    correlator.py           # Evidence ↔ IOC correlation
+  storage/
+    intel_store.py          # Immutable IOC storage
+  api/
+    intel_api.py
+  cli/
+    ingest_feed.py
+    correlate_iocs.py
+  README.md
+```
+
+---
+
+## SUPPORTED IOC TYPES (MANDATORY)
+
+Must support **explicit enumeration**:
+
+* IP address
+* Domain
+* URL
+* File hash (MD5, SHA1, SHA256)
+* Email address
+* Registry key
+* Process name
+* Mutex
+* User agent
+
+No free-form indicators.
+
+---
+
+## INTEL SOURCES
+
+Must support **signed, versioned snapshots**:
+
+* Public feeds (MISP, NVD-derived, CERT, ISAC)
+* Internal sources:
+
+  * Deception Framework interactions
+  * Incident artifacts
+  * Forensics evidence
+* Manual analyst-submitted feeds (signed)
+
+Runtime operation must be **offline-only**.
+
+---
+
+## CORRELATION RULES
+
+IOC correlation must be:
+
+* Deterministic
+* Evidence-based
+* Non-mutating
+
+Correlation outputs are **facts**, not decisions.
+
+Examples:
+
+* IOC hash matches forensic artifact hash
+* Domain IOC matches network scanner service
+* IP IOC matches alert source
+
+---
+
+## REQUIRED INTEGRATIONS
+
+Threat Intel Engine MUST integrate with:
+
+* Audit Ledger (ingestion, correlation)
+* KillChain & Forensics (evidence correlation)
+* Threat Graph (entity + edge creation)
+* Risk Index (signal input only)
+* Alert Engine (context only)
+* System Explanation Engine (SEE)
+* Global Validator (replayability)
+
+---
+
+## PASS / FAIL
+
+PASS only if:
+
+* IOC storage is immutable
+* Feeds are signed and versioned
+* Correlation is deterministic
+* Runtime has no network access
+* Validator can replay correlations
+* No decision logic exists
+
+FAIL if:
+
+* Any IOC causes automatic action
+* Any enrichment mutates facts
+* Any heuristic or ML appears
+* Any runtime internet dependency exists
+
+---
+
+## OUTPUT EXPECTATION
+
+* Production-grade **Threat Intelligence & IOC Engine**
+* Frozen schemas
+* Deterministic ingestion & correlation
+* Offline-first operation
+* Evidence-anchored intelligence
+
+After completion, system proceeds to
+**PHASE K — HNMP Engine (Host / Network / Malware / Process)**.
+
+****Promot end****
