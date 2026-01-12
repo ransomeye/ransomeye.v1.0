@@ -1,0 +1,136 @@
+Promot Start
+
+You are continuing RansomEye — Enterprise & Military-Grade Platform Expansion.
+
+This is PHASE C1 (MANDATORY).
+
+No other work is allowed until this phase is fully complete, validated, and frozen.
+
+WORK UNIT C1 — KILLCHAIN & FORENSICS ENGINE
+ABSOLUTE CONTEXT (DO NOT VIOLATE)
+
+❌ NO modification to v1.0 Core, Agents, DPI
+
+❌ NO modification to Audit Ledger, Global Validator, Model Registry, Risk Index
+
+❌ NO UI
+
+❌ NO automation
+
+❌ NO alerts
+
+❌ NO heuristics without justification
+
+This phase builds evidence-grade correlation only.
+
+OBJECTIVE
+
+Build the KillChain & Forensics Engine that reconstructs full adversary timelines across hosts, users, processes, and network activity — with court-admissible evidence handling.
+
+MANDATORY CAPABILITIES
+1. MITRE ATT&CK Timeline Reconstruction
+
+Map events to MITRE techniques
+
+Explicit stage transitions
+
+Ordered, immutable timeline
+
+Cross-host stitching
+
+2. Evidence Management (NON-OPTIONAL)
+
+Memory dump references (not blobs)
+
+Disk artifact references
+
+Artifact hashing
+
+Compression support
+
+Secure storage indexing
+
+3. Campaign Correlation
+
+Link incidents across:
+
+Hosts
+
+Users
+
+IPs
+
+Malware families
+
+Deterministic linking rules
+
+4. Chain-of-Custody Integration
+
+Every evidence access logged to Audit Ledger
+
+No silent reads
+
+Evidence integrity verification
+
+5. Assurance Compatibility
+
+Global Validator must be able to:
+
+Verify timelines
+
+Verify evidence hashes
+
+Detect missing stages
+
+REQUIRED OUTPUT STRUCTURE
+/killchain-forensics/
+  schema/
+    killchain-event.schema.json
+    evidence-record.schema.json
+  engine/
+    timeline_builder.py
+    mitre_mapper.py
+    campaign_stitcher.py
+  evidence/
+    artifact_store.py
+    hasher.py
+    compressor.py
+  api/
+    forensics_api.py
+  cli/
+    reconstruct_timeline.py
+  README.md
+
+PASS / FAIL CRITERIA
+
+PASS only if:
+
+Timelines are immutable
+
+Cross-host correlation is deterministic
+
+Evidence hashes verify
+
+Chain-of-custody is complete
+
+No evidence access is unlogged
+
+FAIL if:
+
+Any timeline can be mutated
+
+Evidence integrity is assumed
+
+MITRE mapping is ambiguous
+
+Validator cannot replay results
+
+DELIVERABLE EXPECTATION
+
+Produce full production-grade code, schemas, and documentation.
+
+Do NOT summarize.
+Do NOT explain verbally.
+Build the KillChain & Forensics Engine only.
+
+promot end
