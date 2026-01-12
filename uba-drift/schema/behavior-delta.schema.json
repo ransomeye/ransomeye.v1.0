@@ -1,0 +1,112 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RansomEye UBA Behavior Delta",
+  "description": "Frozen schema for behavior deltas. All fields are mandatory. Zero optional fields allowed. Delta is a fact, not a score.",
+  "type": "object",
+  "required": [
+    "delta_id",
+    "identity_id",
+    "baseline_hash",
+    "observation_window_start",
+    "observation_window_end",
+    "delta_type",
+    "baseline_value",
+    "observed_value",
+    "delta_magnitude",
+    "first_seen_timestamp",
+    "last_seen_timestamp",
+    "immutable_hash",
+    "ledger_entry_id"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "delta_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this delta (UUID v4)"
+    },
+    "identity_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Identity identifier"
+    },
+    "baseline_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA256 hash of baseline used for comparison"
+    },
+    "observation_window_start": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp of observation window start"
+    },
+    "observation_window_end": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp of observation window end"
+    },
+    "delta_type": {
+      "type": "string",
+      "enum": [
+        "NEW_EVENT_TYPE",
+        "NEW_HOST",
+        "NEW_TIME_BUCKET",
+        "NEW_PRIVILEGE",
+        "FREQUENCY_SHIFT"
+      ],
+      "description": "Type of behavioral delta (explicit enumeration)"
+    },
+    "baseline_value": {
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        }
+      ],
+      "description": "Value from baseline (string for categorical, number for frequency)"
+    },
+    "observed_value": {
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        }
+      ],
+      "description": "Value observed in observation window"
+    },
+    "delta_magnitude": {
+      "type": "number",
+      "description": "Numeric difference (count difference or presence delta, NOT a score)"
+    },
+    "first_seen_timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp of first observation of this delta"
+    },
+    "last_seen_timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp of last observation of this delta"
+    },
+    "immutable_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA256 hash of delta record (immutability guarantee)"
+    },
+    "ledger_entry_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Audit ledger entry ID for this delta"
+    }
+  }
+}

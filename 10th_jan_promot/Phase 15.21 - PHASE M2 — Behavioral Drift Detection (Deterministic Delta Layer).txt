@@ -1,0 +1,284 @@
+****Promot Start****
+
+### PHASE M2 — Behavioral Drift Detection Engine (Deterministic Delta Layer)
+
+**Objective (NON-NEGOTIABLE)**
+Build the **Behavioral Drift Detection Engine** as a **purely deterministic delta-analysis layer** on top of **UBA Core baselines**.
+
+This phase detects **behavioral change**, **not intent**, **not risk**, **not anomaly labels**.
+It answers only one question:
+
+> *“Has observed behavior deviated from its own historical baseline, and how?”*
+
+Nothing more.
+
+---
+
+## HARD CONSTRAINTS (ABSOLUTE)
+
+1. **NO ML, NO statistics, NO probabilistic models**
+2. **NO risk scores, NO alerts, NO confidence labels**
+3. **NO words like suspicious, malicious, abnormal**
+4. **NO optional fields in schemas**
+5. **NO background schedulers**
+6. **NO hardcoded paths, IPs, users, domains**
+7. **Every delta must be reconstructable bit-for-bit**
+8. **Every action emits Audit Ledger entries**
+9. **UBA Core remains read-only**
+
+---
+
+## SUBSYSTEM NAME (STRICT)
+
+**`uba-drift`**
+
+(No phase numbers in names, no shortcuts)
+
+---
+
+## ROLE IN ARCHITECTURE (IMPORTANT)
+
+* **Consumes**:
+
+  * UBA Core baselines
+  * UBA behavior events
+
+* **Produces**:
+
+  * **Behavioral delta facts only**
+
+* **Does NOT**:
+
+  * Decide
+  * Judge
+  * Alert
+  * Score
+  * Predict
+  * Enforce
+
+This layer exists **solely to quantify change**.
+
+---
+
+## DELIVERABLES TO BUILD
+
+---
+
+## 1. Schemas (Frozen, Zero Optional Fields)
+
+Create under `/uba-drift/schema/`
+
+### 1. `behavior-delta.schema.json`
+
+Fields (ALL REQUIRED):
+
+* delta_id
+* identity_id
+* baseline_hash
+* observation_window_start
+* observation_window_end
+* delta_type
+
+  * NEW_EVENT_TYPE
+  * NEW_HOST
+  * NEW_TIME_BUCKET
+  * NEW_PRIVILEGE
+  * FREQUENCY_SHIFT
+* baseline_value
+* observed_value
+* delta_magnitude
+* first_seen_timestamp
+* last_seen_timestamp
+
+⚠️ **delta_magnitude is numeric but NOT a score**
+It is a **count difference or presence delta**, nothing else.
+
+---
+
+### 2. `delta-summary.schema.json`
+
+Fields (ALL REQUIRED):
+
+* identity_id
+* baseline_hash
+* observation_window_start
+* observation_window_end
+* total_deltas
+* delta_types_present
+* summary_hash
+
+---
+
+## 2. Engine Components
+
+Under `/uba-drift/engine/`
+
+### 1. `delta_comparator.py`
+
+* Compares:
+
+  * Baseline facts vs observation window facts
+* Produces:
+
+  * Explicit deltas
+* Rules:
+
+  * Explicit comparison logic
+  * No heuristics
+  * No thresholds unless environment-defined
+
+---
+
+### 2. `window_builder.py`
+
+* Builds explicit observation windows
+* Window size comes from env vars
+* No implicit rolling windows
+
+---
+
+### 3. `delta_hasher.py`
+
+* Deterministic SHA256 over delta content
+* Enables validator replay
+
+---
+
+### 4. `delta_classifier.py`
+
+⚠️ Misleading name clarified:
+
+* **Classifies delta TYPE only**
+* NOT severity
+* NOT intent
+* NOT threat
+
+---
+
+## 3. Storage (Immutable)
+
+Under `/uba-drift/storage/`
+
+### `delta_store.py`
+
+* Append-only
+* No updates
+* No deletes
+* Deltas versioned by window
+
+---
+
+## 4. API Layer
+
+Under `/uba-drift/api/drift_api.py`
+
+Endpoints:
+
+* `compute_behavior_deltas()`
+* `get_behavior_deltas(identity_id)`
+* `get_delta_summary(identity_id)`
+
+Rules:
+
+* All inputs schema-validated
+* All outputs immutable
+* All calls ledger-anchored
+
+---
+
+## 5. CLI Tools
+
+Under `/uba-drift/cli/`
+
+* `compute_deltas.py`
+* `export_deltas.py`
+* `export_delta_summary.py`
+
+---
+
+## 6. Audit Ledger Integration (MANDATORY)
+
+New ledger action types:
+
+* `UBA_DELTA_COMPUTED`
+* `UBA_DELTA_EXPORTED`
+* `UBA_DELTA_SUMMARY_BUILT`
+
+Every delta computation is **auditable and replayable**.
+
+---
+
+## 7. Global Validator Compatibility
+
+Validator MUST be able to:
+
+* Recompute deltas from:
+
+  * Raw behavior events
+  * Baselines
+* Verify:
+
+  * Delta hashes
+  * Summary hashes
+* Detect:
+
+  * Missing events
+  * Altered baselines
+  * Tampering
+
+---
+
+## 8. Documentation
+
+Create `/uba-drift/README.md` with:
+
+* Explicit statement:
+
+  > “Behavioral drift ≠ malicious behavior”
+* What this subsystem **does NOT do**
+* Determinism guarantees
+* How regulators should read delta data
+* How later layers MAY consume (Risk, IR, Policy)
+
+---
+
+## EXPLICITLY FORBIDDEN
+
+* ❌ Machine learning
+* ❌ Z-scores
+* ❌ Percentiles
+* ❌ “Anomaly”
+* ❌ “Outlier”
+* ❌ “Suspicious”
+* ❌ Auto-thresholding
+* ❌ Background execution
+* ❌ Human-readable judgment text
+
+---
+
+## SUCCESS CRITERIA (PASS / FAIL)
+
+### PASS only if:
+
+* Deltas rebuild identically from raw facts
+* No inference or scoring exists
+* All schemas have zero optional fields
+* Baselines remain untouched
+* Audit ledger is complete
+* Validator passes replay
+
+### FAIL if:
+
+* Any threshold is implicit
+* Any scoring is added
+* Any heuristic is used
+* Any hardcoded value exists
+
+---
+
+## NEXT PHASE (DO NOT BUILD YET)
+
+**PHASE M3 — UBA Signal Interpretation (Risk-Consuming, Not Risk-Producing)**
+This is where **other engines** may consume drift — not here.
+
+****Promot end****
