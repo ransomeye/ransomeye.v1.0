@@ -1,0 +1,134 @@
+Promot Start
+
+You are Cursor, acting as the Validation & Assurance Engineer for
+Phase C — Global GA Validation & Determinism Proof (Corrected).
+
+AUTHORITATIVE CONTEXT
+
+Core Engine, DPI Probe, Linux Agent, Windows Agent are implemented.
+
+Phase B forensic summarization is implemented and corrected.
+
+Data plane is hardened and frozen.
+
+LLM output is governed by semantic determinism, not byte equality.
+
+This phase determines GA eligibility.
+
+OBJECTIVE
+
+Prove that RansomEye is GA-ready through correct, realistic, and technically valid validation.
+
+MANDATORY VALIDATION TRACKS (ALL REQUIRED)
+TRACK 1 — DETERMINISM (CORRECTED)
+
+DET-001: Detection determinism (Agent → raw_events)
+DET-002: Normalization determinism (raw_events → normalized)
+DET-003: Correlation determinism (normalized → incidents)
+DET-004: Forensic summarization determinism (incidents → summaries)
+DET-005: LLM semantic determinism
+
+Rules:
+
+Non-LLM paths → hash equality required
+
+LLM paths → schema + semantic equivalence only
+
+Forbidden language checks mandatory
+
+Structure, ordering, and exclusions must match
+
+TRACK 2 — REPLAY & REHYDRATION (SPLIT MODES)
+
+REP-A — Identity Replay
+
+Same code
+
+Same schemas
+
+Bit-exact hashes required
+
+REP-B — Evolution Replay
+
+New code version
+
+Same inputs
+
+Semantic equivalence required
+
+Hash equality NOT required
+
+Both modes must pass.
+
+TRACK 3 — FAILURE INJECTION
+
+FAIL-001: DB connection loss
+FAIL-002: Agent disconnect
+FAIL-003: Queue overflow
+FAIL-004: Duplicate events
+FAIL-005: Partial writes
+FAIL-006: DB restart mid-processing
+
+Pass criteria:
+
+No corruption
+
+No silent loss
+
+Explicit degradation only
+
+TRACK 4 — SCALE & STRESS (REALISTIC)
+
+SCALE-001: Burst ingestion
+SCALE-002: Sustained load (1M+ events)
+SCALE-003: Mixed traffic (ETW + DPI + Agent)
+SCALE-004: Co-located deployment
+SCALE-005: Backpressure recovery
+
+Latency targets (LOCKED):
+
+p50 < 1s
+
+p95 < 3s
+
+p99 < 5s
+
+TRACK 5 — SECURITY & SAFETY
+
+SEC-001: Enforcement authority verification
+SEC-002: Signed execution verification
+SEC-003: No direct table access
+SEC-004: RBAC enforcement
+SEC-005: Data-plane ownership enforcement
+SEC-006: Audit ledger integrity
+
+TRACK 6 — AGENT REALITY CHECK (NEW)
+
+AGENT-001: Linux real agent vs simulator
+AGENT-002: Windows real agent vs simulator
+
+Requirement:
+
+Structural and semantic equivalence
+
+No simulator-only assumptions allowed
+
+DELIVERABLE
+
+Respond with:
+
+Corrected validation plan
+
+Test execution results
+
+Metrics collected
+
+Pass / Fail per track
+
+Explicit GA verdict
+
+End with:
+
+“Phase C validation complete. GA decision ready.”
+
+Promt End

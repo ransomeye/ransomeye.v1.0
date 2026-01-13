@@ -1,38 +1,36 @@
 Promot Start
 
-You are Cursor, acting as the Validation & GA Readiness Engineer for
+You are Cursor, acting as the Validation & Assurance Engineer for
 Phase C — Global GA Validation & Determinism Proof.
 
 AUTHORITATIVE CONTEXT
 
-All core modules are implemented.
+Core Engine, DPI Probe, Linux Agent, Windows Agent are implemented.
+
+Phase B forensic summarization is implemented and corrected.
 
 Data plane is hardened and frozen.
 
-Phase A (Detection), Phase B (Forensics) are complete.
-
-System must be GA-ready, auditable, and replay-verifiable.
+This phase determines GA eligibility.
 
 OBJECTIVE
 
-Prove that RansomEye is GA-ready by executing end-to-end validation with:
+Prove that RansomEye is GA-ready by validating:
 
-Determinism guarantees
+Determinism
 
-Replay validation
+Replayability
 
-Failure injection
+Data integrity
 
-Scale simulation
+Safety under load
 
-Audit proof
+No hidden failure paths
 
-MANDATORY VALIDATION AREAS
-1. DETERMINISM PROOF
+MANDATORY VALIDATION TRACKS (ALL REQUIRED)
+TRACK 1 — DETERMINISM PROOF
 
-Same input → same output
-
-Across:
+Same inputs → same outputs across:
 
 Detection
 
@@ -40,31 +38,35 @@ Correlation
 
 Forensics
 
-Summaries
+Summarization
 
 Hash comparison required
 
-2. REPLAY VALIDATION
+Multiple runs required
 
-Replay raw_events
+TRACK 2 — REPLAY & REHYDRATION
 
-Rebuild normalized events
+Rebuild:
 
-Rebuild incidents
+Incidents
 
-Rebuild forensic summaries
+Killchains
 
-Verify identical hashes
+Forensic summaries
 
-3. FAILURE INJECTION
+From raw_events only
 
-Simulate:
+No divergence allowed
 
-DB restarts
+TRACK 3 — FAILURE INJECTION
+
+Inject:
+
+DB connection loss
+
+Agent disconnect
 
 Queue overflow
-
-Agent disconnects
 
 Duplicate events
 
@@ -78,68 +80,52 @@ No silent loss
 
 Correct degradation
 
-4. SCALE VALIDATION
+TRACK 4 — SCALE & STRESS
 
-Simulate:
+≥1,000,000 event ingestion burst
 
-1M+ events
+Mixed ETW + DPI + Agent traffic
 
-Burst ingestion
+Co-located deployment
 
-Sustained load
+Verify:
 
-POC single-host mode
+No deadlocks
 
-Measure:
+No unbounded latency
 
-Latency
+No data loss
 
-Backpressure
+TRACK 5 — SECURITY & SAFETY
 
-CPU/memory
+Verify:
 
-DB stability
+No enforcement without authority
 
-5. AUDIT & COMPLIANCE ARTIFACTS
+No unsigned execution
 
-Produce:
+No cross-module DB access
 
-Determinism proof logs
+No direct table reads
 
-Replay verification logs
-
-Failure reports
-
-GA readiness checklist
-
-Signed validation report (PDF/JSON)
-
-HARD RULES
-
-No mocks
-
-No assumptions
-
-No “expected” language
-
-Evidence only
+RBAC enforcement
 
 DELIVERABLE
 
 Respond with:
 
-Validation architecture
+Validation plan
 
-Test matrix
+Test scenarios
 
-Evidence artifacts
+Metrics collected
 
-GA readiness verdict
+Pass / Fail criteria
 
-Explicit list of residual risks (if any)
+Explicit GA verdict
 
 End with:
 
-“Phase C validation complete. RansomEye is GA-ready.”
+“Phase C validation complete. GA decision ready.”
 
-Promt End
+*****Promt End *****
