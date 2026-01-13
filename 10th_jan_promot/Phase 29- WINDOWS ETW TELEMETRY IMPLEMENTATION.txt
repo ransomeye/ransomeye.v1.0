@@ -1,0 +1,232 @@
+🔴 PROMPT 9 — WINDOWS ETW TELEMETRY IMPLEMENTATION
+
+Start Promot*
+
+You are Cursor, acting as the implementation engineer for
+Phase 6 — Windows Agent ETW Telemetry (Implementation).
+
+CONTEXT (FROZEN)
+
+Phase 6 ETW design is APPROVED AND FROZEN
+
+This is DETECTION ONLY
+
+Do NOT modify:
+
+command gate
+
+enforcement logic
+
+signing logic semantics
+
+You are implementing exactly the approved design
+
+OBJECTIVE
+
+Implement user-mode ETW telemetry collection in the Windows Agent with:
+
+Stable session management
+
+Deterministic event normalization
+
+Cryptographic signing
+
+Offline buffering
+
+Health monitoring
+
+IMPLEMENT IN THIS EXACT ORDER
+STEP 1 — PROVIDER DEFINITIONS
+
+File:
+
+agent/etw/providers.py
+
+
+Implement:
+
+Provider GUID registry
+
+Enabled event IDs per provider
+
+Keyword / level filters
+
+Provider metadata (name, purpose)
+
+Fail-closed on invalid provider config.
+
+STEP 2 — SESSION MANAGER
+
+File:
+
+agent/etw/session_manager.py
+
+
+Implement:
+
+ETW session lifecycle (start/stop/restart)
+
+Provider attachment
+
+Failure recovery with backoff
+
+Graceful shutdown handling
+
+Must:
+
+Never crash agent
+
+Emit health events on restart/failure
+
+STEP 3 — EVENT PARSER
+
+File:
+
+agent/etw/event_parser.py
+
+
+Implement:
+
+Binary ETW parsing (no XML)
+
+Minimal field extraction
+
+Lazy parsing
+
+Provider-specific parsers
+
+Reject malformed events safely.
+
+STEP 4 — SCHEMA MAPPER
+
+File:
+
+agent/etw/schema_mapper.py
+
+
+Implement:
+
+Deterministic mapping to normalized schemas
+
+Field canonicalization
+
+ETW provider + event ID preservation
+
+Timestamp normalization
+
+Schemas must align with Linux Agent where possible.
+
+STEP 5 — BUFFER MANAGER
+
+File:
+
+agent/etw/buffer_manager.py
+
+
+Implement:
+
+In-memory ring buffer
+
+Disk-backed overflow buffer
+
+Backpressure handling
+
+Loss detection counters
+
+Offline first. No drops without audit.
+
+STEP 6 — HEALTH MONITOR
+
+File:
+
+agent/etw/health_monitor.py
+
+
+Implement:
+
+Provider liveness checks
+
+Event rate monitoring
+
+Session restart detection
+
+Telemetry loss detection
+
+Emit signed health telemetry.
+
+STEP 7 — TELEMETRY INTEGRATION
+
+Wire ETW output into:
+
+agent/telemetry/event_envelope.py
+agent/telemetry/signer.py
+agent/telemetry/sender.py
+
+
+Requirements:
+
+Every event signed
+
+Envelope includes:
+
+host_id
+
+event_type
+
+timestamp
+
+provider_id
+
+Offline buffering respected
+
+VALIDATION REQUIREMENTS
+
+You MUST include:
+
+Event volume measurements (idle / active)
+
+CPU & memory benchmarks
+
+Provider failure simulation
+
+Session restart simulation
+
+Offline buffer replay validation
+
+HARD RULES
+
+No kernel drivers
+
+No hooks
+
+No WMI
+
+No ML
+
+No enforcement
+
+ENV-only config
+
+No TODOs
+
+No placeholders
+
+DELIVERABLE
+
+Respond with:
+
+Updated directory tree
+
+Key class/function signatures
+
+Example normalized events
+
+Performance benchmark summary
+
+Explicit list of remaining gaps (if any)
+
+End with:
+
+“Phase 6 Windows ETW telemetry implemented. Ready for Phase B.”
+
+Promot End*
