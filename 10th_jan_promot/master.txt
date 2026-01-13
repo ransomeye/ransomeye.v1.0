@@ -12890,3 +12890,83 @@ End with:
 Promt End
 
 
+Promot Start
+
+You are Cursor, acting as the Validation Engineer for
+Phase C — Determinism Track Correction.
+
+AUTHORITATIVE CONTEXT
+
+Phase C execution framework is implemented.
+
+One critical coverage gap remains.
+
+GA execution is blocked until this is fixed.
+
+OBJECTIVE
+
+Add DET-006: Identity Disambiguation Determinism to Track 1 — Determinism and wire it fully into the execution framework.
+
+REQUIRED IMPLEMENTATION (MANDATORY)
+STEP 1 — ADD TEST CASE
+
+Add a new determinism test:
+
+DET-006: Identity Disambiguation Determinism
+
+
+Test scenario:
+
+Same PID reused
+
+Different process start times (or process GUID)
+
+Appears across:
+
+raw_events
+
+normalized events
+
+correlation
+
+forensic summarization
+
+STEP 2 — ASSERTIONS
+
+DET-006 must assert:
+
+Distinct process identities created
+
+No lineage merge
+
+Deterministic behavior across runs
+
+Replay-safe (Identity Replay compatible)
+
+Non-LLM path → bit-exact hash match
+
+STEP 3 — FRAMEWORK INTEGRATION
+
+Update Track 1 count to 6 tests
+
+Update reports and evidence artifacts
+
+Update final GA checklist to include DET-006
+
+DELIVERABLE
+
+Respond with:
+
+Updated Track 1 definition (DET-001 → DET-006)
+
+DET-006 test logic
+
+Updated execution summary
+
+Confirmation that Phase C execution is unblocked
+
+End with:
+
+“DET-006 implemented. Phase C execution unblocked.”
+
+Promt End
