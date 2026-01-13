@@ -12,9 +12,13 @@
       "start_time": "2026-01-13T17:13:41.681642",
       "start_timestamp": 1768304621.6816583,
       "max_hours": 1.0,
-      "status": "running"
+      "status": "completed",
+      "elapsed_hours": 0.6083271825975842,
+      "end_time": "2026-01-13T17:50:11.660268"
     }
   ],
-  "daily_totals": {},
-  "total_hours": 0.0
+  "daily_totals": {
+    "2026-01-13": 0.6083271825975842
+  },
+  "total_hours": 0.6083271825975842
 }
