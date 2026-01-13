@@ -1,120 +1,120 @@
 Promot Start
 
-You are Cursor, acting as the Phase C Execution Hardening Engineer.
+You are Cursor, acting as the Validation Execution Architect for
+Phase C — Global GA Validation (Multi-Host, Corrected Model).
 
 AUTHORITATIVE CONTEXT
 
-Phase C validation framework is implemented.
+RansomEye is a multi-OS system.
 
-All logic and coverage issues are resolved.
+Linux and Windows agents cannot be validated on the same host.
 
-Execution is blocked due to missing runtime prerequisites.
+ETW is Windows-only and cannot run on Linux.
 
-This prompt fixes execution prerequisites ONLY.
+GA certification must be technically defensible.
 
-No test logic changes are allowed.
+This prompt replaces all previous Phase C execution assumptions.
 
 OBJECTIVE
 
-Harden Phase C execution prerequisites so that all 35 tests are actually runnable.
+Implement Phase C execution as a two-run, multi-host validation process with a single authoritative GA verdict.
 
-REQUIRED CHANGES (MANDATORY)
-STEP 1 — FAILURE INJECTION AUTHORITY (FAIL-006)
+EXECUTION MODEL (LOCKED)
+PHASE C-L — LINUX EXECUTION
 
-Add explicit execution authority selection for database restart.
+Runs on: Linux
+Mandatory Tracks:
 
-Phase C must support exactly one of:
+Track 1: Determinism (DET-001 → DET-006)
 
-Option A — Docker
+Track 2: Replay (REP-A Identity, REP-B Evolution)
 
-Environment variable:
+Track 3: Failure Injection (FAIL-001 → FAIL-006)
 
-RANSOMEYE_DB_RESTART_MODE=docker
+Track 4: Scale & Stress (with Disk I/O wait, Queue depth)
 
+Track 5: Security & Safety
 
-Requires:
+Track 6-A: Agent Reality Check — Linux Agent only
 
-RANSOMEYE_DB_CONTAINER_NAME
+Output Artifact (MANDATORY):
 
+phase_c_linux_results.json
 
-Option B — Systemd
+PHASE C-W — WINDOWS EXECUTION
 
-Environment variable:
+Runs on: Native Windows host
+Mandatory Tracks:
 
-RANSOMEYE_DB_RESTART_MODE=systemd
+Track 6-B: Agent Reality Check — Windows Agent (ETW)
 
+What must be validated:
 
-Requires sudo privileges
+ETW event capture
 
-If neither is configured → FAIL FAST and skip FAIL-006 with explicit error.
+Normalization correctness
 
-STEP 2 — AGENT REALITY CHECK BINARIES
+PID reuse disambiguation
 
-Add mandatory environment variables:
+Functional parity with simulator
 
-RANSOMEYE_AGENT_BIN_LINUX
-RANSOMEYE_AGENT_BIN_WINDOWS
+Deterministic schema output
 
+Output Artifact (MANDATORY):
 
-Validation harness must:
+phase_c_windows_results.json
 
-Verify binaries exist
+GA VERDICT LOGIC (NON-NEGOTIABLE)
 
-Verify executability
+GA verdict must be computed as:
 
-Fail fast if missing
-
-No PATH lookup. No defaults.
-
-STEP 3 — TOPOLOGY CLARIFICATION (SCALE-004)
-
-Update documentation and harness logic to state:
-
-Phase C does not orchestrate deployment
-
-Topology (co-located vs distributed) is pre-configured
-
-Harness only:
-
-Measures latency
-
-Measures IO wait
-
-Measures queue depth
-
-Measures contention
-
-No environment manipulation allowed.
-
-STEP 4 — UPDATE PREREQUISITES DOCUMENTATION
-
-Update:
-
-PHASE_C_EXECUTION_SUMMARY.md
+GA_READY =
+  phase_c_linux_results.PASS == true
+  AND
+  phase_c_windows_results.PASS == true
 
 
-Include:
+Rules:
 
-DB restart authority requirements
+Any skipped mandatory test = FAIL
 
-Agent binary path requirements
+FAIL-006 cannot be skipped
 
-Topology responsibility clarification
+AGENT-002 cannot be skipped
 
-Explicit failure messages when prerequisites missing
+No partial or provisional GA allowed
+
+HARNESS REQUIREMENTS
+Linux Harness Must:
+
+Refuse to run AGENT-002
+
+Explicitly state:
+
+“Windows Agent validation must be run on Windows host”
+
+Windows Harness Must:
+
+Run only Track 6-B
+
+Validate ETW via real agent execution
+
+Produce standalone results file
 
 DELIVERABLE
 
 Respond with:
 
-Updated prerequisites list
+Updated Phase C execution architecture
 
-Updated execution-blocking checks
+Linux harness behavior changes
 
-Confirmation that all 35 tests are now runnable
+Windows harness behavior changes
 
-Explicit statement:
+GA verdict aggregation logic
 
-“Phase C execution prerequisites hardened. Validation can now run.”
+Explicit confirmation:
+
+“Phase C execution model corrected. GA validation is now OS-correct and audit-safe.”
 
 Promt End
