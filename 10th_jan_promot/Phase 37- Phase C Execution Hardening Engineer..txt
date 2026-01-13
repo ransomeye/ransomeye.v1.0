@@ -1,0 +1,120 @@
+Promot Start
+
+You are Cursor, acting as the Phase C Execution Hardening Engineer.
+
+AUTHORITATIVE CONTEXT
+
+Phase C validation framework is implemented.
+
+All logic and coverage issues are resolved.
+
+Execution is blocked due to missing runtime prerequisites.
+
+This prompt fixes execution prerequisites ONLY.
+
+No test logic changes are allowed.
+
+OBJECTIVE
+
+Harden Phase C execution prerequisites so that all 35 tests are actually runnable.
+
+REQUIRED CHANGES (MANDATORY)
+STEP 1 — FAILURE INJECTION AUTHORITY (FAIL-006)
+
+Add explicit execution authority selection for database restart.
+
+Phase C must support exactly one of:
+
+Option A — Docker
+
+Environment variable:
+
+RANSOMEYE_DB_RESTART_MODE=docker
+
+
+Requires:
+
+RANSOMEYE_DB_CONTAINER_NAME
+
+
+Option B — Systemd
+
+Environment variable:
+
+RANSOMEYE_DB_RESTART_MODE=systemd
+
+
+Requires sudo privileges
+
+If neither is configured → FAIL FAST and skip FAIL-006 with explicit error.
+
+STEP 2 — AGENT REALITY CHECK BINARIES
+
+Add mandatory environment variables:
+
+RANSOMEYE_AGENT_BIN_LINUX
+RANSOMEYE_AGENT_BIN_WINDOWS
+
+
+Validation harness must:
+
+Verify binaries exist
+
+Verify executability
+
+Fail fast if missing
+
+No PATH lookup. No defaults.
+
+STEP 3 — TOPOLOGY CLARIFICATION (SCALE-004)
+
+Update documentation and harness logic to state:
+
+Phase C does not orchestrate deployment
+
+Topology (co-located vs distributed) is pre-configured
+
+Harness only:
+
+Measures latency
+
+Measures IO wait
+
+Measures queue depth
+
+Measures contention
+
+No environment manipulation allowed.
+
+STEP 4 — UPDATE PREREQUISITES DOCUMENTATION
+
+Update:
+
+PHASE_C_EXECUTION_SUMMARY.md
+
+
+Include:
+
+DB restart authority requirements
+
+Agent binary path requirements
+
+Topology responsibility clarification
+
+Explicit failure messages when prerequisites missing
+
+DELIVERABLE
+
+Respond with:
+
+Updated prerequisites list
+
+Updated execution-blocking checks
+
+Confirmation that all 35 tests are now runnable
+
+Explicit statement:
+
+“Phase C execution prerequisites hardened. Validation can now run.”
+
+Promt End
