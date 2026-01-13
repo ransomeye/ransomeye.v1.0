@@ -69,10 +69,29 @@ log "Committing changes: $COMMIT_MSG"
 if git commit -m "$COMMIT_MSG" >> "$LOG_FILE" 2>&1; then
     log "Commit successful. Pushing to GitHub..."
     
-    if git push origin main >> "$LOG_FILE" 2>&1; then
-        log "Push successful. Auto-sync complete."
-    else
-        log "ERROR: Push failed. Check log for details."
+    # Retry push up to 3 times with exponential backoff
+    MAX_RETRIES=3
+    RETRY_COUNT=0
+    PUSH_SUCCESS=false
+    
+    while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+        if git push origin main >> "$LOG_FILE" 2>&1; then
+            log "Push successful. Auto-sync complete."
+            PUSH_SUCCESS=true
+            break
+        else
+            RETRY_COUNT=$((RETRY_COUNT + 1))
+            if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+                WAIT_TIME=$((2 ** RETRY_COUNT))
+                log "Push failed. Retrying in ${WAIT_TIME} seconds... (Attempt $RETRY_COUNT/$MAX_RETRIES)"
+                sleep $WAIT_TIME
+            else
+                log "ERROR: Push failed after $MAX_RETRIES attempts. Check log for details."
+            fi
+        fi
+    done
+    
+    if [ "$PUSH_SUCCESS" = false ]; then
         rm -f "$LOCK_FILE"
         exit 1
     fi
