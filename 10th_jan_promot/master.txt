@@ -13203,3 +13203,103 @@ Promt End
 
 
 
+Promot Start
+
+You are Cursor, acting as the Build-Integrity and Validation Architect for RansomEye.
+
+NON-NEGOTIABLE SYSTEM CONTRACT
+
+Global credentials for POC + GA are fixed:
+
+Database User: gagan
+Database Password: gagan
+
+
+These are default build credentials and must be embedded.
+Environment variables may override but absence must never break execution.
+
+Database connectivity is a HARD GATE.
+
+If DB connection fails → immediate fatal exit
+
+No tracks execute
+
+No partial verdict
+
+Clear error message required
+
+Phase C is multi-host:
+
+Linux executes Phase C-L only
+
+Windows executes Phase C-W only
+
+Aggregation happens only after both complete
+
+Windows ETW tests must NEVER run on Linux
+
+Skipped mandatory tests = FAIL
+
+FAIL-006 cannot be skipped for GA
+
+AGENT-002 cannot be skipped for GA
+
+Execution must be module-safe:
+
+All tools run via python3 -m
+
+Direct script execution must not break imports
+
+REQUIRED CHANGES
+
+Implement the following:
+
+A. Fix DB Connection Defaults
+
+Default user/password must be gagan / gagan
+
+Add startup DB connectivity assertion
+
+Fail fast if DB unreachable
+
+B. Harden Phase C Executor
+
+Abort immediately on DB failure
+
+Never compute verdict if tracks didn’t execute
+
+Always initialize verdict structure safely
+
+C. Enforce OS Execution Boundaries
+
+Linux refuses --mode windows
+
+Windows refuses Linux tracks
+
+Clear fatal errors when violated
+
+D. Fix GA Aggregation
+
+Aggregator reads result JSONs only
+
+No imports from executor
+
+GA_READY only if Phase C-L PASS AND Phase C-W PASS
+
+DELIVERABLE
+
+Respond with:
+
+Confirmation that DB credentials are now embedded (gagan/gagan)
+
+Code changes summary
+
+Updated execution commands (Linux, Windows, Aggregation)
+
+Explicit statement:
+
+“Phase C execution is now credential-safe, OS-correct, fail-fast, and GA-reliable.”
+
+Promt End
+
+

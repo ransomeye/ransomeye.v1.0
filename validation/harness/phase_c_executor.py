@@ -71,18 +71,99 @@ class PhaseCExecutor:
         if self.execution_mode not in ['linux', 'windows']:
             raise ValueError(f"Invalid execution mode: {execution_mode}. Must be 'linux' or 'windows'")
         
-        # Test execution results
+        # Test execution results (always initialize safely)
         self.results: Dict[str, Any] = {
             "execution_start": datetime.now(timezone.utc).isoformat(),
             "execution_end": None,
             "execution_mode": self.execution_mode,
             "platform": platform.system(),
             "platform_release": platform.release(),
-            "tracks": {}
+            "tracks": {},
+            "verdict": {
+                "execution_mode": self.execution_mode,
+                "total_tests": 0,
+                "passed_tests": 0,
+                "failed_tests": 0,
+                "skipped_tests": 0,
+                "all_tracks_passed": False,
+                "mode_ready": False,
+                "verdict": "UNKNOWN",
+                "verdict_timestamp": None
+            }
         }
         
         # Evidence artifacts
         self.artifacts: List[str] = []
+        
+        # Track execution state
+        self.tracks_executed = False
+        
+        # Enforce OS execution boundaries
+        self._enforce_os_boundaries()
+        
+        # Startup DB connectivity assertion (HARD GATE)
+        self._assert_db_connectivity()
+    
+    def _enforce_os_boundaries(self):
+        """
+        Enforce OS execution boundaries.
+        
+        Linux refuses --mode windows
+        Windows refuses Linux tracks
+        Clear fatal errors when violated
+        """
+        current_os = platform.system().lower()
+        
+        if current_os == 'linux' and self.execution_mode == 'windows':
+            error_msg = (
+                "FATAL: Cannot run Phase C-W (Windows mode) on Linux host.\n"
+                "Windows Agent validation must be run on native Windows host.\n"
+                "Use --mode linux or omit --mode to auto-detect."
+            )
+            print(f"❌ {error_msg}", file=sys.stderr)
+            sys.exit(1)
+        
+        if current_os == 'windows' and self.execution_mode == 'linux':
+            error_msg = (
+                "FATAL: Cannot run Phase C-L (Linux mode) on Windows host.\n"
+                "Linux tracks must be run on Linux host.\n"
+                "Use --mode windows or omit --mode to auto-detect."
+            )
+            print(f"❌ {error_msg}", file=sys.stderr)
+            sys.exit(1)
+    
+    def _assert_db_connectivity(self):
+        """
+        Startup DB connectivity assertion (HARD GATE).
+        
+        If DB connection fails → immediate fatal exit
+        No tracks execute
+        No partial verdict
+        Clear error message required
+        """
+        try:
+            conn = self.get_db_connection()
+            cur = conn.cursor()
+            cur.execute("SELECT 1")
+            cur.fetchone()
+            cur.close()
+            conn.close()
+        except Exception as e:
+            error_msg = (
+                f"FATAL: Database connectivity check failed.\n"
+                f"Phase C validation requires database connection.\n"
+                f"Error: {e}\n"
+                f"\n"
+                f"Default credentials: gagan / gagan\n"
+                f"Override with environment variables:\n"
+                f"  RANSOMEYE_DB_HOST (default: localhost)\n"
+                f"  RANSOMEYE_DB_PORT (default: 5432)\n"
+                f"  RANSOMEYE_DB_NAME (default: ransomeye)\n"
+                f"  RANSOMEYE_DB_USER (default: gagan)\n"
+                f"  RANSOMEYE_DB_PASSWORD (default: gagan)"
+            )
+            print(f"❌ {error_msg}", file=sys.stderr)
+            sys.exit(1)
     
     def _detect_execution_mode(self) -> str:
         """
@@ -172,6 +253,7 @@ class PhaseCExecutor:
         try:
             track_results = track_executor(self)
             track_results["status"] = TestStatus.PASSED.value if track_results.get("all_passed", False) else TestStatus.FAILED.value
+            self.tracks_executed = True
         except Exception as e:
             track_results = {
                 "status": TestStatus.FAILED.value,
@@ -181,6 +263,8 @@ class PhaseCExecutor:
             print(f"ERROR in {track_name}: {e}")
             import traceback
             traceback.print_exc()
+            # Mark that tracks were attempted (even if failed)
+            self.tracks_executed = True
         
         track_results["execution_time_seconds"] = time.time() - track_start
         track_results["execution_timestamp"] = datetime.now(timezone.utc).isoformat()
@@ -196,9 +280,20 @@ class PhaseCExecutor:
         Note: Final GA verdict requires both Phase C-L and Phase C-W results.
         Use aggregate_ga_verdict() to compute final GA status.
         
+        Abort immediately if tracks didn't execute (DB failure or other fatal error).
+        
         Returns:
             Verdict dictionary for this execution mode
         """
+        # Abort if tracks didn't execute (DB failure or fatal error)
+        if not self.tracks_executed:
+            error_msg = (
+                "FATAL: No tracks executed. Cannot compute verdict.\n"
+                "This indicates a fatal error during execution (e.g., DB connectivity failure)."
+            )
+            print(f"❌ {error_msg}", file=sys.stderr)
+            sys.exit(1)
+        
         self.results["execution_end"] = datetime.now(timezone.utc).isoformat()
         
         # Count test results
@@ -413,6 +508,9 @@ class PhaseCExecutor:
         
         Phase C-L (Linux): Tracks 1-5 + Track 6-A (Linux Agent)
         Phase C-W (Windows): Track 6-B (Windows Agent/ETW)
+        
+        Abort immediately on DB failure (already checked in __init__).
+        Never compute verdict if tracks didn't execute.
         """
         print("="*80)
         if self.execution_mode == 'linux':
@@ -426,12 +524,22 @@ class PhaseCExecutor:
         print(f"Output directory: {self.output_dir}")
         print()
         
-        if self.execution_mode == 'linux':
-            self._run_linux_tracks()
-        else:
-            self._run_windows_tracks()
+        try:
+            if self.execution_mode == 'linux':
+                self._run_linux_tracks()
+            else:
+                self._run_windows_tracks()
+        except Exception as e:
+            # Fatal error during track execution
+            error_msg = (
+                f"FATAL: Track execution failed.\n"
+                f"Error: {e}\n"
+                f"No verdict computed. Phase C execution aborted."
+            )
+            print(f"❌ {error_msg}", file=sys.stderr)
+            sys.exit(1)
         
-        # Generate final report
+        # Generate final report (aborts if tracks didn't execute)
         verdict = self.generate_final_report()
         
         # Print final verdict
@@ -465,6 +573,12 @@ class PhaseCExecutor:
     
     def _run_linux_tracks(self):
         """Execute Phase C-L tracks (1-5 + Track 6-A)."""
+        # Enforce: Windows tracks cannot run on Linux
+        if self.execution_mode != 'linux':
+            error_msg = "FATAL: Linux tracks can only run on Linux host."
+            print(f"❌ {error_msg}", file=sys.stderr)
+            sys.exit(1)
+        
         # Import track executors
         from validation.harness.track_1_determinism import execute_track_1_determinism
         from validation.harness.track_2_replay import execute_track_2_replay
@@ -483,6 +597,12 @@ class PhaseCExecutor:
     
     def _run_windows_tracks(self):
         """Execute Phase C-W tracks (Track 6-B only)."""
+        # Enforce: Linux tracks cannot run on Windows
+        if self.execution_mode != 'windows':
+            error_msg = "FATAL: Windows tracks can only run on Windows host."
+            print(f"❌ {error_msg}", file=sys.stderr)
+            sys.exit(1)
+        
         from validation.harness.track_6_agent_windows import execute_track_6_agent_windows
         
         # Execute only Track 6-B

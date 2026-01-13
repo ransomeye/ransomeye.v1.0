@@ -12,13 +12,32 @@ Rules:
 - No partial or provisional GA allowed
 """
 
+#!/usr/bin/env python3
+"""
+RansomEye v1.0 Phase C - GA Verdict Aggregator
+AUTHORITATIVE: Aggregates Phase C-L and Phase C-W results into final GA verdict
+
+GA_READY = phase_c_linux_results.PASS == true AND phase_c_windows_results.PASS == true
+
+Rules:
+- Any skipped mandatory test = FAIL
+- FAIL-006 cannot be skipped
+- AGENT-002 cannot be skipped
+- No partial or provisional GA allowed
+
+CRITICAL: Aggregator reads result JSONs only. No imports from executor.
+"""
+
 import json
 import sys
 from pathlib import Path
 from datetime import datetime, timezone
 from typing import Dict, Any
 
-from validation.harness.phase_c_executor import PhaseCExecutor, TestStatus
+# Test status values (string constants, no import needed)
+TEST_STATUS_PASSED = "passed"
+TEST_STATUS_FAILED = "failed"
+TEST_STATUS_SKIPPED = "skipped"
 
 
 def aggregate_ga_verdict(linux_results_path: str, windows_results_path: str) -> Dict[str, Any]:
@@ -68,7 +87,7 @@ def aggregate_ga_verdict(linux_results_path: str, windows_results_path: str) -> 
         fail_tests = linux_tracks["TRACK_3_FAILURE_INJECTION"].get("tests", {})
         if "FAIL-006" in fail_tests:
             fail_006_status = fail_tests["FAIL-006"].get("status")
-            if fail_006_status == TestStatus.SKIPPED.value:
+            if fail_006_status == TEST_STATUS_SKIPPED:
                 fail_006_skipped = True
     
     # Check AGENT-002 was not in Linux results (should be skipped there)
@@ -77,7 +96,7 @@ def aggregate_ga_verdict(linux_results_path: str, windows_results_path: str) -> 
         agent_tests = linux_tracks["TRACK_6_AGENT_LINUX"].get("tests", {})
         if "AGENT-002" in agent_tests:
             agent_002_status = agent_tests["AGENT-002"].get("status")
-            if agent_002_status != TestStatus.SKIPPED.value:
+            if agent_002_status != TEST_STATUS_SKIPPED:
                 agent_002_in_linux = True  # AGENT-002 should not run on Linux
     
     # Check AGENT-002 exists and passed in Windows results
@@ -88,9 +107,9 @@ def aggregate_ga_verdict(linux_results_path: str, windows_results_path: str) -> 
         if "AGENT-002" in agent_tests:
             agent_002_in_windows = True
             agent_002_status = agent_tests["AGENT-002"].get("status")
-            if agent_002_status == TestStatus.SKIPPED.value:
+            if agent_002_status == TEST_STATUS_SKIPPED:
                 windows_pass = False  # AGENT-002 cannot be skipped
-            elif agent_002_status == TestStatus.PASSED.value:
+            elif agent_002_status == TEST_STATUS_PASSED:
                 agent_002_passed = True
     
     # Final GA verdict
