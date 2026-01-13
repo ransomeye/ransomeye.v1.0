@@ -27,6 +27,12 @@ export HOME="$HOME"
 # Ensure git credential helper is configured
 git config credential.helper store
 
+# Configure git for better timeout handling and large file support
+git config http.postBuffer 524288000  # 500MB buffer
+git config http.timeout 300  # 5 minute timeout
+git config http.lowSpeedLimit 1000
+git config http.lowSpeedTime 300
+
 # Function to log messages
 log() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >> "$LOG_FILE"
