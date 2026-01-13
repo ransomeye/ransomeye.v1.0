@@ -12438,5 +12438,185 @@ End with:
 
 
 
+Promot Start
+
+You are Cursor, acting as the Implementation Engineer for
+Phase B — Advanced Forensic & Behavior Summarization.
+
+AUTHORITATIVE CONTEXT
+
+Data plane is hardened and frozen.
+
+Phase B design is APPROVED AND FROZEN.
+
+This is POST-INCIDENT ONLY.
+
+This is NOT ML / NOT LLM.
+
+Output must be deterministic, replayable, evidence-linked.
+
+Summaries are accessed via Core UI, not CLI in production.
+
+OBJECTIVE
+
+Implement the forensic summarization engine exactly as designed.
+
+IMPLEMENT IN THIS ORDER (MANDATORY)
+STEP 1 — BEHAVIORAL CHAIN BUILDER
+
+File:
+
+engine/behavioral_chain_builder.py
+
+
+Implement:
+
+Process lineage reconstruction using (pid, start_time)
+
+File modification chains
+
+Persistence establishment chains
+
+Network intent progression
+
+Lateral preparation indicators (rule-based thresholds)
+
+Fail if evidence missing → explicitly mark gaps.
+
+STEP 2 — TEMPORAL PHASE DETECTOR
+
+File:
+
+engine/temporal_phase_detector.py
+
+
+Implement:
+
+Deterministic phase detection:
+
+INITIAL_EXECUTION
+
+EXPANSION
+
+PERSISTENCE
+
+EXFILTRATION_PREP
+
+Explicit boundary rules
+
+Null-safe handling for missing phases
+
+No overlap between phases
+
+STEP 3 — EVIDENCE LINKER
+
+File:
+
+engine/evidence_linker.py
+
+
+Implement:
+
+Claim-to-evidence binding
+
+Reject claims without evidence
+
+Evidence reference format:
+
+event_id
+
+table
+
+observed_at
+
+No exceptions.
+
+STEP 4 — SUMMARY GENERATOR (NON-LLM)
+
+File:
+
+engine/summary_generator.py
+
+
+Implement:
+
+Template-based text generation
+
+Fixed section ordering
+
+No adjectives
+
+No inference language
+
+No mitigation advice
+
+Deterministic formatting
+
+STEP 5 — API INTEGRATION
+
+File:
+
+api/summarization_api.py
+
+
+Implement:
+
+Summary generation endpoint
+
+JSON output
+
+Text output
+
+Graph metadata output
+
+Read-only DB access via views only
+
+STEP 6 — CLI (TEST / AUDIT ONLY)
+
+File:
+
+cli/generate_summary.py
+
+
+Purpose:
+
+Dev/test/audit use only
+
+Not user-facing in production
+
+HARD RULES
+
+No ML
+
+No LLM
+
+No probabilities
+
+No heuristics beyond defined rules
+
+No policy logic
+
+No enforcement
+
+No DB writes except summary tables
+
+DELIVERABLE
+
+Respond with:
+
+Updated directory tree
+
+Key function signatures
+
+Example summary outputs (JSON + text)
+
+Explicit list of remaining limitations (if any)
+
+End with:
+
+“Phase B forensic summarization implemented. Ready for Phase C.”
+
+Promt End
+
 
 
