@@ -1,0 +1,87 @@
+Promot Start
+
+You are now acting as PostgreSQL Environment Diagnostics Engineer.
+
+Your task is to make the database bootstrap validator fully self-explanatory on Linux systems, without weakening security or auto-fixing anything.
+
+This is the final diagnostic enhancement.
+
+REQUIRED CHANGE (ONLY THIS)
+Enhance PEER / pg_hba Failure Messaging
+
+When verify_db_bootstrap() detects:
+
+CASE 2 (peer authentication)
+
+CASE 6 (pg_hba blocks password auth)
+
+Do the following:
+
+1. Detect pg_hba.conf Location (Read-Only)
+
+Attempt (in order):
+
+Run:
+
+SHOW hba_file;
+
+
+If unavailable, fall back to known defaults:
+
+/etc/postgresql/*/main/pg_hba.conf
+
+/var/lib/pgsql/data/pg_hba.conf
+
+Do NOT read or modify the file.
+Path detection only.
+
+2. Emit OS-Aware Diagnostic Message
+
+For PEER auth, error output must include:
+
+❌ FATAL: PostgreSQL is using PEER authentication.
+
+Password-based login for role 'gagan' is ignored.
+
+Detected authentication method: peer
+Detected pg_hba.conf location:
+  /etc/postgresql/XX/main/pg_hba.conf
+
+On Ubuntu/Debian, PostgreSQL defaults to PEER auth for local sockets.
+
+To allow password authentication, update pg_hba.conf and change:
+
+  local   all   gagan   peer
+
+to:
+
+  local   all   gagan   md5
+
+Then restart PostgreSQL.
+
+Phase C cannot continue.
+
+3. Do NOT Change Anything Else
+
+❌ No auto-edit
+❌ No restart
+❌ No privilege escalation
+❌ No fallback auth
+
+Diagnostics only.
+
+ACCEPTANCE CRITERIA
+
+After this change:
+
+An operator can fix PostgreSQL without asking you
+
+Zero ambiguity remains
+
+Phase C remains fail-fast and security-correct
+
+This is the final Phase C infrastructure fix
+
+Implement now.
+
+Promt End

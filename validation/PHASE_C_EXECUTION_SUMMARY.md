@@ -287,6 +287,220 @@ The framework will:
 3. Generate final GA verdict
 4. Save all results to `validation/reports/phase_c/`
 
+## COMMON POSTGRESQL BOOTSTRAP FAILURES (LINUX)
+
+Phase C's database bootstrap validator now provides precise diagnostic messages for all common PostgreSQL authentication and configuration failures. This section explains each failure mode and why Phase C refuses to proceed.
+
+### CASE 1: Role Does Not Exist
+
+**Error Message:**
+```
+❌ FATAL: PostgreSQL role 'gagan' does not exist.
+
+Phase C requires:
+  CREATE ROLE gagan LOGIN PASSWORD 'gagan';
+
+Phase C cannot continue.
+```
+
+**Explanation:**
+The PostgreSQL role (user) has not been created. Phase C cannot proceed because it requires a specific role with LOGIN privilege.
+
+**Fix:**
+Run as postgres superuser:
+```sql
+CREATE ROLE gagan LOGIN PASSWORD 'gagan';
+```
+
+### CASE 2: Peer Authentication (Password Ignored)
+
+**Error Message:**
+```
+❌ FATAL: PostgreSQL is using PEER authentication.
+
+Password-based login for role 'gagan' is not allowed.
+
+Fix by editing pg_hba.conf and setting:
+
+  local   all   gagan   md5
+
+Then restart PostgreSQL.
+
+Phase C cannot continue.
+```
+
+**Explanation:**
+PostgreSQL's `pg_hba.conf` is configured to use PEER authentication for local connections. PEER authentication uses the operating system username instead of a password, which means:
+- The password you provide is **ignored**
+- PostgreSQL tries to match the OS user with the database role
+- If the OS user doesn't match the role name, authentication fails
+
+**Why Phase C Refuses to Proceed:**
+Phase C requires password-based authentication (md5 or scram-sha-256) for consistency and security. PEER authentication is environment-dependent and cannot be verified with the standard credentials.
+
+**Fix:**
+1. Edit `/etc/postgresql/*/main/pg_hba.conf` (or your PostgreSQL config directory)
+2. Find the line for local connections (usually `local all all peer`)
+3. Add or modify to:
+   ```
+   local   all   gagan   md5
+   ```
+4. Restart PostgreSQL: `sudo systemctl restart postgresql`
+
+### CASE 3: Wrong Password
+
+**Error Message:**
+```
+❌ FATAL: PostgreSQL password mismatch for role 'gagan'.
+
+The role exists, but the password is NOT 'gagan'.
+
+Fix by running:
+
+  ALTER ROLE gagan PASSWORD 'gagan';
+
+Phase C cannot continue.
+```
+
+**Explanation:**
+The role exists, but the password stored in PostgreSQL does not match the expected password ('gagan'). This can happen if:
+- The role was created with a different password
+- The password was changed after creation
+- The role was created without a password
+
+**Fix:**
+Run as postgres superuser:
+```sql
+ALTER ROLE gagan PASSWORD 'gagan';
+```
+
+### CASE 4: Database Does Not Exist
+
+**Error Message:**
+```
+❌ FATAL: Database 'ransomeye' does not exist.
+
+Fix by running:
+
+  CREATE DATABASE ransomeye OWNER gagan;
+
+Phase C cannot continue.
+```
+
+**Explanation:**
+The database has not been created. Even if the role exists and authentication works, Phase C cannot proceed without the target database.
+
+**Fix:**
+Run as postgres superuser:
+```sql
+CREATE DATABASE ransomeye OWNER gagan;
+```
+
+### CASE 5: Database Exists But Wrong Owner
+
+**Error Message:**
+```
+❌ FATAL: Database 'ransomeye' is not owned by role 'gagan'.
+
+Fix by running:
+
+  ALTER DATABASE ransomeye OWNER TO gagan;
+
+Phase C cannot continue.
+```
+
+**Explanation:**
+The database exists but is owned by a different role. Phase C requires the database to be owned by the role it uses for connections to ensure proper permissions.
+
+**Fix:**
+Run as postgres superuser:
+```sql
+ALTER DATABASE ransomeye OWNER TO gagan;
+```
+
+### CASE 6: pg_hba.conf Blocks Password Authentication
+
+**Error Message:**
+```
+❌ FATAL: pg_hba.conf blocks password authentication.
+
+Ensure an entry exists like:
+
+  local   all   gagan   md5
+
+Phase C cannot continue.
+```
+
+**Explanation:**
+PostgreSQL's `pg_hba.conf` does not have an entry that allows password-based authentication for the role. This can happen if:
+- No entry exists for the role
+- All entries use `peer`, `trust`, or other non-password methods
+- The entry is misconfigured
+
+**Why Phase C Refuses to Proceed:**
+Phase C requires password-based authentication for security and consistency. Without a proper `pg_hba.conf` entry, password authentication cannot work.
+
+**Fix:**
+1. Edit `/etc/postgresql/*/main/pg_hba.conf`
+2. Ensure an entry exists like:
+   ```
+   local   all   gagan   md5
+   ```
+   Or for TCP connections:
+   ```
+   host    all   gagan   127.0.0.1/32   md5
+   ```
+3. Restart PostgreSQL: `sudo systemctl restart postgresql`
+
+### Why Phase C Fails Fast
+
+Phase C intentionally **fails fast** on database bootstrap issues because:
+
+1. **No Auto-Fix**: Phase C does not automatically create users, databases, or modify `pg_hba.conf`. This is intentional to prevent:
+   - Accidental privilege escalation
+   - Unauthorized database modifications
+   - Security configuration changes
+
+2. **Explicit Requirements**: Phase C requires explicit, correct database bootstrap. This ensures:
+   - The environment is correctly configured
+   - Security policies are properly set
+   - The operator understands the database setup
+
+3. **Clear Diagnostics**: Each failure mode provides:
+   - Exact error identification
+   - Specific fix instructions
+   - No guessing or trial-and-error
+
+4. **Security**: Failing fast prevents:
+   - Partial execution with incorrect permissions
+   - Silent security misconfigurations
+   - Unauthorized access attempts
+
+### Complete Bootstrap Sequence
+
+To properly bootstrap PostgreSQL for Phase C, run these commands **once** as the postgres superuser:
+
+```sql
+-- Create the role
+CREATE ROLE gagan LOGIN PASSWORD 'gagan';
+
+-- Create the database
+CREATE DATABASE ransomeye OWNER gagan;
+
+-- Grant privileges (optional, but recommended)
+GRANT ALL PRIVILEGES ON DATABASE ransomeye TO gagan;
+```
+
+And ensure `pg_hba.conf` contains:
+```
+local   all   gagan   md5
+```
+
+Then restart PostgreSQL:
+```bash
+sudo systemctl restart postgresql
+```
+
 ## Status
 
 **Framework Status**: ✅ Created and ready for execution
