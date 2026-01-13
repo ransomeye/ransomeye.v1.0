@@ -4,7 +4,7 @@
 
 ## Overview
 
-This document summarizes the Phase C validation test execution framework that has been created to execute all 34 tests across 6 validation tracks as defined in `GA_VALIDATION_PLAN_CORRECTED.md`.
+This document summarizes the Phase C validation test execution framework that has been created to execute all 35 tests across 6 validation tracks as defined in `GA_VALIDATION_PLAN_CORRECTED.md`.
 
 ## Framework Structure
 
@@ -25,12 +25,13 @@ This document summarizes the Phase C validation test execution framework that ha
 
 ## Test Coverage
 
-### TRACK 1: Determinism (5 tests)
+### TRACK 1: Determinism (6 tests)
 - DET-001: Detection Determinism (bit-exact hash comparison)
 - DET-002: Normalization Determinism (bit-exact hash comparison)
 - DET-003: Correlation Determinism (bit-exact hash comparison)
 - DET-004: Forensic Summarization Determinism (bit-exact hash comparison)
 - DET-005: LLM Semantic Determinism (schema + semantic equivalence)
+- DET-006: Identity Disambiguation Determinism (bit-exact hash comparison)
 
 ### TRACK 2: Replay & Rehydration (10 tests)
 - REP-A-001 to REP-A-005: Identity Replay (bit-exact)
@@ -63,7 +64,7 @@ This document summarizes the Phase C validation test execution framework that ha
 - AGENT-001: Linux Real Agent vs Simulator
 - AGENT-002: Windows Real Agent vs Simulator
 
-**Total: 34 tests**
+**Total: 35 tests**
 
 ## Execution Requirements
 
@@ -139,7 +140,7 @@ All evidence artifacts are saved to `validation/reports/phase_c/`:
 
 ## Pass/Fail Criteria
 
-### Non-LLM Paths (DET-001 to DET-004, REP-A)
+### Non-LLM Paths (DET-001 to DET-004, DET-006, REP-A)
 - **PASS**: All hashes match exactly (100% match rate, 0% tolerance)
 - **FAIL**: Any hash mismatch
 
@@ -167,7 +168,7 @@ All evidence artifacts are saved to `validation/reports/phase_c/`:
 
 The framework generates a final GA verdict based on:
 
-1. **All 34 tests must PASS**
+1. **All 35 tests must PASS**
 2. **All evidence artifacts must be generated**
 3. **No critical failures**
 4. **All security requirements met**
@@ -186,7 +187,7 @@ The framework will output one of:
 
 The framework has been created with:
 
-1. ✅ Complete test structure for all 34 tests
+1. ✅ Complete test structure for all 35 tests
 2. ✅ Evidence artifact collection
 3. ✅ Pass/fail logic implementation
 4. ✅ Final GA verdict generation
@@ -254,7 +255,7 @@ The framework will:
 
 **Integration Status**: ⚠️ Requires service integration for full execution
 
-**Test Coverage**: ✅ All 34 tests defined and structured
+**Test Coverage**: ✅ All 35 tests defined and structured
 
 **Evidence Collection**: ✅ All artifact formats defined
 

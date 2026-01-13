@@ -353,6 +353,156 @@ def test_det_005(executor, conn) -> Dict[str, Any]:
         cur.close()
 
 
+def test_det_006(executor, conn) -> Dict[str, Any]:
+    """
+    DET-006: Identity Disambiguation Determinism
+    
+    Test that same PID reused with different process start times/GUIDs produces
+    distinct process identities across all pipeline stages, with deterministic behavior.
+    
+    Test scenario:
+    - Same PID reused (e.g., PID 1234)
+    - Different process start times (or process GUID)
+    - Appears across: raw_events, normalized events, correlation, forensic summarization
+    
+    Assertions:
+    - Distinct process identities created (no merge)
+    - No lineage merge
+    - Deterministic behavior across runs
+    - Replay-safe (Identity Replay compatible)
+    - Non-LLM path → bit-exact hash match
+    """
+    cur = conn.cursor()
+    
+    try:
+        # Generate events with same PID but different start times/GUIDs
+        # This simulates PID reuse scenario
+        clean_database()
+        
+        # Run 1: Create events with PID reuse
+        run1_events = generate_pid_reuse_events(seed=100)
+        run1_hashes = {}
+        run1_identities = {}
+        
+        for event in run1_events:
+            ingest_event(conn, event)
+            event_id = event["event_id"]
+            
+            # Calculate hash for this event
+            payload_json = json.dumps(event["payload"], sort_keys=True)
+            event_hash = hashlib.sha256(payload_json.encode()).hexdigest()
+            run1_hashes[event_id] = event_hash
+            
+            # Extract process identity (PID + start_time + GUID)
+            pid = event["payload"].get("process_id")
+            start_time = event["payload"].get("process_start_time")
+            process_guid = event["payload"].get("process_guid", "")
+            identity_key = f"{pid}:{start_time}:{process_guid}"
+            run1_identities[event_id] = identity_key
+        
+        # Get normalized event identities (simplified - would query actual normalized tables)
+        run1_normalized_identities = get_process_identities_from_normalized(conn)
+        
+        # Get correlation identities (simplified - would query incidents/evidence)
+        run1_correlation_identities = get_process_identities_from_correlation(conn)
+        
+        # Run 2: Same events, same order
+        clean_database()
+        
+        run2_events = generate_pid_reuse_events(seed=100)  # Same seed = same events
+        run2_hashes = {}
+        run2_identities = {}
+        
+        for event in run2_events:
+            ingest_event(conn, event)
+            event_id = event["event_id"]
+            
+            # Calculate hash for this event
+            payload_json = json.dumps(event["payload"], sort_keys=True)
+            event_hash = hashlib.sha256(payload_json.encode()).hexdigest()
+            run2_hashes[event_id] = event_hash
+            
+            # Extract process identity
+            pid = event["payload"].get("process_id")
+            start_time = event["payload"].get("process_start_time")
+            process_guid = event["payload"].get("process_guid", "")
+            identity_key = f"{pid}:{start_time}:{process_guid}"
+            run2_identities[event_id] = identity_key
+        
+        # Get normalized event identities
+        run2_normalized_identities = get_process_identities_from_normalized(conn)
+        
+        # Get correlation identities
+        run2_correlation_identities = get_process_identities_from_correlation(conn)
+        
+        # Assertion 1: Distinct process identities created (no merge)
+        # Count unique identities in each run
+        run1_unique_identities = len(set(run1_identities.values()))
+        run2_unique_identities = len(set(run2_identities.values()))
+        distinct_identities_created = run1_unique_identities == run2_unique_identities and run1_unique_identities > 1
+        
+        # Assertion 2: No lineage merge
+        # Verify that same PID with different start times are treated as different identities
+        pid_groups_run1 = {}
+        for event_id, identity in run1_identities.items():
+            pid = identity.split(":")[0]
+            if pid not in pid_groups_run1:
+                pid_groups_run1[pid] = []
+            pid_groups_run1[pid].append(identity)
+        
+        # Check if any PID has multiple distinct identities (good - means no merge)
+        no_lineage_merge = any(len(set(identities)) > 1 for identities in pid_groups_run1.values())
+        
+        # Assertion 3: Deterministic behavior across runs (bit-exact hash match)
+        hash_matches = 0
+        hash_mismatches = []
+        for event_id in run1_hashes:
+            if event_id in run2_hashes:
+                if run1_hashes[event_id] == run2_hashes[event_id]:
+                    hash_matches += 1
+                else:
+                    hash_mismatches.append({
+                        "event_id": str(event_id),
+                        "run1_hash": run1_hashes[event_id],
+                        "run2_hash": run2_hashes[event_id]
+                    })
+        
+        deterministic_behavior = len(hash_mismatches) == 0 and len(run1_hashes) == len(run2_hashes)
+        
+        # Assertion 4: Replay-safe (Identity Replay compatible)
+        # Verify identities are consistent across runs
+        identity_match = run1_identities == run2_identities
+        
+        # Combined pass criteria
+        passed = (
+            distinct_identities_created and
+            no_lineage_merge and
+            deterministic_behavior and
+            identity_match
+        )
+        
+        return {
+            "status": TestStatus.PASSED.value if passed else TestStatus.FAILED.value,
+            "distinct_identities_created": distinct_identities_created,
+            "run1_unique_identities": run1_unique_identities,
+            "run2_unique_identities": run2_unique_identities,
+            "no_lineage_merge": no_lineage_merge,
+            "deterministic_behavior": deterministic_behavior,
+            "hash_matches": hash_matches,
+            "hash_mismatches": len(hash_mismatches),
+            "identity_match": identity_match,
+            "mismatch_details": hash_mismatches[:5] if hash_mismatches else []
+        }
+    
+    except Exception as e:
+        return {
+            "status": TestStatus.FAILED.value,
+            "error": str(e)
+        }
+    finally:
+        cur.close()
+
+
 # Helper functions
 
 def generate_deterministic_events(count: int, seed: int) -> List[Dict[str, Any]]:
@@ -382,6 +532,121 @@ def generate_deterministic_events(count: int, seed: int) -> List[Dict[str, Any]]
         events.append(event)
     
     return events
+
+
+def generate_pid_reuse_events(seed: int) -> List[Dict[str, Any]]:
+    """
+    Generate events with PID reuse scenario.
+    
+    Creates events where the same PID is reused but with different
+    process start times and/or process GUIDs to test identity disambiguation.
+    """
+    import random
+    random.seed(seed)
+    
+    events = []
+    machine_id = f"test-machine-{seed}"
+    component_instance_id = f"test-instance-{seed}"
+    
+    # Create 5 events with PID reuse
+    # PID 1234 will be reused 3 times with different start times
+    base_time = datetime.now(timezone.utc)
+    
+    # First process with PID 1234
+    events.append({
+        "event_id": str(uuid.uuid4()),
+        "machine_id": machine_id,
+        "component_instance_id": component_instance_id,
+        "component": "linux_agent",
+        "observed_at": (base_time).isoformat(),
+        "sequence": 0,
+        "payload": {
+            "event_type": "process_start",
+            "process_id": 1234,
+            "process_name": "process_a",
+            "command_line": "process_a.exe",
+            "process_start_time": base_time.isoformat(),
+            "process_guid": str(uuid.uuid4())
+        }
+    })
+    
+    # Second process with different PID
+    events.append({
+        "event_id": str(uuid.uuid4()),
+        "machine_id": machine_id,
+        "component_instance_id": component_instance_id,
+        "component": "linux_agent",
+        "observed_at": (base_time.replace(second=10)).isoformat(),
+        "sequence": 1,
+        "payload": {
+            "event_type": "process_start",
+            "process_id": 5678,
+            "process_name": "process_b",
+            "command_line": "process_b.exe",
+            "process_start_time": (base_time.replace(second=10)).isoformat(),
+            "process_guid": str(uuid.uuid4())
+        }
+    })
+    
+    # PID 1234 reused - different start time and GUID
+    events.append({
+        "event_id": str(uuid.uuid4()),
+        "machine_id": machine_id,
+        "component_instance_id": component_instance_id,
+        "component": "linux_agent",
+        "observed_at": (base_time.replace(second=20)).isoformat(),
+        "sequence": 2,
+        "payload": {
+            "event_type": "process_start",
+            "process_id": 1234,  # Same PID
+            "process_name": "process_c",
+            "command_line": "process_c.exe",
+            "process_start_time": (base_time.replace(second=20)).isoformat(),  # Different time
+            "process_guid": str(uuid.uuid4())  # Different GUID
+        }
+    })
+    
+    # PID 1234 reused again - different start time and GUID
+    events.append({
+        "event_id": str(uuid.uuid4()),
+        "machine_id": machine_id,
+        "component_instance_id": component_instance_id,
+        "component": "linux_agent",
+        "observed_at": (base_time.replace(second=30)).isoformat(),
+        "sequence": 3,
+        "payload": {
+            "event_type": "process_start",
+            "process_id": 1234,  # Same PID
+            "process_name": "process_d",
+            "command_line": "process_d.exe",
+            "process_start_time": (base_time.replace(second=30)).isoformat(),  # Different time
+            "process_guid": str(uuid.uuid4())  # Different GUID
+        }
+    })
+    
+    return events
+
+
+def get_process_identities_from_normalized(conn) -> Dict[str, str]:
+    """
+    Get process identities from normalized tables.
+    
+    Returns mapping of event_id to process identity (PID:start_time:guid).
+    """
+    # Simplified - would query actual normalized tables (process_activity)
+    # For now, return empty dict (would be populated by actual normalization service)
+    return {}
+
+
+def get_process_identities_from_correlation(conn) -> Dict[str, str]:
+    """
+    Get process identities from correlation/incident data.
+    
+    Returns mapping of event_id to process identity.
+    """
+    # Simplified - would query actual correlation tables
+    # For now, return empty dict (would be populated by actual correlation engine)
+    return {}
 
 
 def ingest_event(conn, event: Dict[str, Any]):

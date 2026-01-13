@@ -12890,6 +12890,113 @@ End with:
 Promt End
 
 
+
+
+Promot Start
+
+You are Cursor, acting as the Execution Engineer for
+Phase C — Global GA Validation (Final Execution).
+
+AUTHORITATIVE CONTEXT
+
+Phase C validation plan is APPROVED AND FROZEN
+
+All required fixes have been incorporated:
+
+DET-006 (PID reuse / identity disambiguation)
+
+Functional Parity (action-based agent testing)
+
+Identity Replay vs Evolution Replay
+
+Backwards Compatibility (superset validation)
+
+Realistic latency targets
+
+Disk I/O metrics included
+
+This phase determines the final GA decision
+
+OBJECTIVE
+
+Execute the approved Phase C validation plan and produce verifiable evidence artifacts.
+
+EXECUTION REQUIREMENTS (MANDATORY)
+1. RUN ALL TRACKS
+
+Execute all 34 tests across 6 tracks exactly as defined:
+
+Determinism (DET-001 → DET-006)
+
+Replay (REP-A + REP-B)
+
+Failure Injection
+
+Scale & Stress (with I/O metrics)
+
+Security & Safety
+
+Agent Reality Check (Functional Parity)
+
+2. COLLECT EVIDENCE ARTIFACTS
+
+For each track, produce:
+
+JSON logs (machine-readable)
+
+Markdown reports (human-readable)
+
+Hash/signature verification where applicable
+
+Artifacts must be immutable once generated.
+
+3. APPLY CORRECT PASS/FAIL LOGIC
+
+Non-LLM paths → bit-exact hashes
+
+LLM paths → schema + backwards-compatible superset validation
+
+Replay:
+
+REP-A → bit-exact
+
+REP-B → backwards compatibility
+
+Scale:
+
+p50 < 1s
+
+p95 < 3s
+
+p99 < 5s
+
+Any critical failure → GA blocked
+
+DELIVERABLE
+
+Respond with:
+
+Test execution summary
+
+Pass/Fail status per track
+
+Collected metrics (including Disk I/O wait & queue depth)
+
+Evidence artifact list
+
+Final GA verdict
+
+End with one of the following (no ambiguity):
+
+“Phase C validation PASSED. RansomEye is GA-READY.”
+
+OR
+
+“Phase C validation FAILED. GA is BLOCKED.”
+
+*****Promt End *****
+
+
 Promot Start
 
 You are Cursor, acting as the Validation Engineer for
@@ -12970,3 +13077,6 @@ End with:
 “DET-006 implemented. Phase C execution unblocked.”
 
 Promt End
+
+
+
