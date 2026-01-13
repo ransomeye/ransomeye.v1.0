@@ -27,13 +27,13 @@ lora:
 # Training Hyperparameters
 training:
   output_dir: "./models"
-  num_train_epochs: 2  # Reduced for CPU training
+  num_train_epochs: 1  # Single epoch for quick training
   per_device_train_batch_size: 1  # Reduced for CPU memory
   gradient_accumulation_steps: 8  # Increased to maintain effective batch size
   learning_rate: 2.0e-4
   warmup_steps: 50  # Reduced for smaller dataset
   max_steps: -1  # -1 means use num_train_epochs
-  max_length: 512  # Further reduced for memory (was 1024)
+  max_length: 256  # Small sequences for quick training
   temperature: 0.0  # Deterministic
   top_p: 1.0
   logging_steps: 10
@@ -66,10 +66,10 @@ gpu:
 
 # Data Configuration
 data:
-  train_file: "./data/processed/train_expanded.jsonl"
+  train_file: "./data/processed/train_small.jsonl"  # Small dataset for quick training
   validation_file: "./data/processed/validation.jsonl"
   test_file: "./data/processed/test.jsonl"
-  max_samples: 1000  # Limit to 1000 samples for memory (can increase if needed)
+  max_samples: 200  # Small dataset for quick training (1 hour sessions)
 
 # Evaluation
 evaluation:

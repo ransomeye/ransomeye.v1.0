@@ -21,8 +21,8 @@ class TrainingSessionManager:
     def __init__(self, session_file: Path):
         self.session_file = Path(session_file)
         self.session_file.parent.mkdir(parents=True, exist_ok=True)
-        self.max_session_hours = 5.0
-        self.max_daily_hours = 5.0
+        self.max_session_hours = 1.0  # 1 hour per session
+        self.max_daily_hours = 5.0  # Still 5 hours per day max
     
     def load_data(self) -> Dict[str, Any]:
         """Load session data."""
