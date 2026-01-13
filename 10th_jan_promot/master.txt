@@ -13303,3 +13303,147 @@ Explicit statement:
 Promt End
 
 
+Promot Start
+
+You are now acting as Database & Validation Bootstrap Engineer for RansomEye.
+
+Your task is to correct the Phase C database assumptions and make database authentication explicit, verifiable, and non-ambiguous.
+
+This is NOT an application logic change — this is infrastructure correctness enforcement.
+
+🚨 CRITICAL REALITY TO ACKNOWLEDGE (DO NOT ARGUE)
+
+Embedding credentials in Python code does NOT:
+
+Create PostgreSQL users
+
+Set passwords
+
+Grant privileges
+
+Fix pg_hba.conf
+
+Create databases
+
+Phase C is failing correctly because PostgreSQL is not bootstrapped correctly.
+
+REQUIRED CHANGES (DO ALL)
+1. Add Explicit DB Credential Verification (Preflight)
+
+In preflight_check():
+
+Detect authentication failure vs connection failure
+
+If authentication fails:
+
+Print EXACT actionable error
+
+Abort Phase C immediately
+
+Example (exact wording required):
+
+❌ FATAL: PostgreSQL authentication failed.
+
+Required POC credentials:
+  user: gagan
+  password: gagan
+  database: ransomeye
+
+This is NOT a code issue.
+PostgreSQL is not bootstrapped correctly.
+
+Fix by running (once, as postgres superuser):
+
+  CREATE ROLE gagan LOGIN PASSWORD 'gagan';
+  CREATE DATABASE ransomeye OWNER gagan;
+  GRANT ALL PRIVILEGES ON DATABASE ransomeye TO gagan;
+
+Phase C cannot continue.
+
+
+⚠️ Do NOT attempt auto-creation from Python.
+That would violate security boundaries.
+
+2. Add DB Bootstrap Validator (Hard Gate)
+
+Create a new helper:
+
+validation/harness/db_bootstrap_validator.py
+
+Responsibilities:
+
+Verify role exists
+
+Verify database exists
+
+Verify ownership
+
+Verify login works using psycopg2
+
+Verify basic SELECT 1
+
+Return a structured failure reason, not just True/False.
+
+3. Update Phase C Documentation (MANDATORY)
+
+In PHASE_C_EXECUTION_SUMMARY.md add a bold section:
+
+DATABASE BOOTSTRAP REQUIREMENT (MANDATORY)
+
+Phase C assumes PostgreSQL is pre-provisioned with:
+
+  User: gagan
+  Password: gagan
+  Database: ransomeye
+  Owner: gagan
+
+Phase C WILL FAIL if this is not true.
+This is intentional and correct.
+
+4. DO NOT CHANGE THESE THINGS
+
+❌ Do NOT:
+
+Remove gagan/gagan defaults
+
+Add fallback passwords
+
+Silence auth failures
+
+Auto-create DB users
+
+Downgrade failure to warning
+
+Failing here is security-correct behavior.
+
+ACCEPTANCE CRITERIA
+
+After your changes:
+
+Phase C failure message must clearly say:
+
+DB is misconfigured
+
+This is not a code bug
+
+No stack traces
+
+No confusion
+
+No retries
+
+No silent fallback
+
+This must be obvious to any auditor, SOC engineer, or SRE.
+
+FINAL NOTE (IMPORTANT)
+
+If Phase C passes without DB bootstrap verification,
+RansomEye is NOT GA-grade.
+
+Fix this once, permanently.
+
+*****Promt End *****
+
+
+

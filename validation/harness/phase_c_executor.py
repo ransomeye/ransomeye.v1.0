@@ -160,50 +160,48 @@ class PhaseCExecutor:
         """
         Startup DB connectivity assertion (HARD GATE).
         
-        If DB connection fails → immediate fatal exit
+        Verifies PostgreSQL is correctly bootstrapped:
+        - Role exists with LOGIN privilege
+        - Database exists and is owned by role
+        - Authentication works
+        - Basic queries work
+        
+        If DB bootstrap verification fails → immediate fatal exit
         No tracks execute
         No partial verdict
-        Clear error message required (no Python tracebacks)
+        Clear, actionable error message (no Python tracebacks)
         """
-        try:
-            conn = self.get_db_connection()
-            cur = conn.cursor()
-            cur.execute("SELECT 1")
-            cur.fetchone()
-            cur.close()
-            conn.close()
-        except psycopg2.OperationalError as e:
-            # Extract clear error message (no traceback)
-            error_detail = str(e).split('\n')[0] if '\n' in str(e) else str(e)
-            error_msg = (
-                f"FATAL: Database connectivity check failed.\n"
-                f"Phase C validation requires database connection.\n"
-                f"\n"
-                f"Error: {error_detail}\n"
-                f"\n"
-                f"Default credentials: gagan / gagan\n"
-                f"Override with environment variables:\n"
-                f"  RANSOMEYE_DB_HOST (default: localhost)\n"
-                f"  RANSOMEYE_DB_PORT (default: 5432)\n"
-                f"  RANSOMEYE_DB_NAME (default: ransomeye)\n"
-                f"  RANSOMEYE_DB_USER (default: gagan)\n"
-                f"  RANSOMEYE_DB_PASSWORD (default: gagan)"
+        from validation.harness.db_bootstrap_validator import (
+            verify_db_bootstrap,
+            format_bootstrap_failure_message
+        )
+        import os
+        
+        # Get credentials (with defaults)
+        db_user = os.getenv("RANSOMEYE_DB_USER", "gagan")
+        db_password = os.getenv("RANSOMEYE_DB_PASSWORD", "gagan")
+        db_host = os.getenv("RANSOMEYE_DB_HOST", "localhost")
+        db_port = int(os.getenv("RANSOMEYE_DB_PORT", "5432"))
+        db_name = os.getenv("RANSOMEYE_DB_NAME", "ransomeye")
+        
+        # Verify bootstrap
+        success, failure_reason = verify_db_bootstrap(
+            host=db_host,
+            port=db_port,
+            database=db_name,
+            user=db_user,
+            password=db_password
+        )
+        
+        if not success:
+            # Format clear, actionable error message
+            error_msg = format_bootstrap_failure_message(
+                failure_reason,
+                user=db_user,
+                password=db_password,
+                database=db_name
             )
-            print(f"❌ {error_msg}", file=sys.stderr)
-            sys.exit(1)
-        except Exception as e:
-            # Generic error (shouldn't happen, but handle gracefully)
-            error_detail = str(e).split('\n')[0] if '\n' in str(e) else str(e)
-            error_msg = (
-                f"FATAL: Database connectivity check failed.\n"
-                f"Phase C validation requires database connection.\n"
-                f"\n"
-                f"Error: {error_detail}\n"
-                f"\n"
-                f"Default credentials: gagan / gagan\n"
-                f"Check database configuration and connectivity."
-            )
-            print(f"❌ {error_msg}", file=sys.stderr)
+            print(error_msg, file=sys.stderr)
             sys.exit(1)
     
     def _detect_execution_mode(self) -> str:
@@ -296,14 +294,14 @@ class PhaseCExecutor:
             track_results["status"] = TestStatus.PASSED.value if track_results.get("all_passed", False) else TestStatus.FAILED.value
             self.tracks_executed = True
         except Exception as e:
+            # Clear error message (no traceback for operator errors)
+            error_detail = str(e).split('\n')[0] if '\n' in str(e) else str(e)
             track_results = {
                 "status": TestStatus.FAILED.value,
-                "error": str(e),
+                "error": error_detail,
                 "all_passed": False
             }
-            print(f"ERROR in {track_name}: {e}")
-            import traceback
-            traceback.print_exc()
+            print(f"❌ ERROR in {track_name}: {error_detail}")
             # Mark that tracks were attempted (even if failed)
             self.tracks_executed = True
         
@@ -688,9 +686,29 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
     
-    execution_mode = None if args.mode == 'auto' else args.mode
-    executor = PhaseCExecutor(output_dir=args.output_dir, execution_mode=execution_mode)
-    verdict = executor.run_all_tracks()
+    try:
+        execution_mode = None if args.mode == 'auto' else args.mode
+        executor = PhaseCExecutor(output_dir=args.output_dir, execution_mode=execution_mode)
+        
+        # Preflight check (explicit, not in __init__)
+        executor.preflight_check()
+        
+        # Run all tracks
+        verdict = executor.run_all_tracks()
+        
+        # Exit with appropriate code (mode-specific, not final GA)
+        sys.exit(0 if verdict['verdict'] == 'PASS' else 1)
     
-    # Exit with appropriate code (mode-specific, not final GA)
-    sys.exit(0 if verdict['verdict'] == 'PASS' else 1)
+    except KeyboardInterrupt:
+        error_msg = "FATAL: Execution interrupted by user."
+        print(f"❌ {error_msg}", file=sys.stderr)
+        sys.exit(1)
+    except Exception as e:
+        # Clear error message (no traceback for operator errors)
+        error_detail = str(e).split('\n')[0] if '\n' in str(e) else str(e)
+        error_msg = (
+            f"FATAL: Phase C execution failed.\n"
+            f"Error: {error_detail}"
+        )
+        print(f"❌ {error_msg}", file=sys.stderr)
+        sys.exit(1)

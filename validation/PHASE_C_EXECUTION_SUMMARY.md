@@ -70,14 +70,52 @@ This document summarizes the Phase C validation test execution framework that ha
 
 ### Prerequisites
 
+## **DATABASE BOOTSTRAP REQUIREMENT (MANDATORY)**
+
+**Phase C assumes PostgreSQL is pre-provisioned with:**
+
+- **User**: `gagan`
+- **Password**: `gagan`
+- **Database**: `ransomeye`
+- **Owner**: `gagan`
+
+**Phase C WILL FAIL if this is not true.**
+**This is intentional and correct.**
+
+**Bootstrap PostgreSQL (run once, as postgres superuser):**
+
+```sql
+CREATE ROLE gagan LOGIN PASSWORD 'gagan';
+CREATE DATABASE ransomeye OWNER gagan;
+GRANT ALL PRIVILEGES ON DATABASE ransomeye TO gagan;
+```
+
+**Phase C verifies:**
+- Role exists with LOGIN privilege
+- Database exists and is owned by role
+- Authentication works with credentials
+- Basic queries work
+
+**If bootstrap verification fails:**
+- Phase C aborts immediately
+- Clear, actionable error message displayed
+- No tracks execute
+- No partial verdict
+
+**This is NOT a code issue.**
+**This is infrastructure correctness enforcement.**
+
+**Environment variables (optional overrides):**
+- `RANSOMEYE_DB_HOST` (default: localhost)
+- `RANSOMEYE_DB_PORT` (default: 5432)
+- `RANSOMEYE_DB_NAME` (default: ransomeye)
+- `RANSOMEYE_DB_USER` (default: gagan)
+- `RANSOMEYE_DB_PASSWORD` (default: gagan)
+
 1. **Database Connection**:
    - PostgreSQL database must be running
-   - Environment variables:
-     - `RANSOMEYE_DB_HOST` (default: localhost)
-     - `RANSOMEYE_DB_PORT` (default: 5432)
-     - `RANSOMEYE_DB_NAME` (default: ransomeye)
-     - `RANSOMEYE_DB_USER` (default: ransomeye)
-     - `RANSOMEYE_DB_PASSWORD` (required)
+   - **Database must be bootstrapped (see above)**
+   - Environment variables may override defaults (see above)
 
 2. **Database Schema**:
    - All required tables must exist (raw_events, incidents, evidence, etc.)

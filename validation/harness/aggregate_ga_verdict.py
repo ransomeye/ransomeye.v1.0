@@ -212,7 +212,11 @@ def aggregate_ga_verdict(linux_results_path: str, windows_results_path: str) -> 
         agent_002_passed  # AGENT-002 must pass
     )
     
+    # Clear GA verdict (GA-READY or GA-BLOCKED)
+    ga_verdict = "GA-READY" if ga_ready else "GA-BLOCKED"
+    
     aggregate_verdict = {
+        "schema_version": "1.0",
         "ga_ready": ga_ready,
         "linux_pass": linux_pass,
         "windows_pass": windows_pass,
@@ -222,7 +226,7 @@ def aggregate_ga_verdict(linux_results_path: str, windows_results_path: str) -> 
         "agent_002_passed": agent_002_passed,
         "linux_skipped_tests": linux_skipped,
         "windows_skipped_tests": windows_skipped,
-        "verdict": "GA-READY" if ga_ready else "NOT GA-READY",
+        "verdict": ga_verdict,
         "verdict_timestamp": datetime.now(timezone.utc).isoformat(),
         "linux_results_path": str(linux_path.resolve()),
         "windows_results_path": str(windows_path.resolve()),
@@ -286,6 +290,24 @@ def main():
             print("✅ Phase C validation PASSED. RansomEye is GA-READY.")
         else:
             print("❌ Phase C validation FAILED. GA is BLOCKED.")
+            print()
+            print("Blocking reasons:")
+            if not verdict['linux_pass']:
+                print("  - Phase C-L (Linux) did not pass")
+            if not verdict['windows_pass']:
+                print("  - Phase C-W (Windows) did not pass")
+            if verdict['fail_006_skipped']:
+                print("  - FAIL-006 was skipped (cannot be skipped for GA)")
+            if verdict['agent_002_in_linux']:
+                print("  - AGENT-002 was executed on Linux (must run on Windows only)")
+            if not verdict['agent_002_in_windows']:
+                print("  - AGENT-002 missing from Windows results")
+            if not verdict['agent_002_passed']:
+                print("  - AGENT-002 did not pass")
+            if verdict['linux_skipped_tests'] > 0:
+                print(f"  - {verdict['linux_skipped_tests']} skipped tests in Phase C-L")
+            if verdict['windows_skipped_tests'] > 0:
+                print(f"  - {verdict['windows_skipped_tests']} skipped tests in Phase C-W")
         
         print("="*80)
         
@@ -299,8 +321,22 @@ def main():
         
         sys.exit(0 if verdict['ga_ready'] else 1)
     
+    except FileNotFoundError as e:
+        # Clear error message (no traceback)
+        print(f"❌ {e}", file=sys.stderr)
+        sys.exit(1)
+    except ValueError as e:
+        # Clear error message (no traceback)
+        print(f"❌ {e}", file=sys.stderr)
+        sys.exit(1)
     except Exception as e:
-        print(f"ERROR: {e}", file=sys.stderr)
+        # Generic error (clear message, no traceback)
+        error_detail = str(e).split('\n')[0] if '\n' in str(e) else str(e)
+        error_msg = (
+            f"FATAL: GA verdict aggregation failed.\n"
+            f"Error: {error_detail}"
+        )
+        print(f"❌ {error_msg}", file=sys.stderr)
         sys.exit(1)
 
 
