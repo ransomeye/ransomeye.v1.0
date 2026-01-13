@@ -12139,6 +12139,304 @@ End with:
 Promot End*
 
 
+Promot Start
+
+You are Cursor, acting as the Database & Data-Plane Hardening Engineer for RansomEye.
+
+AUTHORITATIVE CONTEXT
+
+Windows ETW telemetry implementation exists.
+
+Core Engine, DPI Probe, and Linux Agent may run on the same host (POC/demo).
+
+PostgreSQL is mandatory.
+
+Event volume can exceed 1,000,000 writes/reads concurrently.
+
+Zero data corruption is acceptable.
+
+Wrong table / column access is unacceptable.
+
+This prompt is about architecture correctness, DB safety, and scale — not features.
+
+OBJECTIVE
+
+Design and enforce a bulletproof data-plane architecture such that:
+
+Every module:
+
+Writes ONLY to its designated tables
+
+Reads ONLY via approved views
+
+Database:
+
+Handles massive concurrent writes safely
+
+Avoids lock contention
+
+Avoids table bloat
+
+Avoids index storms
+
+Co-located deployment:
+
+Core + DPI + Linux Agent on same machine
+
+No port conflicts
+
+No resource starvation
+
+Predictable performance isolation
+
+MANDATORY DELIVERABLES (NO SKIP)
+STEP 1 — WRITE/READ OWNERSHIP MATRIX (CRITICAL)
+
+Produce a strict matrix:
+
+Module	WRITE Tables	READ Tables	READ Method
+
+Rules:
+
+Agents never read DB
+
+DPI never reads agent tables
+
+Core reads via views only
+
+No direct cross-module table reads
+
+This matrix is binding.
+
+STEP 2 — SCHEMA HARDENING STRATEGY
+
+Define:
+
+Event ingestion tables (append-only)
+
+Partitioning strategy (time + source)
+
+Indexing strategy (minimal, write-optimized)
+
+HOT update avoidance
+
+WAL tuning assumptions
+
+Explicitly state:
+
+Which tables are UNLOGGED vs LOGGED
+
+Which use BRIN vs BTREE
+
+Which are partitioned
+
+STEP 3 — HIGH-CONCURRENCY INGEST DESIGN
+
+Explain how DB handles:
+
+1M+ inserts
+
+Burst traffic
+
+Backpressure from Core
+
+Queue-based ingest
+
+Retry semantics
+
+Must include:
+
+COPY vs INSERT decision
+
+Batch sizes
+
+Failure handling
+
+No duplicate ingestion
+
+STEP 4 — CO-LOCATED POC SAFETY
+
+Explain:
+
+Port separation
+
+CPU pinning strategy
+
+Memory limits per service
+
+IO scheduling considerations
+
+Network namespace / socket separation (if any)
+
+No conflicts allowed.
+
+STEP 5 — GUARANTEES & FAILURE MODES
+
+Explicitly list:
+
+What failures are tolerated
+
+What failures are fatal
+
+How corruption is prevented
+
+How partial writes are handled
+
+How replay works
+
+HARD RULES
+
+No assumptions
+
+No “should be fine”
+
+No vague language
+
+No skipping DB internals
+
+No changing earlier architectural decisions
+
+OUTPUT FORMAT
+
+Respond with:
+
+Data-plane architecture explanation
+
+Ownership matrix table
+
+Partition/index strategy
+
+Co-located deployment safety model
+
+Explicit list of remaining risks (if any)
+
+End your response with:
+
+“Data-plane hardened. Ready to proceed to Phase B.”
+
+*****Promt End *****
+
+
+
+Promot Start
+
+You are Cursor, acting as the Forensic Intelligence Engineer for
+Phase B — Advanced Forensic & Behavior Summarization.
+
+AUTHORITATIVE CONTEXT
+
+Data plane is hardened and frozen.
+
+Raw, normalized, and correlated events exist.
+
+This phase is POST-INCIDENT ONLY.
+
+This phase is NOT LLM-based.
+
+Output must be deterministic and replayable.
+
+OBJECTIVE
+
+Build a deterministic forensic summarization engine that:
+
+Reconstructs attacker behavior step-by-step
+
+Explains what happened, how it unfolded, what evidence exists
+
+Produces machine-verifiable summaries
+
+Does NOT speculate
+
+Does NOT recommend actions
+
+Does NOT infer intent beyond evidence
+
+REQUIRED CAPABILITIES (MANDATORY)
+1. BEHAVIORAL CHAIN RECONSTRUCTION
+
+Process lineage reconstruction
+
+File modification chains
+
+Persistence establishment chains
+
+Network intent progression
+
+Lateral preparation indicators
+
+2. TEMPORAL GRAPH SUMMARIZATION
+
+Collapse large event sets into phases
+
+Identify:
+
+Initial execution
+
+Expansion
+
+Persistence
+
+Exfiltration prep (if any)
+
+Deterministic phase boundaries
+
+3. EVIDENCE LINKING
+
+Every claim links to:
+
+event_id
+
+table
+
+timestamp
+
+No statement without evidence references
+
+4. OUTPUT FORMATS
+
+JSON (machine)
+
+Text (human, non-LLM)
+
+Graph metadata (nodes + edges)
+
+HARD RULES
+
+No ML
+
+No LLM
+
+No probabilities
+
+No adjectives
+
+No external intel
+
+No policy logic
+
+No enforcement
+
+DELIVERABLE
+
+Respond with:
+
+Forensic summarization architecture
+
+Data sources used (tables/views)
+
+Deterministic summarization algorithm
+
+Example forensic summary output
+
+Explicit list of limitations
+
+End with:
+
+“Phase B forensic summarization designed. Ready for implementation.”
+
+*****Promt End *****
+
+
 
 
 
