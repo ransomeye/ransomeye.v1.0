@@ -215,26 +215,20 @@ class Aggregator:
         ai_score, ai_confidence = self.ingest_ai_metadata(ai_metadata, current_timestamp)
         policy_score = self.ingest_policy_decisions(policy_decisions)
         
-        # Future signals (placeholder, return 0 for now)
-        threat_score = 0.0
-        uba_score = 0.0
-        
-        # Component scores
+        # GA-BLOCKING FIX: Removed placeholder threat_score and uba_score.
+        # Threat correlation and UBA signals are not part of v1.0.
+        # Component scores only include v1.0 signals.
         component_scores = {
             'incidents': incident_score,
             'ai_metadata': ai_score,
-            'policy_decisions': policy_score,
-            'threat_correlation': threat_score,
-            'uba': uba_score
+            'policy_decisions': policy_score
         }
         
-        # Weighted aggregation
+        # Weighted aggregation (v1.0 signals only)
         weighted_sum = (
             self.weights.get('incidents', 0.0) * incident_score +
             self.weights.get('ai_metadata', 0.0) * ai_score +
-            self.weights.get('policy_decisions', 0.0) * policy_score +
-            self.weights.get('threat_correlation', 0.0) * threat_score +
-            self.weights.get('uba', 0.0) * uba_score
+            self.weights.get('policy_decisions', 0.0) * policy_score
         )
         
         # Normalize to 0-100

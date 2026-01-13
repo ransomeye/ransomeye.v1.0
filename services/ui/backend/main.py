@@ -8,6 +8,7 @@ Python 3.10+ only - aligns with Phase 8 requirements
 import os
 import sys
 import json
+import re
 import psycopg2
 from psycopg2 import pool
 from typing import List, Dict, Any, Optional

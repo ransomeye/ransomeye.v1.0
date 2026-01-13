@@ -9,12 +9,12 @@
 
 ### Version
 **Version**: `1.0.0`  
-**Release Date**: [PLACEHOLDER - Date will be inserted here after bundle finalization]  
+**Release Date**: `2026-01-12`  
 **Phase**: Phase 2 – Database First  
 **PostgreSQL Version**: 14+ (compatible)
 
 ### Integrity Hash
-**SHA256 Hash**: `[PLACEHOLDER - SHA256 hash will be inserted here after bundle finalization]`
+**SHA256 Hash**: `14144a0838f7fbf412f4510a708be4a76dd5fa07c90e539c3a90aa5bbf256acd`
 
 **Hash Computation Method**:
 1. Concatenate all schema files in this bundle in lexicographic order:
@@ -28,7 +28,7 @@
    - `07_retention.sql`
    - `SCHEMA_BUNDLE.md` (this file, excluding this hash field)
 2. Compute SHA256 hash of the concatenated content
-3. Insert hash in this field (replacing `[PLACEHOLDER]`)
+3. Insert hash in this field
 4. Recompute hash of updated `SCHEMA_BUNDLE.md`
 5. Insert final hash in this field
 
@@ -179,7 +179,9 @@ This bundle contains the following authoritative schema definitions:
 
 ## Freeze Statement
 
-**FROZEN AS OF**: [PLACEHOLDER - Date will be inserted here after bundle finalization]
+**FROZEN AS OF**: `2026-01-12`
+
+**STATUS**: `FROZEN — DO NOT MODIFY`
 
 This schema bundle is **IMMUTABLE** and **CANONICAL**.
 
@@ -227,7 +229,7 @@ This bundle requires explicit approval before finalization:
 - [ ] Freeze date recorded
 - [ ] Bundle declared FROZEN
 
-**Current Status**: `PENDING_FINALIZATION`
+**Current Status**: `FROZEN — DO NOT MODIFY`
 
 ---
 
@@ -316,11 +318,11 @@ This schema is **exactly aligned** with the frozen system contracts from Phase 1
 
 ## Legal and Status
 
-**Schema Bundle Status**: `AUTHORITATIVE`  
+**Schema Bundle Status**: `FROZEN — DO NOT MODIFY`  
 **Schema Bundle Version**: `1.0.0`  
 **Schema Bundle Phase**: `Phase 2 – Database First`  
-**Immutable After**: `[PLACEHOLDER - Date after finalization]`  
-**SHA256 Hash**: `[PLACEHOLDER - Hash after finalization]`  
+**Immutable After**: `2026-01-12`  
+**SHA256 Hash**: `14144a0838f7fbf412f4510a708be4a76dd5fa07c90e539c3a90aa5bbf256acd`  
 **PostgreSQL Version**: `14+`
 
 **THIS BUNDLE IS FROZEN AND CANNOT BE MODIFIED.**

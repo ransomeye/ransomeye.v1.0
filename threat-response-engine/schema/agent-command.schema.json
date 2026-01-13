@@ -1,0 +1,97 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RansomEye Agent Command",
+  "description": "Frozen schema for commands sent to agents. All fields are mandatory. No optional fields allowed.",
+  "type": "object",
+  "required": [
+    "command_id",
+    "action_type",
+    "target",
+    "incident_id",
+    "tre_mode",
+    "issued_by_user_id",
+    "issued_by_role",
+    "issued_at",
+    "expires_at",
+    "rollback_token",
+    "signature"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "command_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Command identifier (UUID v4)"
+    },
+    "action_type": {
+      "type": "string",
+      "enum": [
+        "BLOCK_PROCESS",
+        "BLOCK_NETWORK_CONNECTION",
+        "TEMPORARY_FIREWALL_RULE",
+        "QUARANTINE_FILE",
+        "ISOLATE_HOST",
+        "LOCK_USER",
+        "DISABLE_SERVICE",
+        "MASS_PROCESS_KILL",
+        "NETWORK_SEGMENT_ISOLATION"
+      ],
+      "description": "Action type (frozen enum)"
+    },
+    "target": {
+      "type": "object",
+      "description": "Target object (process_id, file_path, network_address, etc.)",
+      "additionalProperties": true
+    },
+    "incident_id": {
+      "type": ["string", "null"],
+      "format": "uuid",
+      "description": "Incident identifier (UUID or null)"
+    },
+    "tre_mode": {
+      "type": "string",
+      "enum": ["DRY_RUN", "GUARDED_EXEC", "FULL_ENFORCE"],
+      "description": "TRE enforcement mode"
+    },
+    "issued_by_user_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "User identifier who issued the command"
+    },
+    "issued_by_role": {
+      "type": "string",
+      "enum": ["SUPER_ADMIN", "SECURITY_ANALYST", "POLICY_MANAGER", "IT_ADMIN", "AUDITOR"],
+      "description": "Role of user who issued the command"
+    },
+    "approval_id": {
+      "type": ["string", "null"],
+      "format": "uuid",
+      "description": "HAF approval identifier (UUID or null)"
+    },
+    "issued_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp when command was issued"
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp when command expires"
+    },
+    "rollback_token": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA256 hash of rollback artifact"
+    },
+    "signature": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9+/=]+$",
+      "description": "Base64-encoded ed25519 signature of command payload"
+    },
+    "signing_key_id": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA256 hash of TRE signing public key"
+    }
+  }
+}

@@ -8919,3 +8919,2797 @@ You are done only if:
 Implement accordingly.
 
 ****Promot End****
+
+
+
+Promot Start*
+
+STOP all feature development immediately.
+
+You are now in GA-BLOCKING REMEDIATION MODE.
+
+Your task is to FIX AND PROVE RESOLUTION of the THREE CRITICAL NON-COMPLIANCES identified in the audit.
+You are NOT allowed to introduce new features, new tables, new schemas, or new behavior.
+
+You must address ONLY the items listed below.
+
+FIX 1 — DATABASE CONNECTION FALLBACK REMOVAL (CRITICAL)
+Scope
+
+services/correlation-engine/app/db.py
+
+services/policy-engine/app/db.py
+
+Problem
+
+Fallback psycopg2.connect() paths bypass common/db/safety.py.
+
+This violates:
+
+Unified DB strategy
+
+Fail-fast guarantees
+
+Transaction safety guarantees
+
+Required Action
+
+REMOVE all fallback DB connection code paths.
+
+ENFORCE exclusive use of:
+
+create_write_connection()
+
+create_readonly_connection()
+
+create_write_connection_pool()
+
+create_readonly_connection_pool()
+
+If DB config is invalid → fail-fast immediately.
+
+No silent fallback. No retries. No defaults.
+
+Proof Required
+
+You must provide:
+
+Diff output (before/after)
+
+Exact lines removed
+
+Confirmation that NO psycopg2.connect() remains in those files
+
+grep proof:
+
+grep -R "psycopg2.connect" services/
+
+FIX 2 — RISK INDEX PLACEHOLDER ELIMINATION (CRITICAL)
+Scope
+
+risk-index/engine/aggregator.py
+
+Problem
+
+Placeholder logic at line ~218:
+
+# Future signals (placeholder)
+threat_score = 0.0
+uba_score = 0.0
+
+
+This violates:
+
+Zero placeholder policy
+
+Deterministic correctness guarantees
+
+Required Action (MANDATORY CHOICE)
+
+You must choose ONE of the following and implement it cleanly:
+
+OPTION A (RECOMMENDED)
+
+Remove threat_score and uba_score entirely from v1.0 path
+
+No placeholder variables
+
+No dead branches
+
+Explicit documentation: “Not part of v1.0”
+
+OPTION B (ONLY if already implemented elsewhere)
+
+Wire real signal ingestion
+
+Must be real data
+
+Must be deterministic
+
+Must already exist in codebase
+
+⚠️ You may NOT invent logic.
+
+Proof Required
+
+Diff output
+
+Final function body
+
+grep proof that no placeholder comments remain:
+
+grep -R "placeholder" risk-index/
+
+FIX 3 — SCHEMA BUNDLE FINALIZATION (CRITICAL)
+Scope
+
+schemas/SCHEMA_BUNDLE.md
+
+Problem
+
+Contains [PLACEHOLDER] strings for:
+
+Date
+
+SHA256 hash
+
+This violates:
+
+Release immutability
+
+Supply-chain trust guarantees
+
+Required Action
+
+Compute SHA256 over all schema files included in bundle.
+
+Insert:
+
+Final release date
+
+Final SHA256 hash
+
+Mark bundle explicitly as:
+
+STATUS: FROZEN — DO NOT MODIFY
+
+Proof Required
+
+Command used to compute hash
+
+Resulting hash
+
+Final SCHEMA_BUNDLE.md excerpt
+
+grep proof:
+
+grep -R "\[PLACEHOLDER\]" schemas/
+
+POST-FIX VERIFICATION (MANDATORY)
+
+After fixes, you MUST:
+
+Re-run full compliance check for:
+
+Sections 1, 4, 5 of audit
+
+Produce a mini re-audit report with:
+
+Before/after status
+
+Explicit “COMPLIANT” or “NOT COMPLIANT”
+
+ABSOLUTE RULES
+
+❌ No new features
+
+❌ No new schemas
+
+❌ No new DB tables
+
+❌ No refactors outside listed files
+
+❌ No TODOs
+
+❌ No comments saying “future work”
+
+If anything cannot be fixed without breaking scope, you must fail explicitly and explain why.
+
+This is a GA unblock task, not development.
+
+Promot End*
+
+Promot Start*
+
+Implement the Threat Response Engine (TRE) for RansomEye with the following STRICT constraints:
+
+1. TRE is execution-only, not decision-making
+2. TRE executes ONLY final Policy Engine decisions
+3. TRE enforces Human Authority (HAF) where required
+4. All actions are signed (ed25519), auditable, and rollback-capable
+5. Agents validate and execute commands but never decide
+6. Rollback is mandatory and first-class
+7. All records are immutable and audit-anchored
+8. No placeholders, no dummy data, no heuristics, no ML
+
+Deliverables:
+- Full directory structure
+- Frozen schemas (zero optional fields)
+- Action validation engine
+- Secure command signing and verification
+- Agent command dispatch protocol
+- Rollback manager
+- Audit ledger integration
+- DB schema additions
+- CLI tools for execution and rollback
+- README with legal and regulatory positioning
+
+The design must align with:
+- Policy Engine
+- Human Authority Framework (HAF)
+- System Explanation Engine (SEE)
+- Audit Ledger
+- Existing Linux/Windows agents
+
+
+Promot End*
+
+
+### ****Promot Start****
+
+You are implementing **FULL, PRODUCTION-GRADE ROLE-BASED ACCESS CONTROL (RBAC)** for **RansomEye**, covering **both backend and UI**, with **ZERO assumptions** and **ZERO implicit behavior**.
+
+This is a **GA-critical, security-enforcing subsystem**.
+Any deviation, shortcut, assumption, or partial implementation is **NOT ACCEPTABLE**.
+
+---
+
+## 1. ABSOLUTE CONSTRAINTS (NON-NEGOTIABLE)
+
+You **MUST** comply with **ALL** of the following:
+
+1. **Server-side enforcement is mandatory**
+
+   * UI hiding or disabling buttons is **NOT sufficient**
+   * Every protected backend API **must enforce permissions**
+   * If UI is bypassed, backend **must still block** unauthorized actions
+
+2. **Explicit permission model**
+
+   * Default behavior = **DENY**
+   * No implied permissions
+   * No role-name checks in code (e.g., `if role == "ADMIN"` is forbidden)
+   * All access decisions must be made using **explicit permission checks**
+
+3. **Exactly FIVE roles — NO MORE, NO LESS**
+
+   ```
+   SUPER_ADMIN
+   SECURITY_ANALYST
+   POLICY_MANAGER
+   IT_ADMIN
+   AUDITOR
+   ```
+
+   * No custom roles
+   * No dynamic roles
+   * No role inheritance
+   * No role stacking
+   * Each user has **exactly ONE role**
+
+4. **Multiple users per role**
+
+   * RBAC must support unlimited users per role
+   * Roles are **not users**
+
+5. **Audit logging is mandatory**
+
+   * Every permission-sensitive action MUST emit audit ledger entries
+   * Both ALLOWED and DENIED actions must be logged
+
+6. **NO placeholders**
+
+   * No TODO
+   * No FIXME
+   * No dummy values
+   * No mock data
+   * No static JSON datasets
+   * No demo-only logic
+
+7. **Production UI only**
+
+   * Must integrate with existing RansomEye UI
+   * No fake dashboards
+   * No hardcoded UI assumptions
+
+---
+
+## 2. ROLE DEFINITIONS (FROZEN — EXACT MATCH REQUIRED)
+
+You must implement **exactly** the following roles with **exact behavior**.
+
+### 🔴 SUPER_ADMIN
+
+**Who**: CTO / Head of Security / Platform Owner
+**Authority Level**: Absolute
+
+Must be able to:
+
+* View, create, edit, and delete **ALL users**
+* Assign roles to users
+* View and edit **ALL configuration**
+* Manage billing, licenses, subscriptions
+* Configure SSO, API keys, integrations
+* Override enforcement system-wide
+* Access every UI tab and backend API
+
+---
+
+### 🟠 SECURITY_ANALYST (SecOps)
+
+**Who**: SOC analysts, threat hunters
+**Goal**: Actively defend against attacks
+
+Allowed:
+
+* View incidents and alerts
+* Assign incidents
+* Execute Threat Response actions:
+
+  * Isolate host
+  * Kill process
+  * Block network
+  * Rollback actions
+* Access forensics (logs, memory dumps)
+* Generate incident-scoped reports
+
+Explicitly FORBIDDEN:
+
+* Editing policies
+* Managing users
+* Managing agents
+* Billing or licensing
+* Deleting logs
+
+---
+
+### 🔵 POLICY_MANAGER
+
+**Who**: Senior security engineers
+**Goal**: Prevention and detection tuning
+
+Allowed:
+
+* View and edit policies
+* Configure detection thresholds
+* Manage whitelists / blacklists
+* Configure deception / honeypots
+* Run policy simulations
+
+Explicitly FORBIDDEN:
+
+* Executing response actions
+* Managing users
+* Managing agents
+* Billing
+* Viewing raw forensics
+
+---
+
+### 🟣 IT_ADMIN
+
+**Who**: Sysadmins, infrastructure teams
+**Goal**: Platform health and deployment
+
+Allowed:
+
+* Install / uninstall agents
+* Upgrade agents
+* View agent health
+* Group devices
+* View host status
+
+Explicitly FORBIDDEN:
+
+* Viewing incident details
+* Viewing forensics
+* Executing threat responses
+* Editing policies
+* Billing or licensing
+
+---
+
+### 🟢 AUDITOR
+
+**Who**: Compliance officers, external auditors
+**Goal**: Verification and compliance
+
+Allowed:
+
+* Read-only dashboards
+* View audit logs
+* Generate compliance reports (PDF/CSV)
+* View incidents (read-only)
+* View policies (read-only)
+
+Explicitly FORBIDDEN:
+
+* Clicking ANY action buttons
+* Executing responses
+* Editing anything
+* Managing users
+* Managing agents
+
+---
+
+## 3. PERMISSION MODEL (MANDATORY)
+
+You must implement an **explicit permission system**, not role checks.
+
+### Example permission categories (expand as needed, but be explicit):
+
+```
+INCIDENT_VIEW
+INCIDENT_ASSIGN
+RESPONSE_EXECUTE
+RESPONSE_ROLLBACK
+FORENSICS_VIEW
+FORENSICS_EXPORT
+POLICY_VIEW
+POLICY_EDIT
+POLICY_SIMULATE
+AGENT_INSTALL
+AGENT_UNINSTALL
+AGENT_UPDATE
+AGENT_VIEW
+USER_CREATE
+USER_DELETE
+USER_ROLE_ASSIGN
+BILLING_VIEW
+BILLING_MANAGE
+AUDIT_VIEW
+REPORT_GENERATE
+REPORT_EXPORT
+SYSTEM_SETTINGS_EDIT
+```
+
+Rules:
+
+* Permissions must be **enumerated**
+* Permissions must be **versioned**
+* Permissions must be checked **before every protected operation**
+
+---
+
+## 4. DATABASE REQUIREMENTS (MANDATORY)
+
+You MUST implement persistent RBAC storage.
+
+### Required tables (minimum):
+
+```
+users (
+  user_id UUID PRIMARY KEY,
+  email TEXT UNIQUE NOT NULL,
+  role_id TEXT NOT NULL,
+  status ENUM('ACTIVE','SUSPENDED'),
+  created_at TIMESTAMP
+)
+
+roles (
+  role_id TEXT PRIMARY KEY
+)
+
+permissions (
+  permission_id TEXT PRIMARY KEY
+)
+
+role_permissions (
+  role_id TEXT,
+  permission_id TEXT,
+  PRIMARY KEY (role_id, permission_id)
+)
+```
+
+Rules:
+
+* role_permissions mapping is **immutable at runtime**
+* No soft deletes
+* No dynamic permission injection
+
+---
+
+## 5. BACKEND ENFORCEMENT (CRITICAL)
+
+You MUST:
+
+1. Implement RBAC middleware / guards
+2. Enforce permissions in:
+
+   * Threat Response Engine (TRE)
+   * Policy Engine
+   * Agent management APIs
+   * Reporting APIs
+   * User management APIs
+3. Block unauthorized requests even if:
+
+   * UI is bypassed
+   * API is called directly
+4. Fail closed (deny by default)
+
+---
+
+## 6. UI REQUIREMENTS (MANDATORY)
+
+You MUST implement **role-aware UI rendering**:
+
+* Tabs are visible **only if permission exists**
+* Buttons are hidden **and disabled** if forbidden
+* Attempting forbidden actions must:
+
+  * Show clear error
+  * Be audit logged
+* UI must reflect **real backend permissions**, not assumptions
+
+---
+
+## 7. INTEGRATION REQUIREMENTS (MANDATORY)
+
+RBAC must integrate with:
+
+* **Threat Response Engine (TRE)**
+
+  * RESPONSE_EXECUTE and RESPONSE_ROLLBACK enforced
+* **Policy Engine**
+
+  * POLICY_EDIT / POLICY_SIMULATE enforced
+* **Human Authority Framework (HAF)**
+
+  * RBAC check happens BEFORE authority check
+* **Audit Ledger**
+
+  * Log allow/deny for every protected action
+* **Signed Reporting**
+
+  * Report access controlled by role & permission
+
+---
+
+## 8. AUDIT LEDGER EVENTS (MANDATORY)
+
+For every protected action, emit:
+
+```
+USER_ACTION_ATTEMPTED
+USER_ACTION_ALLOWED
+USER_ACTION_DENIED
+```
+
+Each event must include:
+
+* user_id
+* role_id
+* permission
+* resource_id
+* outcome
+* timestamp
+
+---
+
+## 9. DELIVERABLES REQUIRED
+
+You MUST return:
+
+1. RBAC architecture explanation
+2. Permission enum definition
+3. Exact role → permission mapping
+4. Database schema changes
+5. Backend enforcement logic
+6. UI role-aware rendering logic
+7. Audit ledger event definitions
+8. README documenting RBAC model
+9. Verification checklist proving enforcement
+
+---
+
+## 10. ABSOLUTELY FORBIDDEN
+
+You must NOT:
+
+* Assume permissions
+* Hardcode role names in logic
+* Skip backend checks
+* Add bypass flags
+* Add temporary admin shortcuts
+* Add feature flags to avoid RBAC
+
+---
+
+## FINAL INSTRUCTION
+
+This RBAC system **must behave like a military-grade security control plane**.
+
+If something is unclear:
+
+* You must FAIL
+* You must NOT guess
+
+Deviation from this specification is **not allowed**.
+
+### ****Promot End****
+
+
+
+****Promot Start****
+
+### PHASE N1 — THREAT RESPONSE ENGINE (TRE) **ENFORCEMENT MODE ACTIVATION WITH RBAC + HAF (NO ASSUMPTIONS)**
+
+You are to **activate REAL enforcement** in the Threat Response Engine.
+This is **NOT a design discussion**. This is an **implementation mandate**.
+
+---
+
+## 0. NON-NEGOTIABLE PRINCIPLES (READ FIRST)
+
+1. **RBAC IS AUTHORITATIVE**
+
+   * No TRE action may execute unless RBAC explicitly allows it.
+   * UI state is irrelevant. Backend must enforce.
+
+2. **HAF IS A HARD GATE**
+
+   * For destructive or irreversible actions, Human Authority approval is mandatory.
+   * RBAC check **always happens before** HAF.
+
+3. **NO AUTONOMOUS ACTIONS**
+
+   * TRE executes only **policy decisions** or **explicit human-triggered actions**.
+   * TRE never “decides”.
+
+4. **DEFAULT = DENY**
+
+   * If anything is missing, unclear, or malformed → FAIL FAST.
+
+5. **NO PLACEHOLDERS**
+
+   * No TODO, no “future”, no stubs, no mock logic.
+
+---
+
+## 1. ENFORCEMENT MODES (MANDATORY)
+
+Implement **exactly three enforcement modes** (enum, frozen):
+
+```
+TRE_MODE = {
+  DRY_RUN,        # Existing behavior – simulate only
+  GUARDED_EXEC,   # Execute only actions marked SAFE
+  FULL_ENFORCE    # Execute all actions, HAF required where applicable
+}
+```
+
+### Mode Behavior Rules
+
+| Mode         | SAFE actions  | DESTRUCTIVE actions                 |
+| ------------ | ------------- | ----------------------------------- |
+| DRY_RUN      | Simulate only | Simulate only                       |
+| GUARDED_EXEC | Execute       | BLOCKED                             |
+| FULL_ENFORCE | Execute       | Execute **only after HAF approval** |
+
+Mode must be:
+
+* Stored in DB
+* Loaded at runtime
+* Changeable **only by SUPER_ADMIN**
+* Logged to audit ledger on change
+
+---
+
+## 2. ACTION CLASSIFICATION (FROZEN)
+
+Classify actions **EXACTLY** as follows:
+
+### SAFE ACTIONS
+
+* BLOCK_PROCESS
+* BLOCK_NETWORK_CONNECTION
+* TEMPORARY_FIREWALL_RULE
+* QUARANTINE_FILE
+
+### DESTRUCTIVE / HIGH-IMPACT ACTIONS
+
+* ISOLATE_HOST
+* LOCK_USER
+* DISABLE_SERVICE
+* MASS_PROCESS_KILL
+* NETWORK_SEGMENT_ISOLATION
+
+This classification must be:
+
+* Enforced in code
+* Not configurable
+* Documented as immutable
+
+---
+
+## 3. EXECUTION FLOW (MANDATORY ORDER)
+
+Implement the **exact execution pipeline** below:
+
+```
+Policy Decision
+   ↓
+RBAC Permission Check
+   ↓
+TRE Mode Check
+   ↓
+Action Classification Check
+   ↓
+HAF Approval Check (if required)
+   ↓
+Agent Command Signing
+   ↓
+Agent Execution
+   ↓
+Execution Result Recording
+   ↓
+Rollback Record Creation
+   ↓
+Audit Ledger Write
+```
+
+If any step fails:
+
+* STOP
+* LOG
+* RETURN FAILURE
+* DO NOT EXECUTE
+
+---
+
+## 4. RBAC INTEGRATION (STRICT)
+
+### Required Permissions (EXACT)
+
+| Action                     | Required Permission     |
+| -------------------------- | ----------------------- |
+| Execute SAFE action        | TRE_EXECUTE_SAFE        |
+| Execute DESTRUCTIVE action | TRE_EXECUTE_DESTRUCTIVE |
+| Approve via HAF            | HAF_APPROVE_ACTION      |
+| Rollback action            | TRE_ROLLBACK            |
+| Change TRE mode            | TRE_ADMIN               |
+
+If permission missing:
+
+* Return HTTP 403
+* Emit RBAC_DENY ledger event
+* Do not call HAF
+
+---
+
+## 5. HAF INTEGRATION (STRICT)
+
+For DESTRUCTIVE actions in FULL_ENFORCE:
+
+1. Create **pending authority request**
+2. Persist immutable approval request
+3. Wait for explicit approval
+4. Approval must include:
+
+   * approver_user_id
+   * role (must be SUPER_ADMIN or SECURITY_ANALYST with approval rights)
+   * timestamp
+   * signed decision
+5. Only then proceed to execution
+
+If rejected or expired → FAIL CLOSED.
+
+---
+
+## 6. AGENT COMMAND EXECUTION (STRICT)
+
+Every command sent to agents must:
+
+* Be signed with **ed25519**
+* Include:
+
+  * command_id
+  * action_type
+  * target_id
+  * incident_id
+  * issued_by_user_id
+  * tre_mode
+  * approval_id (if applicable)
+* Be **idempotent**
+* Support rollback token generation
+
+Agent must:
+
+* Verify signature
+* Verify freshness
+* Execute exactly once
+* Emit execution receipt
+
+---
+
+## 7. ROLLBACK (MANDATORY)
+
+For every executed action:
+
+* Create rollback record BEFORE execution
+* Rollback must:
+
+  * Require RBAC check
+  * Require HAF approval if original action was destructive
+  * Be fully auditable
+* Rollback failures must be logged but **never silently ignored**
+
+---
+
+## 8. DATABASE REQUIREMENTS
+
+Ensure tables exist and are used (no bypass):
+
+* tre_execution_modes
+* tre_action_executions
+* tre_action_approvals
+* tre_rollback_records
+
+All records:
+
+* Immutable
+* Timestamped
+* Linked via IDs
+
+---
+
+## 9. AUDIT LEDGER (MANDATORY EVENTS)
+
+Emit ledger events for:
+
+* TRE_MODE_CHANGED
+* TRE_ACTION_REQUESTED
+* TRE_ACTION_BLOCKED
+* TRE_ACTION_APPROVED
+* TRE_ACTION_EXECUTED
+* TRE_ACTION_FAILED
+* TRE_ROLLBACK_REQUESTED
+* TRE_ROLLBACK_EXECUTED
+* TRE_RBAC_DENY
+* TRE_HAF_DENY
+
+Every event must include:
+
+* user_id
+* role
+* action_type
+* target
+* incident_id (if any)
+* outcome
+
+---
+
+## 10. UI REQUIREMENTS (ROLE-AWARE)
+
+UI must:
+
+* Show **Execute buttons only if RBAC allows**
+* Show **Approval queue only to HAF approvers**
+* Clearly label:
+
+  * SAFE vs DESTRUCTIVE
+  * DRY_RUN vs ENFORCE
+* Show immutable execution history
+* Prevent bulk destructive actions without confirmation
+
+UI hiding is **NOT security** — backend already enforces.
+
+---
+
+## 11. VERIFICATION (MANDATORY)
+
+Deliver:
+
+1. `VERIFICATION.md` with:
+
+   * Negative tests
+   * RBAC bypass tests
+   * HAF rejection tests
+2. Proof that:
+
+   * Destructive actions do NOT run without approval
+   * Rollback is impossible without permission
+   * Audit trail is complete and replayable
+
+---
+
+## 12. FINAL OUTPUT EXPECTATION
+
+When complete, report **ONLY**:
+
+* Compliance status (PASS / FAIL)
+* List of files created/modified
+* Verification summary
+
+No explanations. No assumptions. No opinions.
+
+****Promot end****
+
+
+****Promot Start****
+
+### PHASE N1 — THREAT RESPONSE ENGINE (TRE) **ENFORCEMENT MODE ACTIVATION WITH RBAC + HAF (NO ASSUMPTIONS)**
+
+You are to **activate REAL enforcement** in the Threat Response Engine.
+This is **NOT a design discussion**. This is an **implementation mandate**.
+
+---
+
+## 0. NON-NEGOTIABLE PRINCIPLES (READ FIRST)
+
+1. **RBAC IS AUTHORITATIVE**
+
+   * No TRE action may execute unless RBAC explicitly allows it.
+   * UI state is irrelevant. Backend must enforce.
+
+2. **HAF IS A HARD GATE**
+
+   * For destructive or irreversible actions, Human Authority approval is mandatory.
+   * RBAC check **always happens before** HAF.
+
+3. **NO AUTONOMOUS ACTIONS**
+
+   * TRE executes only **policy decisions** or **explicit human-triggered actions**.
+   * TRE never “decides”.
+
+4. **DEFAULT = DENY**
+
+   * If anything is missing, unclear, or malformed → FAIL FAST.
+
+5. **NO PLACEHOLDERS**
+
+   * No TODO, no “future”, no stubs, no mock logic.
+
+---
+
+## 1. ENFORCEMENT MODES (MANDATORY)
+
+Implement **exactly three enforcement modes** (enum, frozen):
+
+```
+TRE_MODE = {
+  DRY_RUN,        # Existing behavior – simulate only
+  GUARDED_EXEC,   # Execute only actions marked SAFE
+  FULL_ENFORCE    # Execute all actions, HAF required where applicable
+}
+```
+
+### Mode Behavior Rules
+
+| Mode         | SAFE actions  | DESTRUCTIVE actions                 |
+| ------------ | ------------- | ----------------------------------- |
+| DRY_RUN      | Simulate only | Simulate only                       |
+| GUARDED_EXEC | Execute       | BLOCKED                             |
+| FULL_ENFORCE | Execute       | Execute **only after HAF approval** |
+
+Mode must be:
+
+* Stored in DB
+* Loaded at runtime
+* Changeable **only by SUPER_ADMIN**
+* Logged to audit ledger on change
+
+---
+
+## 2. ACTION CLASSIFICATION (FROZEN)
+
+Classify actions **EXACTLY** as follows:
+
+### SAFE ACTIONS
+
+* BLOCK_PROCESS
+* BLOCK_NETWORK_CONNECTION
+* TEMPORARY_FIREWALL_RULE
+* QUARANTINE_FILE
+
+### DESTRUCTIVE / HIGH-IMPACT ACTIONS
+
+* ISOLATE_HOST
+* LOCK_USER
+* DISABLE_SERVICE
+* MASS_PROCESS_KILL
+* NETWORK_SEGMENT_ISOLATION
+
+This classification must be:
+
+* Enforced in code
+* Not configurable
+* Documented as immutable
+
+---
+
+## 3. EXECUTION FLOW (MANDATORY ORDER)
+
+Implement the **exact execution pipeline** below:
+
+```
+Policy Decision
+   ↓
+RBAC Permission Check
+   ↓
+TRE Mode Check
+   ↓
+Action Classification Check
+   ↓
+HAF Approval Check (if required)
+   ↓
+Agent Command Signing
+   ↓
+Agent Execution
+   ↓
+Execution Result Recording
+   ↓
+Rollback Record Creation
+   ↓
+Audit Ledger Write
+```
+
+If any step fails:
+
+* STOP
+* LOG
+* RETURN FAILURE
+* DO NOT EXECUTE
+
+---
+
+## 4. RBAC INTEGRATION (STRICT)
+
+### Required Permissions (EXACT)
+
+| Action                     | Required Permission     |
+| -------------------------- | ----------------------- |
+| Execute SAFE action        | TRE_EXECUTE_SAFE        |
+| Execute DESTRUCTIVE action | TRE_EXECUTE_DESTRUCTIVE |
+| Approve via HAF            | HAF_APPROVE_ACTION      |
+| Rollback action            | TRE_ROLLBACK            |
+| Change TRE mode            | TRE_ADMIN               |
+
+If permission missing:
+
+* Return HTTP 403
+* Emit RBAC_DENY ledger event
+* Do not call HAF
+
+---
+
+## 5. HAF INTEGRATION (STRICT)
+
+For DESTRUCTIVE actions in FULL_ENFORCE:
+
+1. Create **pending authority request**
+2. Persist immutable approval request
+3. Wait for explicit approval
+4. Approval must include:
+
+   * approver_user_id
+   * role (must be SUPER_ADMIN or SECURITY_ANALYST with approval rights)
+   * timestamp
+   * signed decision
+5. Only then proceed to execution
+
+If rejected or expired → FAIL CLOSED.
+
+---
+
+## 6. AGENT COMMAND EXECUTION (STRICT)
+
+Every command sent to agents must:
+
+* Be signed with **ed25519**
+* Include:
+
+  * command_id
+  * action_type
+  * target_id
+  * incident_id
+  * issued_by_user_id
+  * tre_mode
+  * approval_id (if applicable)
+* Be **idempotent**
+* Support rollback token generation
+
+Agent must:
+
+* Verify signature
+* Verify freshness
+* Execute exactly once
+* Emit execution receipt
+
+---
+
+## 7. ROLLBACK (MANDATORY)
+
+For every executed action:
+
+* Create rollback record BEFORE execution
+* Rollback must:
+
+  * Require RBAC check
+  * Require HAF approval if original action was destructive
+  * Be fully auditable
+* Rollback failures must be logged but **never silently ignored**
+
+---
+
+## 8. DATABASE REQUIREMENTS
+
+Ensure tables exist and are used (no bypass):
+
+* tre_execution_modes
+* tre_action_executions
+* tre_action_approvals
+* tre_rollback_records
+
+All records:
+
+* Immutable
+* Timestamped
+* Linked via IDs
+
+---
+
+## 9. AUDIT LEDGER (MANDATORY EVENTS)
+
+Emit ledger events for:
+
+* TRE_MODE_CHANGED
+* TRE_ACTION_REQUESTED
+* TRE_ACTION_BLOCKED
+* TRE_ACTION_APPROVED
+* TRE_ACTION_EXECUTED
+* TRE_ACTION_FAILED
+* TRE_ROLLBACK_REQUESTED
+* TRE_ROLLBACK_EXECUTED
+* TRE_RBAC_DENY
+* TRE_HAF_DENY
+
+Every event must include:
+
+* user_id
+* role
+* action_type
+* target
+* incident_id (if any)
+* outcome
+
+---
+
+## 10. UI REQUIREMENTS (ROLE-AWARE)
+
+UI must:
+
+* Show **Execute buttons only if RBAC allows**
+* Show **Approval queue only to HAF approvers**
+* Clearly label:
+
+  * SAFE vs DESTRUCTIVE
+  * DRY_RUN vs ENFORCE
+* Show immutable execution history
+* Prevent bulk destructive actions without confirmation
+
+UI hiding is **NOT security** — backend already enforces.
+
+---
+
+## 11. VERIFICATION (MANDATORY)
+
+Deliver:
+
+1. `VERIFICATION.md` with:
+
+   * Negative tests
+   * RBAC bypass tests
+   * HAF rejection tests
+2. Proof that:
+
+   * Destructive actions do NOT run without approval
+   * Rollback is impossible without permission
+   * Audit trail is complete and replayable
+
+---
+
+## 12. FINAL OUTPUT EXPECTATION
+
+When complete, report **ONLY**:
+
+* Compliance status (PASS / FAIL)
+* List of files created/modified
+* Verification summary
+
+No explanations. No assumptions. No opinions.
+
+****Promot end****
+
+
+Decision taken. Proceeding to the **next mandatory phase** without questions.
+
+---
+
+## NEXT PHASE: **PHASE N2 — AGENT-SIDE ENFORCEMENT & HARDENED COMMAND EXECUTION**
+
+This phase is **required** to make the already-compliant TRE **actually enforceable at endpoint level**.
+TRE enforcement is incomplete unless agents are hardened to **execute, verify, rollback, and resist abuse**.
+
+This is a **control-plane → data-plane hardening phase**.
+
+---
+
+****Promot Start****
+
+### PHASE N2 — AGENT-SIDE ENFORCEMENT, HARDENING & ROLLBACK GUARANTEES
+
+(**Linux Agent + Windows Agent + DPI Probe where applicable**)
+
+You are implementing **endpoint-side execution authority**.
+Agents are no longer passive collectors.
+
+---
+
+## 0. ABSOLUTE RULES (NO EXCEPTIONS)
+
+1. **Agents NEVER trust the network**
+2. **Agents NEVER trust the UI**
+3. **Agents ONLY trust signed commands**
+4. **Agents FAIL CLOSED**
+5. **Rollback is mandatory for every action**
+6. **No background autonomy**
+7. **No assumptions**
+
+---
+
+## 1. AGENT COMMAND ACCEPTANCE GATE (MANDATORY)
+
+Every agent MUST implement a **single command intake gate**:
+
+```
+receive_command()
+   ↓
+schema validation
+   ↓
+timestamp + nonce freshness check
+   ↓
+ed25519 signature verification
+   ↓
+issuer trust verification (TRE public key)
+   ↓
+RBAC + role assertion validation (embedded)
+   ↓
+HAF approval presence (if required)
+   ↓
+idempotency check (command_id)
+   ↓
+execution OR rejection
+```
+
+If ANY step fails → **REJECT + LOG + AUDIT**
+
+---
+
+## 2. COMMAND STRUCTURE (FROZEN — NO CHANGES)
+
+Agents must accept **ONLY** this structure:
+
+```
+{
+  command_id: UUID,
+  action_type: ENUM,
+  target: OBJECT,
+  incident_id: UUID | null,
+  tre_mode: ENUM,
+  issued_by_user_id: UUID,
+  issued_by_role: ENUM,
+  approval_id: UUID | null,
+  issued_at: RFC3339,
+  expires_at: RFC3339,
+  rollback_token: SHA256,
+  signature: ed25519
+}
+```
+
+No extra fields.
+No optional logic.
+Reject unknown fields.
+
+---
+
+## 3. ACTION EXECUTION MODULES (MANDATORY)
+
+Implement **explicit execution modules** per agent.
+
+### Linux Agent
+
+* process_blocker.py (kill + cgroup deny)
+* network_blocker.py (iptables / nftables)
+* file_quarantine.py (immutable quarantine dir)
+* host_isolator.py (network namespace isolation)
+* rollback_engine.py
+
+### Windows Agent
+
+* process_blocker.ps1 / .py (Terminate + deny restart)
+* firewall_blocker.ps1 (Windows Firewall)
+* file_quarantine.ps1
+* host_isolator.ps1 (NIC disable / VLAN)
+* rollback_engine.ps1
+
+### DPI Probe
+
+* network_blocker ONLY (no host actions)
+
+Each module must:
+
+* Validate action applicability
+* Emit execution receipt
+* Produce rollback artifact
+
+---
+
+## 4. ROLLBACK GUARANTEE (HARD REQUIREMENT)
+
+For **every executed action**:
+
+1. Generate rollback artifact BEFORE execution
+2. Store rollback artifact locally (encrypted)
+3. Report rollback token to TRE
+4. Reject execution if rollback cannot be created
+
+Rollback execution requires:
+
+* Signed rollback command
+* RBAC permission TRE_ROLLBACK
+* HAF approval if original action was destructive
+
+---
+
+## 5. LOCAL AGENT AUDIT LOG (MANDATORY)
+
+Agents must maintain **append-only local audit log**:
+
+* command_received
+* command_rejected (with reason)
+* command_executed
+* command_failed
+* rollback_created
+* rollback_executed
+
+Logs must be:
+
+* Tamper-evident
+* Rotated safely
+* Forwarded to Core when available
+
+---
+
+## 6. SECURITY HARDENING (MANDATORY)
+
+Agents must enforce:
+
+* Replay protection (nonce cache)
+* Clock skew tolerance (±60s max)
+* Command expiry enforcement
+* Rate limiting on command intake
+* One-shot execution per command_id
+
+---
+
+## 7. FAILURE BEHAVIOR (STRICT)
+
+| Scenario            | Behavior             |
+| ------------------- | -------------------- |
+| Signature invalid   | Reject + audit       |
+| Expired command     | Reject + audit       |
+| Missing approval    | Reject + audit       |
+| Rollback prep fails | Reject               |
+| Partial execution   | Rollback immediately |
+| Agent offline       | No queued execution  |
+
+---
+
+## 8. UI INTEGRATION SIGNALS
+
+Agents must expose status to UI via Core:
+
+* Last command received
+* Last command executed
+* Pending rollback
+* Isolation state
+* Enforcement readiness (YES/NO)
+
+---
+
+## 9. AUDIT LEDGER EVENTS (AGENT SIDE)
+
+Emit to Core for ledger:
+
+* AGENT_COMMAND_RECEIVED
+* AGENT_COMMAND_REJECTED
+* AGENT_COMMAND_EXECUTED
+* AGENT_COMMAND_FAILED
+* AGENT_ROLLBACK_CREATED
+* AGENT_ROLLBACK_EXECUTED
+
+All events must include:
+
+* agent_id
+* command_id
+* action_type
+* outcome
+* timestamp
+
+---
+
+## 10. VERIFICATION (NON-NEGOTIABLE)
+
+Deliver:
+
+1. `AGENT_ENFORCEMENT_VERIFICATION.md`
+2. Proof that:
+
+   * Unsigned commands are rejected
+   * Replayed commands are rejected
+   * Destructive actions without approval are rejected
+   * Rollback always works
+3. Cross-agent parity proof (Linux == Windows behavior)
+
+---
+
+## 11. OUTPUT FORMAT (STRICT)
+
+When complete, respond with **ONLY**:
+
+* Compliance status
+* Files created/modified
+* Verification summary
+
+No commentary.
+
+****Promot end****
+
+Promot Start
+
+PHASE N3 — HUMAN-IN-THE-LOOP SAFETY, UI ENFORCEMENT CONTROLS & INCIDENT GOVERNANCE
+
+Implement end-to-end enforcement governance across UI + Core + TRE with zero assumptions.
+
+0. ABSOLUTE RULES
+
+No action without incident context (except SUPER_ADMIN emergency)
+
+No destructive action without explicit human approval
+
+UI must enforce RBAC AND server must enforce RBAC
+
+Every click → auditable decision
+
+No background automation beyond what is already approved
+
+Fail-closed everywhere
+
+1. INCIDENT-BOUND EXECUTION (MANDATORY)
+
+All response actions must be incident-scoped:
+
+Every TRE action must reference:
+
+incident_id
+
+incident_stage
+
+policy_decision_id
+
+Actions without incident context:
+
+REJECTED (except SUPER_ADMIN emergency path)
+
+Implement:
+
+IncidentExecutionGuard
+
+Reject actions if incident is CLOSED or ARCHIVED
+
+2. UI ENFORCEMENT CONTROLS (ROLE-AWARE, POWERFUL)
+2.1 Action Panels (STRICT)
+
+Implement role-gated action panels:
+
+Role	UI Capabilities
+SUPER_ADMIN	All actions + emergency override
+SECURITY_ANALYST	Execute SAFE actions, request DESTRUCTIVE
+POLICY_MANAGER	No execution, policy tuning only
+IT_ADMIN	Agent ops only
+AUDITOR	Read-only, no buttons
+
+Buttons must:
+
+Be disabled if RBAC denies
+
+Show reason for disable
+
+Require confirmation dialogs with explanation preview
+
+3. HUMAN AUTHORITY WORKFLOW (DESTRUCTIVE ONLY)
+
+Implement two-step approval workflow:
+
+Analyst submits destructive action request
+
+Approver (SUPER_ADMIN or delegated authority) approves
+
+TRE executes ONLY after approval_id is present
+
+UI must show:
+
+Pending approvals
+
+Who approved
+
+Time to execution
+
+Rollback availability
+
+4. EMERGENCY OVERRIDE (SUPER_ADMIN ONLY)
+
+Emergency path:
+
+Bypasses incident binding
+
+Requires typed justification
+
+Requires dual confirmation
+
+Emits EMERGENCY_OVERRIDE_USED audit event
+
+Always creates rollback artifact
+
+5. ROLLBACK UX + SAFETY
+
+UI must expose:
+
+Rollback availability per action
+
+One-click rollback (RBAC + HAF enforced)
+
+Rollback history per incident
+
+Rollback failure reasons
+
+Rollback must:
+
+Be incident-scoped
+
+Require approval if original action was destructive
+
+6. AUDIT LEDGER (UI + CORE)
+
+Emit events for:
+
+UI_ACTION_REQUESTED
+
+UI_ACTION_BLOCKED
+
+UI_ACTION_APPROVED
+
+UI_ACTION_EXECUTED
+
+UI_ACTION_ROLLED_BACK
+
+UI_EMERGENCY_OVERRIDE
+
+Every event must include:
+
+user_id
+
+role
+
+incident_id
+
+action_type
+
+decision
+
+timestamp
+
+7. UI TECHNICAL REQUIREMENTS
+
+Server-side permission checks only (UI is advisory)
+
+No hidden endpoints
+
+No optimistic execution
+
+Explicit error surfaces
+
+Deterministic rendering based on RBAC state
+
+8. DOCUMENTATION (MANDATORY)
+
+Deliver:
+
+ENFORCEMENT_UI_SPEC.md
+
+INCIDENT_EXECUTION_LIFECYCLE.md
+
+HUMAN_AUTHORITY_FLOW.md
+
+AUDIT_TRACEABILITY.md
+
+9. VERIFICATION (NON-NEGOTIABLE)
+
+Provide proof:
+
+Analyst cannot execute destructive action
+
+UI bypass attempt is blocked server-side
+
+Emergency override is logged and rollbackable
+
+Auditor cannot trigger any state change
+
+Closed incident blocks all actions
+
+10. OUTPUT FORMAT (STRICT)
+
+Respond with ONLY:
+
+Compliance status
+
+Files created/modified
+
+Verification summary
+
+Promot end
+
+
+
+Promot Start
+
+PHASE N4 — RATE LIMITING, BLAST-RADIUS CONTROL & POST-INCIDENT ACCOUNTABILITY
+
+Implement system-wide execution safety controls with zero assumptions and fail-closed behavior.
+
+0. ABSOLUTE RULES
+
+No unlimited execution (ever)
+
+All actions must declare blast radius
+
+Rate limits are enforced server-side
+
+Post-incident state is immutable unless explicitly reopened
+
+All limits are auditable and replayable
+
+1. RATE LIMITING (MANDATORY, SERVER-SIDE)
+
+Implement hard rate limits for response actions:
+
+1.1 Limits (NON-CONFIGURABLE DEFAULTS)
+
+Per user: 10 actions / minute
+
+Per incident: 25 actions total
+
+Per host: 5 actions / 10 minutes
+
+Emergency override: 2 actions / incident
+
+Limits must:
+
+Be enforced in TRE pipeline
+
+Be evaluated before HAF
+
+Fail-closed with explicit error
+
+Emit audit events:
+
+ACTION_RATE_LIMIT_HIT
+
+EMERGENCY_LIMIT_HIT
+
+2. BLAST-RADIUS DECLARATION & ENFORCEMENT
+
+Every action must declare:
+
+blast_scope: HOST | GROUP | NETWORK | GLOBAL
+
+target_count: explicit integer
+
+expected_impact: ENUM (LOW | MEDIUM | HIGH)
+
+Rules:
+
+GROUP / NETWORK / GLOBAL scopes require approval
+
+Target count must match resolved targets
+
+Mismatch = REJECT
+
+Implement:
+
+BlastRadiusResolver
+
+BlastRadiusValidator
+
+3. INCIDENT FREEZE & REOPEN
+3.1 Automatic Freeze
+
+After:
+
+Incident CLOSED
+
+Incident RESOLVED_WITH_ACTIONS
+
+System must:
+
+Block all new actions
+
+Allow rollback only
+
+Require SUPER_ADMIN to reopen
+
+3.2 Reopen Workflow
+
+Requires justification
+
+Emits INCIDENT_REOPENED audit event
+
+Restores action capability
+
+4. POST-INCIDENT ATTESTATION (NEW)
+
+Implement mandatory attestation after destructive actions:
+
+Attestation required from:
+
+Security Analyst (executor)
+
+Approver (HAF authority)
+
+Stored immutably
+
+Linked to incident_id
+
+UI must block:
+
+Incident closure until attestation complete
+
+5. UI SAFETY CONTROLS (EXTENSION)
+
+UI must display:
+
+Remaining action quota (user / incident)
+
+Blast radius preview before submit
+
+Warnings for HIGH impact actions
+
+Incident freeze banner
+
+No silent failures.
+
+6. AUDIT LEDGER (EXTENDED)
+
+Add events:
+
+ACTION_RATE_LIMIT_HIT
+
+BLAST_RADIUS_REJECTED
+
+INCIDENT_FROZEN
+
+INCIDENT_REOPENED
+
+POST_INCIDENT_ATTESTED
+
+All events must include:
+
+user_id
+
+role
+
+incident_id
+
+decision
+
+reason
+
+timestamp
+
+7. DATABASE (MANDATORY)
+
+Add tables:
+
+tre_rate_limits
+
+tre_blast_radius
+
+incident_attestations
+
+Constraints:
+
+Immutable records
+
+Foreign keys to incident + action
+
+No deletes
+
+8. VERIFICATION (NON-NEGOTIABLE)
+
+Prove:
+
+User cannot exceed action limits
+
+Blast radius mismatch blocks execution
+
+Emergency override is capped
+
+Closed incident blocks execution
+
+Incident cannot close without attestation
+
+All failures are logged
+
+9. OUTPUT FORMAT (STRICT)
+
+Respond with ONLY:
+
+Compliance status
+
+Files created/modified
+
+Verification summary
+
+Promot end
+
+
+
+Start Promot*
+
+You are Cursor, acting as the implementation engineer for Phase 5.1 — LLM Generative Summarizer.
+
+AUTHORITATIVE CONTEXT
+
+explanation-assembly/ is NOT a summarizer.
+
+You must build a new subsystem, not extend explanation-assembly.
+
+LLM is NON-DECISIONAL, NON-ENFORCING, TEXT-ONLY.
+
+This module is offline-first, deterministic, signed, and auditable.
+
+OBJECTIVE
+
+Design and implement an Offline LLM Summarizer that generates human-readable incident narratives from structured facts.
+
+HARD CONSTRAINTS (NON-NEGOTIABLE)
+
+NO enforcement
+
+NO decisions
+
+NO raw packets
+
+NO secrets
+
+Deterministic prompts
+
+Prompt hash must be logged
+
+Output hash must be logged
+
+PII redaction at generation time
+
+Air-gapped capable
+
+PDF / HTML / CSV output
+
+REQUIRED INPUTS
+
+Incident timeline (from correlation engine)
+
+KillChain stages
+
+SHAP explanations (numeric only)
+
+Forensic artifacts metadata (NOT raw dumps)
+
+Policy decisions (facts only)
+
+REQUIRED OUTPUTS
+
+SOC narrative
+
+Executive summary
+
+Legal / Regulator narrative
+(All generated separately, not post-processed)
+
+REQUIRED DELIVERABLES (IN THIS ORDER)
+
+Architecture write-up
+
+New repo/module name
+
+Clear separation from explanation-assembly
+
+Prompt versioning & hashing model
+
+PII redaction strategy
+
+LLM execution sandbox
+
+Output signing & audit logging
+
+Failure modes (fail-closed)
+
+EXPLICITLY FORBIDDEN
+
+Online APIs
+
+Self-modifying prompts
+
+Auto-retraining
+
+Free-text analyst input
+
+“Helpful” hallucinations
+
+OUTPUT FORMAT
+
+Respond with:
+
+Architecture diagram (textual)
+
+Module structure
+
+Prompt lifecycle flow
+
+Open risks / assumptions (if any)
+
+Do NOT write code yet.
+
+End your response with:
+
+“I am ready for implementation once architecture is approved.”
+
+Promot End*
+
+
+🔴 PROMPT 3 — LLM SUMMARIZER IMPLEMENTATION (FOUNDATION)
+
+Start Promot*
+
+You are Cursor, acting as the implementation engineer for Phase 5.1 — LLM Generative Summarizer (Foundation Build).
+
+ARCHITECTURE STATUS
+
+Architecture is APPROVED AND FROZEN
+
+You must implement exactly what was approved
+
+No scope expansion
+
+No simplification
+
+YOUR OBJECTIVE
+
+Implement the foundational codebase for llm-summarizer/ such that:
+
+All invariants are enforced
+
+All failure modes are fail-closed
+
+No LLM text generation quality tuning yet
+
+Focus is correctness, safety, determinism
+
+IMPLEMENT IN THIS EXACT ORDER
+STEP 1 — SCHEMAS (MANDATORY FIRST)
+
+Create frozen JSON schemas:
+
+summary-request.schema.json
+
+summary-output.schema.json
+
+prompt-template.schema.json
+
+redaction-log.schema.json
+
+Rules:
+
+Strict typing
+
+No optional ambiguity
+
+Reject unknown fields
+
+Versioned schemas only
+
+STEP 2 — PROMPT TEMPLATE REGISTRY
+
+Implement:
+
+Immutable prompt template registration
+
+Template hash calculation (SHA256)
+
+Version enforcement
+
+Fail-closed on hash mismatch
+
+Files:
+
+prompts/template_registry.py
+
+prompts/prompt_hasher.py
+
+STEP 3 — PII REDACTION ENGINE
+
+Implement deterministic redaction:
+
+STRICT / BALANCED / FORENSIC modes
+
+Regex-based pattern detection
+
+Ordered, repeatable execution
+
+Redaction log generation (immutable)
+
+Files:
+
+redaction/redaction_engine.py
+
+redaction/pattern_detector.py
+
+redaction/redaction_policy.py
+
+STEP 4 — LLM EXECUTION SANDBOX (NO MODEL YET)
+
+Implement sandbox WITHOUT calling the model yet:
+
+Token counting
+
+Memory limits
+
+Timeout enforcement
+
+Determinism checks
+
+Fail-closed guards
+
+Files:
+
+llm/sandbox.py
+
+llm/token_manager.py
+
+STEP 5 — OUTPUT VALIDATION & SIGNING
+
+Implement:
+
+Output schema validation
+
+Output hashing
+
+ed25519 signing
+
+Signature verification helper
+
+Files:
+
+output/validator.py
+
+output/signer.py
+
+STEP 6 — AUDIT LEDGER INTEGRATION
+
+Emit ledger entries for:
+
+Redaction completed
+
+Prompt assembled
+
+Sandbox executed (even without model)
+
+Output signed
+
+Do not skip audit on failures.
+
+HARD RULES
+
+No online access
+
+No subprocess execution
+
+No inference yet
+
+No UI
+
+No shortcuts
+
+No TODOs
+
+No “mock” logic
+
+DELIVERABLE
+
+Respond with:
+
+Directory tree
+
+Key class/function signatures
+
+Example schema snippets
+
+Explicit list of what is NOT implemented yet
+
+End with:
+
+“Phase 5.1 foundation implemented. Ready for inference layer.”
+
+Promot End*
+
+
+🔴 PROMPT 4 — LLM INFERENCE ENGINE (OFFLINE, DETERMINISTIC)
+
+Start Promot*
+
+You are Cursor, acting as the implementation engineer for
+Phase 5.2 — LLM Inference Engine (Offline, Deterministic).
+
+CONTEXT (FROZEN)
+
+Phase 5.1 foundation is COMPLETE and FROZEN.
+
+You must integrate inference without changing:
+
+schemas
+
+redaction
+
+prompt assembly
+
+audit semantics
+
+OBJECTIVE
+
+Implement actual LLM inference for llm-summarizer/ using offline GGUF models, with strict determinism and safety.
+
+HARD CONSTRAINTS (NON-NEGOTIABLE)
+
+Offline only (no network)
+
+GGUF format only
+
+Deterministic inference:
+
+temperature = 0.0
+
+fixed seed
+
+Fail-closed on:
+
+model hash mismatch
+
+non-PROMOTED model
+
+token overflow
+
+timeout
+
+memory breach
+
+No prompt mutation
+
+No post-generation editing
+
+Same prompt + same model → same output (bit-for-bit)
+
+IMPLEMENT IN THIS ORDER
+STEP 1 — MODEL LOADER
+
+Create:
+
+llm/model_loader.py
+
+Responsibilities:
+
+Load GGUF model from filesystem
+
+Model path from ENV only
+
+Calculate model SHA256
+
+Verify:
+
+model exists
+
+hash matches ai-model-registry
+
+model state == PROMOTED
+
+Fail-closed on any mismatch
+
+STEP 2 — TOKENIZATION (REAL)
+
+Upgrade:
+
+llm/token_manager.py
+
+Requirements:
+
+Use the actual tokenizer for the chosen model
+
+Accurate input + output token counting
+
+Reject on overflow before inference
+
+STEP 3 — INFERENCE ENGINE
+
+Create:
+
+llm/inference_engine.py
+
+Responsibilities:
+
+Accept final prompt string
+
+Run deterministic inference
+
+Enforce:
+
+token limits
+
+execution timeout
+
+Return:
+
+generated_text
+
+token counts
+
+inference time (ms)
+
+STEP 4 — SANDBOX INTEGRATION
+
+Wire inference into:
+
+llm/sandbox.py
+
+Requirements:
+
+Memory limit enforcement
+
+Timeout enforcement
+
+No subprocess escape
+
+Explicit failure exceptions
+
+STEP 5 — AUDIT INTEGRATION
+
+Emit ledger events:
+
+llm_model_loaded
+
+llm_inference_started
+
+llm_inference_completed
+
+llm_inference_failed (if applicable)
+
+Include:
+
+model_id
+
+model_version
+
+model_hash
+
+input_tokens
+
+output_tokens
+
+inference_time_ms
+
+EXPLICITLY FORBIDDEN
+
+Online APIs
+
+Auto-retries
+
+Sampling
+
+Temperature tuning
+
+Streaming output
+
+Partial results
+
+DELIVERABLE
+
+Respond with:
+
+Updated directory tree
+
+Key class/function signatures
+
+How determinism is guaranteed
+
+What is still NOT implemented after this phase
+
+End with:
+
+“Phase 5.2 inference layer implemented. Ready for rendering layer.”
+
+Promot End*
+
+
+🔴 PROMPT 5 — OUTPUT RENDERING (PDF / HTML / CSV)
+
+Start Promot*
+
+You are Cursor, acting as the implementation engineer for
+Phase 5.3 — Output Rendering Layer (PDF / HTML / CSV).
+
+CONTEXT (FROZEN)
+
+Phase 5.1 and 5.2 are COMPLETE and FROZEN.
+
+LLM inference already produces:
+
+deterministic generated_text
+
+output_hash
+
+ed25519 signature
+
+Rendering must consume validated, signed output, not raw prompts.
+
+OBJECTIVE
+
+Implement a deterministic, auditable rendering layer that converts generated summaries into:
+
+PDF (compliance / regulator)
+
+HTML (UI consumption)
+
+CSV (regulatory ingestion)
+
+HARD CONSTRAINTS (NON-NEGOTIABLE)
+
+Rendering MUST NOT modify generated text
+
+Rendering MUST NOT reflow meaning
+
+Rendering MUST preserve exact text content
+
+Rendering MUST log output_format + output_hash
+
+Rendering MUST be deterministic
+
+Rendering MUST fail-closed on any error
+
+No network access
+
+No dynamic templates from users
+
+IMPLEMENT IN THIS ORDER
+STEP 1 — RENDERER MODULE
+
+Create:
+
+output/renderer.py
+
+Implement:
+
+render_pdf(text: str, metadata: dict) -> bytes
+
+render_html(text: str, metadata: dict) -> str
+
+render_csv(text: str, metadata: dict) -> str
+
+Rules:
+
+PDF: fixed layout, monospaced or neutral font, no JS
+
+HTML: static, no scripts, no external assets
+
+CSV: one row per logical section, no free-form splitting
+
+STEP 2 — METADATA BINDING
+
+Each rendered output MUST embed:
+
+summary_id
+
+narrative_type
+
+prompt_hash
+
+model_id
+
+model_version
+
+output_hash
+
+signed_at (RFC3339)
+
+Metadata must be:
+
+embedded in PDF footer or metadata
+
+embedded in HTML <meta> tags
+
+embedded as header rows in CSV
+
+STEP 3 — SIGNED OUTPUT HANDLING
+
+Rules:
+
+Rendering occurs after output signing
+
+Signature applies to original text
+
+Renderer must:
+
+include signature reference
+
+NOT re-sign rendered artifacts
+
+STEP 4 — AUDIT INTEGRATION
+
+Emit ledger events:
+
+summary_render_started
+
+summary_render_completed
+
+summary_render_failed
+
+Include:
+
+summary_id
+
+output_format
+
+output_hash
+
+EXPLICITLY FORBIDDEN
+
+Markdown rendering engines
+
+Rich text editors
+
+Dynamic HTML
+
+External fonts or assets
+
+Re-wrapping or paraphrasing text
+
+DELIVERABLE
+
+Respond with:
+
+Updated directory tree
+
+Renderer function signatures
+
+Determinism guarantees per format
+
+What is still NOT implemented after this phase
+
+End with:
+
+“Phase 5.3 rendering layer implemented. Ready for templates and CLI.”
+
+Promot End*
+
+
+🔴 PROMPT 6 — JINJA2 PROMPT TEMPLATES (AUTHORITATIVE CONTENT)
+
+Start Promot*
+
+You are Cursor, acting as the implementation engineer for
+Phase 5.4 — Authoritative Prompt Templates (Jinja2).
+
+CONTEXT (FROZEN)
+
+Prompt registry, assembler, hashing, and inference are COMPLETE.
+
+This phase is content definition, not logic.
+
+Templates are security-critical artifacts.
+
+OBJECTIVE
+
+Create the initial frozen prompt templates that control exactly what the LLM may say.
+
+TEMPLATES TO CREATE (MANDATORY)
+
+Create directory:
+
+prompts/templates/
+
+
+Create exactly these files:
+
+soc_narrative_v1.0.0.jinja2
+
+executive_summary_v1.0.0.jinja2
+
+legal_narrative_v1.0.0.jinja2
+
+No others.
+
+HARD CONSTRAINTS (NON-NEGOTIABLE)
+
+Templates MUST:
+
+Use only structured inputs
+
+Never speculate
+
+Never introduce new facts
+
+No adjectives implying certainty unless supported by evidence
+
+Explicitly distinguish:
+
+Observed facts
+
+Correlated inferences
+
+Policy decisions
+
+No mitigation advice
+
+No blame language
+
+No probabilistic wording unless numeric confidence exists
+
+Deterministic ordering of sections
+
+REQUIRED STRUCTURE (ALL TEMPLATES)
+
+Each template MUST include sections in this exact order:
+
+Header
+
+Scope & Source of Information
+
+Incident Timeline (facts only)
+
+Observed Behaviors
+
+Correlated Findings
+
+Policy & Response Actions (facts only)
+
+Evidence References
+
+Limitations & Assumptions
+
+Closing Statement
+
+AUDIENCE-SPECIFIC RULES
+SOC Narrative
+
+Technical
+
+Precise
+
+No simplification
+
+No business language
+
+Executive Summary
+
+Non-technical
+
+No timestamps unless necessary
+
+Focus on impact and containment
+
+Max 1 page equivalent
+
+Legal / Regulator Narrative
+
+Formal tone
+
+No abbreviations
+
+Explicit disclaimers
+
+Chain-of-custody emphasis
+
+Jurisdiction-neutral language
+
+VERSIONING RULES
+
+Version = v1.0.0
+
+Templates are immutable
+
+Any change requires new version
+
+Do NOT register templates yet
+
+DELIVERABLE
+
+Respond with:
+
+Full contents of all three template files
+
+Explanation of how each section avoids hallucination
+
+Explicit statement of what the templates will never say
+
+End with:
+
+“Phase 5.4 prompt templates defined. Ready for CLI tools.”
+
+Promot End*
+
+
+🔴 PROMPT 7 — CLI TOOLS (ADMIN & VALIDATION ONLY)
+
+Start Promot*
+
+You are Cursor, acting as the implementation engineer for
+Phase 5.5 — CLI Tools for LLM Summarizer (Admin & Validation Only).
+
+CONTEXT (FROZEN)
+
+Summarizer is UI-driven for users.
+
+CLI is NOT a user interface.
+
+CLI is for:
+
+Admin operations
+
+Air-gapped environments
+
+CI / Global Validator
+
+Template lifecycle control
+
+OBJECTIVE
+
+Implement safe, deterministic CLI tools for the LLM summarizer subsystem.
+
+CLIs TO IMPLEMENT (MANDATORY)
+
+Create directory:
+
+cli/
+
+
+Implement exactly these tools:
+
+register_template.py
+
+list_templates.py
+
+generate_summary.py
+
+render_summary.py
+
+verify_model.py
+
+No others.
+
+TOOL BEHAVIOR (STRICT)
+register_template.py
+
+Input: template file path
+
+Validate Jinja2 syntax
+
+Calculate template hash
+
+Register immutable template
+
+Emit audit ledger entry
+
+Fail if template already exists (same hash)
+
+list_templates.py
+
+Read-only
+
+Show:
+
+template_id
+
+version
+
+narrative_type
+
+hash
+
+registered_at
+
+generate_summary.py
+
+Input: summary-request JSON file
+
+Call SummarizerAPI.generate_summary
+
+Print:
+
+summary_id
+
+output_hash
+
+signature
+
+render_summary.py
+
+Input: summary_id + format (PDF/HTML/CSV)
+
+Write output to file
+
+No regeneration
+
+verify_model.py
+
+Verify:
+
+model exists
+
+hash matches registry
+
+state == PROMOTED
+
+No inference
+
+HARD CONSTRAINTS
+
+No interactive prompts
+
+No editing of templates
+
+No bypass of registry
+
+No silent failures
+
+All failures logged
+
+ENV-only configuration
+
+DELIVERABLE
+
+Respond with:
+
+CLI directory tree
+
+argparse command specs for each tool
+
+Safety guarantees per tool
+
+What remains after CLI completion
+
+End with:
+
+“Phase 5.5 CLI tools implemented. LLM subsystem complete.”
+
+Promot End*
+
+
+
+

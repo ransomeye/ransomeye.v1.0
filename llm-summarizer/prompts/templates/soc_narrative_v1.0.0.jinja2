@@ -1,0 +1,157 @@
+SECURITY INCIDENT NARRATIVE — SOC ANALYST VIEW
+
+================================================================================
+SCOPE & SOURCE OF INFORMATION
+================================================================================
+
+This narrative is generated from structured security telemetry and correlation data. All statements are derived from recorded events, policy decisions, and forensic metadata. No external intelligence or speculation is included.
+
+Source Components:
+- Correlation Engine: Incident timeline and event correlation
+- KillChain Forensics: MITRE ATT&CK stage mapping and campaign correlation
+- AI Core: SHAP feature importance scores (numeric only)
+- Forensic Evidence: Artifact metadata references (not raw content)
+- Policy Engine: Decision records and enforcement actions (facts only)
+
+Incident Identifier: {{ incident_id }}
+Narrative Generation Timestamp: {{ requested_at }}
+Redaction Policy Applied: {{ redaction_policy }}
+
+================================================================================
+INCIDENT TIMELINE (FACTS ONLY)
+================================================================================
+
+The following timeline is constructed from recorded events. Events are ordered by observed timestamp. No temporal inference is applied.
+
+{% if incident_timeline %}
+{% for event in incident_timeline %}
+Event ID: {{ event.event_id }}
+Timestamp: {{ event.timestamp }}
+Event Type: {{ event.event_type }}
+Source Host: {{ event.source_host }}
+Target Host: {{ event.target_host }}
+{% if event.description %}Description: {{ event.description }}{% endif %}
+
+{% endfor %}
+{% else %}
+No timeline events recorded for this incident.
+{% endif %}
+
+================================================================================
+OBSERVED BEHAVIORS
+================================================================================
+
+The following behaviors were directly observed in telemetry. Each behavior is a recorded fact, not an inference.
+
+{% if killchain_stages %}
+KillChain Stage Progression:
+
+{% for stage in killchain_stages %}
+Stage: {{ stage.stage_name }}
+MITRE Technique: {{ stage.mitre_technique_id }}
+Time Window: {{ stage.start_timestamp }} to {{ stage.end_timestamp }}
+{% if stage.description %}Stage Description: {{ stage.description }}{% endif %}
+
+{% endfor %}
+{% else %}
+No KillChain stages identified for this incident.
+{% endif %}
+
+{% if shap_explanations %}
+Feature Importance (SHAP Scores):
+
+The following numeric scores indicate which features contributed most to detection. Higher absolute values indicate stronger contribution. These are numeric scores only, not risk assessments.
+
+{% for explanation in shap_explanations %}
+Feature: {{ explanation.feature_name }}
+SHAP Value: {{ explanation.shap_value }}
+
+{% endfor %}
+{% else %}
+No SHAP explanations available for this incident.
+{% endif %}
+
+================================================================================
+CORRELATED FINDINGS
+================================================================================
+
+The following findings are derived from correlation logic applied to observed events. Correlation does not imply causation. All correlations are based on explicit matching rules (IP addresses, malware families, user accounts, host identifiers).
+
+{% if killchain_stages %}
+Campaign Correlation:
+
+Multiple stages were correlated into a single campaign based on shared identifiers (IP addresses, malware families, user accounts, host identifiers). The correlation logic is deterministic and rule-based.
+
+{% endif %}
+
+================================================================================
+POLICY & RESPONSE ACTIONS (FACTS ONLY)
+================================================================================
+
+The following policy decisions and response actions were recorded. These are factual records of what was decided and executed, not recommendations or evaluations.
+
+{% if policy_decisions %}
+{% for decision in policy_decisions %}
+Decision ID: {{ decision.decision_id }}
+Decision Type: {{ decision.decision_type }}
+Decision Timestamp: {{ decision.decision_timestamp }}
+Outcome: {{ decision.decision_outcome }}
+{% if decision.reasoning %}Reasoning: {{ decision.reasoning }}{% endif %}
+
+{% endfor %}
+{% else %}
+No policy decisions recorded for this incident.
+{% endif %}
+
+================================================================================
+EVIDENCE REFERENCES
+================================================================================
+
+The following forensic artifacts were collected and indexed. Artifacts are referenced by hash and type only. Raw artifact content is not included in this narrative.
+
+{% if forensic_artifacts_metadata %}
+{% for artifact in forensic_artifacts_metadata %}
+Artifact ID: {{ artifact.artifact_id }}
+Artifact Type: {{ artifact.artifact_type }}
+Artifact Hash: {{ artifact.artifact_hash }}
+Collected At: {{ artifact.collected_at }}
+{% if artifact.description %}Description: {{ artifact.description }}{% endif %}
+
+{% endfor %}
+{% else %}
+No forensic artifacts recorded for this incident.
+{% endif %}
+
+================================================================================
+LIMITATIONS & ASSUMPTIONS
+================================================================================
+
+This narrative is limited to:
+
+1. Recorded telemetry events only. Events not captured by agents or DPI are not included.
+2. Deterministic correlation rules only. No machine learning inference beyond SHAP scores.
+3. Policy decision records only. No evaluation of decision quality or effectiveness.
+4. Forensic artifact metadata only. Raw artifact content is not analyzed in this narrative.
+5. Temporal ordering by recorded timestamps. Clock skew or delayed ingestion may affect ordering.
+
+This narrative does NOT include:
+
+- External threat intelligence
+- Speculation about attacker intent
+- Mitigation recommendations
+- Blame or attribution statements
+- Probabilistic assessments without numeric confidence scores
+- Information not present in the structured input data
+
+================================================================================
+CLOSING STATEMENT
+================================================================================
+
+This narrative is a factual reconstruction based on recorded security telemetry. All statements are derived from structured data provided to the summarization engine. No external knowledge, speculation, or inference beyond explicit correlation rules is included.
+
+For detailed forensic analysis, refer to the evidence artifacts referenced above. For policy evaluation, refer to the policy decision records. For timeline reconstruction, refer to the incident timeline events.
+
+Narrative generated by: RansomEye LLM Summarizer
+Model: {{ model_id }} (version {{ model_version }})
+Prompt Hash: {{ prompt_hash }}
+Output Hash: {{ output_hash }}

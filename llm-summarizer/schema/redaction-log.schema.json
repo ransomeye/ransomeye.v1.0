@@ -1,0 +1,100 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RansomEye LLM Summarizer - Redaction Log",
+  "description": "Frozen schema for PII redaction logs. All fields are mandatory. No optional fields allowed.",
+  "type": "object",
+  "required": [
+    "redaction_log_id",
+    "summary_request_id",
+    "redaction_policy",
+    "redactions",
+    "redaction_hash",
+    "redacted_at",
+    "redacted_by"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "redaction_log_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this redaction log (UUID v4)"
+    },
+    "summary_request_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Summary request identifier"
+    },
+    "redaction_policy": {
+      "type": "string",
+      "enum": [
+        "STRICT",
+        "BALANCED",
+        "FORENSIC"
+      ],
+      "description": "Redaction policy mode applied"
+    },
+    "redactions": {
+      "type": "array",
+      "description": "List of redactions performed",
+      "items": {
+        "type": "object",
+        "required": [
+          "field_path",
+          "original_value",
+          "redacted_value",
+          "redaction_type"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "field_path": {
+            "type": "string",
+            "minLength": 1,
+            "description": "JSONPath to redacted field"
+          },
+          "original_value": {
+            "type": "string",
+            "description": "Original value before redaction"
+          },
+          "redacted_value": {
+            "type": "string",
+            "description": "Value after redaction"
+          },
+          "redaction_type": {
+            "type": "string",
+            "enum": [
+              "IP_HASH",
+              "IP_PARTIAL",
+              "HOSTNAME_HASH",
+              "HOSTNAME_TRUNCATE",
+              "USERNAME_HASH",
+              "EMAIL_REDACT",
+              "EMAIL_DOMAIN_ONLY",
+              "DOMAIN_REDACT",
+              "DOMAIN_SECOND_LEVEL",
+              "SECRET_PATTERN",
+              "SSN_PATTERN",
+              "CREDIT_CARD_PATTERN"
+            ],
+            "description": "Type of redaction applied"
+          }
+        }
+      }
+    },
+    "redaction_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA256 hash of redaction log (deterministic)"
+    },
+    "redacted_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp of redaction"
+    },
+    "redacted_by": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Entity that performed redaction"
+    }
+  }
+}

@@ -1,0 +1,174 @@
+🔴 PROMPT 3 — LLM SUMMARIZER IMPLEMENTATION (FOUNDATION)
+
+Start Promot*
+
+You are Cursor, acting as the implementation engineer for Phase 5.1 — LLM Generative Summarizer (Foundation Build).
+
+ARCHITECTURE STATUS
+
+Architecture is APPROVED AND FROZEN
+
+You must implement exactly what was approved
+
+No scope expansion
+
+No simplification
+
+YOUR OBJECTIVE
+
+Implement the foundational codebase for llm-summarizer/ such that:
+
+All invariants are enforced
+
+All failure modes are fail-closed
+
+No LLM text generation quality tuning yet
+
+Focus is correctness, safety, determinism
+
+IMPLEMENT IN THIS EXACT ORDER
+STEP 1 — SCHEMAS (MANDATORY FIRST)
+
+Create frozen JSON schemas:
+
+summary-request.schema.json
+
+summary-output.schema.json
+
+prompt-template.schema.json
+
+redaction-log.schema.json
+
+Rules:
+
+Strict typing
+
+No optional ambiguity
+
+Reject unknown fields
+
+Versioned schemas only
+
+STEP 2 — PROMPT TEMPLATE REGISTRY
+
+Implement:
+
+Immutable prompt template registration
+
+Template hash calculation (SHA256)
+
+Version enforcement
+
+Fail-closed on hash mismatch
+
+Files:
+
+prompts/template_registry.py
+
+prompts/prompt_hasher.py
+
+STEP 3 — PII REDACTION ENGINE
+
+Implement deterministic redaction:
+
+STRICT / BALANCED / FORENSIC modes
+
+Regex-based pattern detection
+
+Ordered, repeatable execution
+
+Redaction log generation (immutable)
+
+Files:
+
+redaction/redaction_engine.py
+
+redaction/pattern_detector.py
+
+redaction/redaction_policy.py
+
+STEP 4 — LLM EXECUTION SANDBOX (NO MODEL YET)
+
+Implement sandbox WITHOUT calling the model yet:
+
+Token counting
+
+Memory limits
+
+Timeout enforcement
+
+Determinism checks
+
+Fail-closed guards
+
+Files:
+
+llm/sandbox.py
+
+llm/token_manager.py
+
+STEP 5 — OUTPUT VALIDATION & SIGNING
+
+Implement:
+
+Output schema validation
+
+Output hashing
+
+ed25519 signing
+
+Signature verification helper
+
+Files:
+
+output/validator.py
+
+output/signer.py
+
+STEP 6 — AUDIT LEDGER INTEGRATION
+
+Emit ledger entries for:
+
+Redaction completed
+
+Prompt assembled
+
+Sandbox executed (even without model)
+
+Output signed
+
+Do not skip audit on failures.
+
+HARD RULES
+
+No online access
+
+No subprocess execution
+
+No inference yet
+
+No UI
+
+No shortcuts
+
+No TODOs
+
+No “mock” logic
+
+DELIVERABLE
+
+Respond with:
+
+Directory tree
+
+Key class/function signatures
+
+Example schema snippets
+
+Explicit list of what is NOT implemented yet
+
+End with:
+
+“Phase 5.1 foundation implemented. Ready for inference layer.”
+
+Promot End*

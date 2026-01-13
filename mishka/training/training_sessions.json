@@ -1,0 +1,13 @@
+{
+  "sessions": [
+    {
+      "session_id": "session_1768285641",
+      "start_time": "2026-01-13T11:57:21.618985",
+      "start_timestamp": 1768285641.6189973,
+      "max_hours": 5.0,
+      "status": "running"
+    }
+  ],
+  "daily_totals": {},
+  "total_hours": 0.0
+}

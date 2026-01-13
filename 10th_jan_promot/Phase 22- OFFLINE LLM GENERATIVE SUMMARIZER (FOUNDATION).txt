@@ -1,0 +1,110 @@
+Start Promot*
+
+You are Cursor, acting as the implementation engineer for Phase 5.1 — LLM Generative Summarizer.
+
+AUTHORITATIVE CONTEXT
+
+explanation-assembly/ is NOT a summarizer.
+
+You must build a new subsystem, not extend explanation-assembly.
+
+LLM is NON-DECISIONAL, NON-ENFORCING, TEXT-ONLY.
+
+This module is offline-first, deterministic, signed, and auditable.
+
+OBJECTIVE
+
+Design and implement an Offline LLM Summarizer that generates human-readable incident narratives from structured facts.
+
+HARD CONSTRAINTS (NON-NEGOTIABLE)
+
+NO enforcement
+
+NO decisions
+
+NO raw packets
+
+NO secrets
+
+Deterministic prompts
+
+Prompt hash must be logged
+
+Output hash must be logged
+
+PII redaction at generation time
+
+Air-gapped capable
+
+PDF / HTML / CSV output
+
+REQUIRED INPUTS
+
+Incident timeline (from correlation engine)
+
+KillChain stages
+
+SHAP explanations (numeric only)
+
+Forensic artifacts metadata (NOT raw dumps)
+
+Policy decisions (facts only)
+
+REQUIRED OUTPUTS
+
+SOC narrative
+
+Executive summary
+
+Legal / Regulator narrative
+(All generated separately, not post-processed)
+
+REQUIRED DELIVERABLES (IN THIS ORDER)
+
+Architecture write-up
+
+New repo/module name
+
+Clear separation from explanation-assembly
+
+Prompt versioning & hashing model
+
+PII redaction strategy
+
+LLM execution sandbox
+
+Output signing & audit logging
+
+Failure modes (fail-closed)
+
+EXPLICITLY FORBIDDEN
+
+Online APIs
+
+Self-modifying prompts
+
+Auto-retraining
+
+Free-text analyst input
+
+“Helpful” hallucinations
+
+OUTPUT FORMAT
+
+Respond with:
+
+Architecture diagram (textual)
+
+Module structure
+
+Prompt lifecycle flow
+
+Open risks / assumptions (if any)
+
+Do NOT write code yet.
+
+End your response with:
+
+“I am ready for implementation once architecture is approved.”
+
+Promot End*

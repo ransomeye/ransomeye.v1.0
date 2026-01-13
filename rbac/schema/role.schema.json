@@ -1,0 +1,36 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RansomEye RBAC Role",
+  "description": "Frozen schema for role definitions. All fields are mandatory. Zero optional fields allowed.",
+  "type": "object",
+  "required": [
+    "role_id",
+    "role_name",
+    "description"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "role_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this role (UUID v4)"
+    },
+    "role_name": {
+      "type": "string",
+      "enum": [
+        "SUPER_ADMIN",
+        "SECURITY_ANALYST",
+        "POLICY_MANAGER",
+        "IT_ADMIN",
+        "AUDITOR"
+      ],
+      "description": "Role name (exactly five roles)"
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500,
+      "description": "Human-readable description of role"
+    }
+  }
+}

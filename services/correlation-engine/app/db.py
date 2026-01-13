@@ -42,27 +42,29 @@ def get_db_connection():
     Get PostgreSQL database connection with explicit isolation level.
     Transaction discipline: Explicit isolation level (READ_COMMITTED).
     Connection safety: Validate health before returning.
+    
+    GA-BLOCKING FIX: Removed fallback psycopg2.connect() path.
+    Fail-fast if common/db/safety.py utilities are not available.
     """
-    if _common_db_safety_available:
-        conn = create_write_connection(
-            host=os.getenv("RANSOMEYE_DB_HOST", "localhost"),
-            port=int(os.getenv("RANSOMEYE_DB_PORT", "5432")),
-            database=os.getenv("RANSOMEYE_DB_NAME", "ransomeye"),
-            user=os.getenv("RANSOMEYE_DB_USER", "ransomeye"),
-            password=os.getenv("RANSOMEYE_DB_PASSWORD", ""),
-            isolation_level=IsolationLevel.READ_COMMITTED,
-            logger=_logger
-        )
-        return conn
-    else:
-        # Fallback
-        return psycopg2.connect(
-            host=os.getenv("RANSOMEYE_DB_HOST", "localhost"),
-            port=int(os.getenv("RANSOMEYE_DB_PORT", "5432")),
-            database=os.getenv("RANSOMEYE_DB_NAME", "ransomeye"),
-            user=os.getenv("RANSOMEYE_DB_USER", "ransomeye"),
-            password=os.getenv("RANSOMEYE_DB_PASSWORD", "")
-        )
+    if not _common_db_safety_available:
+        error_msg = "CRITICAL: Database safety utilities (common/db/safety.py) are not available. Core must terminate."
+        if _logger:
+            _logger.fatal(error_msg)
+        else:
+            print(f"FATAL: {error_msg}", file=sys.stderr)
+        from common.shutdown import ExitCode, exit_fatal
+        exit_fatal(error_msg, ExitCode.STARTUP_ERROR)
+    
+    conn = create_write_connection(
+        host=os.getenv("RANSOMEYE_DB_HOST", "localhost"),
+        port=int(os.getenv("RANSOMEYE_DB_PORT", "5432")),
+        database=os.getenv("RANSOMEYE_DB_NAME", "ransomeye"),
+        user=os.getenv("RANSOMEYE_DB_USER", "ransomeye"),
+        password=os.getenv("RANSOMEYE_DB_PASSWORD", ""),
+        isolation_level=IsolationLevel.READ_COMMITTED,
+        logger=_logger
+    )
+    return conn
 
 
 def get_unprocessed_events(conn) -> List[Dict[str, Any]]:
@@ -184,18 +186,18 @@ def create_incident(conn, incident_id: str, machine_id: str, event: Dict[str, An
             cur.close()
     
     # Use common database safety utilities for explicit transaction management
-    if _common_db_safety_available:
-        return execute_write_operation(conn, "create_incident", _do_create_incident, _logger)
-    else:
-        # Fallback: Explicit transaction management
-        begin_transaction(conn, _logger)
-        try:
-            result = _do_create_incident()
-            commit_transaction(conn, _logger, "create_incident")
-            return result
-        except Exception as e:
-            rollback_transaction(conn, _logger, "create_incident")
-            raise
+    # GA-BLOCKING FIX: Removed fallback transaction management path.
+    # Fail-fast if common/db/safety.py utilities are not available.
+    if not _common_db_safety_available:
+        error_msg = "CRITICAL: Database safety utilities (common/db/safety.py) are not available. Core must terminate."
+        if _logger:
+            _logger.fatal(error_msg)
+        else:
+            print(f"FATAL: {error_msg}", file=sys.stderr)
+        from common.shutdown import ExitCode, exit_fatal
+        exit_fatal(error_msg, ExitCode.STARTUP_ERROR)
+    
+    return execute_write_operation(conn, "create_incident", _do_create_incident, _logger)
 
 
 def check_event_processed(conn, event_id: str) -> bool:

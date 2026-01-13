@@ -1,0 +1,18 @@
+[Unit]
+Description=GitHub Auto-Sync Service for RansomEye Repository
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ransomeye
+Group=ransomeye
+WorkingDirectory=/home/ransomeye/rebuild
+Environment="HOME=/home/ransomeye"
+Environment="PATH=/usr/bin:/bin:/usr/local/bin"
+ExecStart=/bin/bash /home/ransomeye/rebuild/.git-auto-sync.sh
+StandardOutput=append:/home/ransomeye/rebuild/.git-auto-sync.log
+StandardError=append:/home/ransomeye/rebuild/.git-auto-sync.log
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,98 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RansomEye RBAC Permission",
+  "description": "Frozen schema for permission definitions. All fields are mandatory. Zero optional fields allowed.",
+  "type": "object",
+  "required": [
+    "permission_id",
+    "permission_name",
+    "resource_type",
+    "action"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "permission_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this permission (UUID v4)"
+    },
+    "permission_name": {
+      "type": "string",
+      "enum": [
+        "incident:view",
+        "incident:view_all",
+        "incident:acknowledge",
+        "incident:resolve",
+        "incident:close",
+        "incident:export",
+        "policy:view",
+        "policy:create",
+        "policy:update",
+        "policy:delete",
+        "policy:execute",
+        "policy:simulate",
+        "tre:view",
+        "tre:execute",
+        "tre:rollback",
+        "tre:view_all",
+        "haf:view",
+        "haf:create_override",
+        "haf:approve",
+        "haf:reject",
+        "report:view",
+        "report:generate",
+        "report:export",
+        "report:view_all",
+        "system:view_config",
+        "system:modify_config",
+        "system:view_logs",
+        "system:manage_users",
+        "system:manage_roles",
+        "audit:view",
+        "audit:view_all",
+        "audit:export"
+      ],
+      "description": "Permission name (format: resource:action)"
+    },
+    "resource_type": {
+      "type": "string",
+      "enum": [
+        "incident",
+        "policy",
+        "tre",
+        "haf",
+        "report",
+        "system",
+        "audit"
+      ],
+      "description": "Type of resource this permission applies to"
+    },
+    "action": {
+      "type": "string",
+      "enum": [
+        "view",
+        "view_all",
+        "acknowledge",
+        "resolve",
+        "close",
+        "export",
+        "create",
+        "update",
+        "delete",
+        "execute",
+        "simulate",
+        "rollback",
+        "create_override",
+        "approve",
+        "reject",
+        "generate",
+        "view_config",
+        "modify_config",
+        "view_logs",
+        "manage_users",
+        "manage_roles"
+      ],
+      "description": "Action this permission allows"
+    }
+  }
+}

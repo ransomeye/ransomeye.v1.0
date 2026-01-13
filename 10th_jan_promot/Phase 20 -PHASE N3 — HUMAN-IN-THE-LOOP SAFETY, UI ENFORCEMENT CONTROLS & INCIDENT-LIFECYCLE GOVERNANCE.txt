@@ -1,0 +1,193 @@
+Promot Start
+
+PHASE N3 — HUMAN-IN-THE-LOOP SAFETY, UI ENFORCEMENT CONTROLS & INCIDENT GOVERNANCE
+
+Implement end-to-end enforcement governance across UI + Core + TRE with zero assumptions.
+
+0. ABSOLUTE RULES
+
+No action without incident context (except SUPER_ADMIN emergency)
+
+No destructive action without explicit human approval
+
+UI must enforce RBAC AND server must enforce RBAC
+
+Every click → auditable decision
+
+No background automation beyond what is already approved
+
+Fail-closed everywhere
+
+1. INCIDENT-BOUND EXECUTION (MANDATORY)
+
+All response actions must be incident-scoped:
+
+Every TRE action must reference:
+
+incident_id
+
+incident_stage
+
+policy_decision_id
+
+Actions without incident context:
+
+REJECTED (except SUPER_ADMIN emergency path)
+
+Implement:
+
+IncidentExecutionGuard
+
+Reject actions if incident is CLOSED or ARCHIVED
+
+2. UI ENFORCEMENT CONTROLS (ROLE-AWARE, POWERFUL)
+2.1 Action Panels (STRICT)
+
+Implement role-gated action panels:
+
+Role	UI Capabilities
+SUPER_ADMIN	All actions + emergency override
+SECURITY_ANALYST	Execute SAFE actions, request DESTRUCTIVE
+POLICY_MANAGER	No execution, policy tuning only
+IT_ADMIN	Agent ops only
+AUDITOR	Read-only, no buttons
+
+Buttons must:
+
+Be disabled if RBAC denies
+
+Show reason for disable
+
+Require confirmation dialogs with explanation preview
+
+3. HUMAN AUTHORITY WORKFLOW (DESTRUCTIVE ONLY)
+
+Implement two-step approval workflow:
+
+Analyst submits destructive action request
+
+Approver (SUPER_ADMIN or delegated authority) approves
+
+TRE executes ONLY after approval_id is present
+
+UI must show:
+
+Pending approvals
+
+Who approved
+
+Time to execution
+
+Rollback availability
+
+4. EMERGENCY OVERRIDE (SUPER_ADMIN ONLY)
+
+Emergency path:
+
+Bypasses incident binding
+
+Requires typed justification
+
+Requires dual confirmation
+
+Emits EMERGENCY_OVERRIDE_USED audit event
+
+Always creates rollback artifact
+
+5. ROLLBACK UX + SAFETY
+
+UI must expose:
+
+Rollback availability per action
+
+One-click rollback (RBAC + HAF enforced)
+
+Rollback history per incident
+
+Rollback failure reasons
+
+Rollback must:
+
+Be incident-scoped
+
+Require approval if original action was destructive
+
+6. AUDIT LEDGER (UI + CORE)
+
+Emit events for:
+
+UI_ACTION_REQUESTED
+
+UI_ACTION_BLOCKED
+
+UI_ACTION_APPROVED
+
+UI_ACTION_EXECUTED
+
+UI_ACTION_ROLLED_BACK
+
+UI_EMERGENCY_OVERRIDE
+
+Every event must include:
+
+user_id
+
+role
+
+incident_id
+
+action_type
+
+decision
+
+timestamp
+
+7. UI TECHNICAL REQUIREMENTS
+
+Server-side permission checks only (UI is advisory)
+
+No hidden endpoints
+
+No optimistic execution
+
+Explicit error surfaces
+
+Deterministic rendering based on RBAC state
+
+8. DOCUMENTATION (MANDATORY)
+
+Deliver:
+
+ENFORCEMENT_UI_SPEC.md
+
+INCIDENT_EXECUTION_LIFECYCLE.md
+
+HUMAN_AUTHORITY_FLOW.md
+
+AUDIT_TRACEABILITY.md
+
+9. VERIFICATION (NON-NEGOTIABLE)
+
+Provide proof:
+
+Analyst cannot execute destructive action
+
+UI bypass attempt is blocked server-side
+
+Emergency override is logged and rollbackable
+
+Auditor cannot trigger any state change
+
+Closed incident blocks all actions
+
+10. OUTPUT FORMAT (STRICT)
+
+Respond with ONLY:
+
+Compliance status
+
+Files created/modified
+
+Verification summary
+
+Promot end

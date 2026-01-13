@@ -1,0 +1,200 @@
+Promot Start
+
+PHASE N4 — RATE LIMITING, BLAST-RADIUS CONTROL & POST-INCIDENT ACCOUNTABILITY
+
+Implement system-wide execution safety controls with zero assumptions and fail-closed behavior.
+
+0. ABSOLUTE RULES
+
+No unlimited execution (ever)
+
+All actions must declare blast radius
+
+Rate limits are enforced server-side
+
+Post-incident state is immutable unless explicitly reopened
+
+All limits are auditable and replayable
+
+1. RATE LIMITING (MANDATORY, SERVER-SIDE)
+
+Implement hard rate limits for response actions:
+
+1.1 Limits (NON-CONFIGURABLE DEFAULTS)
+
+Per user: 10 actions / minute
+
+Per incident: 25 actions total
+
+Per host: 5 actions / 10 minutes
+
+Emergency override: 2 actions / incident
+
+Limits must:
+
+Be enforced in TRE pipeline
+
+Be evaluated before HAF
+
+Fail-closed with explicit error
+
+Emit audit events:
+
+ACTION_RATE_LIMIT_HIT
+
+EMERGENCY_LIMIT_HIT
+
+2. BLAST-RADIUS DECLARATION & ENFORCEMENT
+
+Every action must declare:
+
+blast_scope: HOST | GROUP | NETWORK | GLOBAL
+
+target_count: explicit integer
+
+expected_impact: ENUM (LOW | MEDIUM | HIGH)
+
+Rules:
+
+GROUP / NETWORK / GLOBAL scopes require approval
+
+Target count must match resolved targets
+
+Mismatch = REJECT
+
+Implement:
+
+BlastRadiusResolver
+
+BlastRadiusValidator
+
+3. INCIDENT FREEZE & REOPEN
+3.1 Automatic Freeze
+
+After:
+
+Incident CLOSED
+
+Incident RESOLVED_WITH_ACTIONS
+
+System must:
+
+Block all new actions
+
+Allow rollback only
+
+Require SUPER_ADMIN to reopen
+
+3.2 Reopen Workflow
+
+Requires justification
+
+Emits INCIDENT_REOPENED audit event
+
+Restores action capability
+
+4. POST-INCIDENT ATTESTATION (NEW)
+
+Implement mandatory attestation after destructive actions:
+
+Attestation required from:
+
+Security Analyst (executor)
+
+Approver (HAF authority)
+
+Stored immutably
+
+Linked to incident_id
+
+UI must block:
+
+Incident closure until attestation complete
+
+5. UI SAFETY CONTROLS (EXTENSION)
+
+UI must display:
+
+Remaining action quota (user / incident)
+
+Blast radius preview before submit
+
+Warnings for HIGH impact actions
+
+Incident freeze banner
+
+No silent failures.
+
+6. AUDIT LEDGER (EXTENDED)
+
+Add events:
+
+ACTION_RATE_LIMIT_HIT
+
+BLAST_RADIUS_REJECTED
+
+INCIDENT_FROZEN
+
+INCIDENT_REOPENED
+
+POST_INCIDENT_ATTESTED
+
+All events must include:
+
+user_id
+
+role
+
+incident_id
+
+decision
+
+reason
+
+timestamp
+
+7. DATABASE (MANDATORY)
+
+Add tables:
+
+tre_rate_limits
+
+tre_blast_radius
+
+incident_attestations
+
+Constraints:
+
+Immutable records
+
+Foreign keys to incident + action
+
+No deletes
+
+8. VERIFICATION (NON-NEGOTIABLE)
+
+Prove:
+
+User cannot exceed action limits
+
+Blast radius mismatch blocks execution
+
+Emergency override is capped
+
+Closed incident blocks execution
+
+Incident cannot close without attestation
+
+All failures are logged
+
+9. OUTPUT FORMAT (STRICT)
+
+Respond with ONLY:
+
+Compliance status
+
+Files created/modified
+
+Verification summary
+
+Promot end

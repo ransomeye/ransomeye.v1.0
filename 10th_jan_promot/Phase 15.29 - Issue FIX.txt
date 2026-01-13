@@ -1,0 +1,196 @@
+Promot Start*
+
+STOP all feature development immediately.
+
+You are now in GA-BLOCKING REMEDIATION MODE.
+
+Your task is to FIX AND PROVE RESOLUTION of the THREE CRITICAL NON-COMPLIANCES identified in the audit.
+You are NOT allowed to introduce new features, new tables, new schemas, or new behavior.
+
+You must address ONLY the items listed below.
+
+FIX 1 — DATABASE CONNECTION FALLBACK REMOVAL (CRITICAL)
+Scope
+
+services/correlation-engine/app/db.py
+
+services/policy-engine/app/db.py
+
+Problem
+
+Fallback psycopg2.connect() paths bypass common/db/safety.py.
+
+This violates:
+
+Unified DB strategy
+
+Fail-fast guarantees
+
+Transaction safety guarantees
+
+Required Action
+
+REMOVE all fallback DB connection code paths.
+
+ENFORCE exclusive use of:
+
+create_write_connection()
+
+create_readonly_connection()
+
+create_write_connection_pool()
+
+create_readonly_connection_pool()
+
+If DB config is invalid → fail-fast immediately.
+
+No silent fallback. No retries. No defaults.
+
+Proof Required
+
+You must provide:
+
+Diff output (before/after)
+
+Exact lines removed
+
+Confirmation that NO psycopg2.connect() remains in those files
+
+grep proof:
+
+grep -R "psycopg2.connect" services/
+
+FIX 2 — RISK INDEX PLACEHOLDER ELIMINATION (CRITICAL)
+Scope
+
+risk-index/engine/aggregator.py
+
+Problem
+
+Placeholder logic at line ~218:
+
+# Future signals (placeholder)
+threat_score = 0.0
+uba_score = 0.0
+
+
+This violates:
+
+Zero placeholder policy
+
+Deterministic correctness guarantees
+
+Required Action (MANDATORY CHOICE)
+
+You must choose ONE of the following and implement it cleanly:
+
+OPTION A (RECOMMENDED)
+
+Remove threat_score and uba_score entirely from v1.0 path
+
+No placeholder variables
+
+No dead branches
+
+Explicit documentation: “Not part of v1.0”
+
+OPTION B (ONLY if already implemented elsewhere)
+
+Wire real signal ingestion
+
+Must be real data
+
+Must be deterministic
+
+Must already exist in codebase
+
+⚠️ You may NOT invent logic.
+
+Proof Required
+
+Diff output
+
+Final function body
+
+grep proof that no placeholder comments remain:
+
+grep -R "placeholder" risk-index/
+
+FIX 3 — SCHEMA BUNDLE FINALIZATION (CRITICAL)
+Scope
+
+schemas/SCHEMA_BUNDLE.md
+
+Problem
+
+Contains [PLACEHOLDER] strings for:
+
+Date
+
+SHA256 hash
+
+This violates:
+
+Release immutability
+
+Supply-chain trust guarantees
+
+Required Action
+
+Compute SHA256 over all schema files included in bundle.
+
+Insert:
+
+Final release date
+
+Final SHA256 hash
+
+Mark bundle explicitly as:
+
+STATUS: FROZEN — DO NOT MODIFY
+
+Proof Required
+
+Command used to compute hash
+
+Resulting hash
+
+Final SCHEMA_BUNDLE.md excerpt
+
+grep proof:
+
+grep -R "\[PLACEHOLDER\]" schemas/
+
+POST-FIX VERIFICATION (MANDATORY)
+
+After fixes, you MUST:
+
+Re-run full compliance check for:
+
+Sections 1, 4, 5 of audit
+
+Produce a mini re-audit report with:
+
+Before/after status
+
+Explicit “COMPLIANT” or “NOT COMPLIANT”
+
+ABSOLUTE RULES
+
+❌ No new features
+
+❌ No new schemas
+
+❌ No new DB tables
+
+❌ No refactors outside listed files
+
+❌ No TODOs
+
+❌ No comments saying “future work”
+
+If anything cannot be fixed without breaking scope, you must fail explicitly and explain why.
+
+This is a GA unblock task, not development.
+
+Promot End*

@@ -1,0 +1,144 @@
+🔴 PROMPT 7 — CLI TOOLS (ADMIN & VALIDATION ONLY)
+
+Start Promot*
+
+You are Cursor, acting as the implementation engineer for
+Phase 5.5 — CLI Tools for LLM Summarizer (Admin & Validation Only).
+
+CONTEXT (FROZEN)
+
+Summarizer is UI-driven for users.
+
+CLI is NOT a user interface.
+
+CLI is for:
+
+Admin operations
+
+Air-gapped environments
+
+CI / Global Validator
+
+Template lifecycle control
+
+OBJECTIVE
+
+Implement safe, deterministic CLI tools for the LLM summarizer subsystem.
+
+CLIs TO IMPLEMENT (MANDATORY)
+
+Create directory:
+
+cli/
+
+
+Implement exactly these tools:
+
+register_template.py
+
+list_templates.py
+
+generate_summary.py
+
+render_summary.py
+
+verify_model.py
+
+No others.
+
+TOOL BEHAVIOR (STRICT)
+register_template.py
+
+Input: template file path
+
+Validate Jinja2 syntax
+
+Calculate template hash
+
+Register immutable template
+
+Emit audit ledger entry
+
+Fail if template already exists (same hash)
+
+list_templates.py
+
+Read-only
+
+Show:
+
+template_id
+
+version
+
+narrative_type
+
+hash
+
+registered_at
+
+generate_summary.py
+
+Input: summary-request JSON file
+
+Call SummarizerAPI.generate_summary
+
+Print:
+
+summary_id
+
+output_hash
+
+signature
+
+render_summary.py
+
+Input: summary_id + format (PDF/HTML/CSV)
+
+Write output to file
+
+No regeneration
+
+verify_model.py
+
+Verify:
+
+model exists
+
+hash matches registry
+
+state == PROMOTED
+
+No inference
+
+HARD CONSTRAINTS
+
+No interactive prompts
+
+No editing of templates
+
+No bypass of registry
+
+No silent failures
+
+All failures logged
+
+ENV-only configuration
+
+DELIVERABLE
+
+Respond with:
+
+CLI directory tree
+
+argparse command specs for each tool
+
+Safety guarantees per tool
+
+What remains after CLI completion
+
+End with:
+
+“Phase 5.5 CLI tools implemented. LLM subsystem complete.”
+
+Promot End*

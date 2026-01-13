@@ -1,0 +1,159 @@
+🔴 PROMPT 5 — OUTPUT RENDERING (PDF / HTML / CSV)
+
+Start Promot*
+
+You are Cursor, acting as the implementation engineer for
+Phase 5.3 — Output Rendering Layer (PDF / HTML / CSV).
+
+CONTEXT (FROZEN)
+
+Phase 5.1 and 5.2 are COMPLETE and FROZEN.
+
+LLM inference already produces:
+
+deterministic generated_text
+
+output_hash
+
+ed25519 signature
+
+Rendering must consume validated, signed output, not raw prompts.
+
+OBJECTIVE
+
+Implement a deterministic, auditable rendering layer that converts generated summaries into:
+
+PDF (compliance / regulator)
+
+HTML (UI consumption)
+
+CSV (regulatory ingestion)
+
+HARD CONSTRAINTS (NON-NEGOTIABLE)
+
+Rendering MUST NOT modify generated text
+
+Rendering MUST NOT reflow meaning
+
+Rendering MUST preserve exact text content
+
+Rendering MUST log output_format + output_hash
+
+Rendering MUST be deterministic
+
+Rendering MUST fail-closed on any error
+
+No network access
+
+No dynamic templates from users
+
+IMPLEMENT IN THIS ORDER
+STEP 1 — RENDERER MODULE
+
+Create:
+
+output/renderer.py
+
+Implement:
+
+render_pdf(text: str, metadata: dict) -> bytes
+
+render_html(text: str, metadata: dict) -> str
+
+render_csv(text: str, metadata: dict) -> str
+
+Rules:
+
+PDF: fixed layout, monospaced or neutral font, no JS
+
+HTML: static, no scripts, no external assets
+
+CSV: one row per logical section, no free-form splitting
+
+STEP 2 — METADATA BINDING
+
+Each rendered output MUST embed:
+
+summary_id
+
+narrative_type
+
+prompt_hash
+
+model_id
+
+model_version
+
+output_hash
+
+signed_at (RFC3339)
+
+Metadata must be:
+
+embedded in PDF footer or metadata
+
+embedded in HTML <meta> tags
+
+embedded as header rows in CSV
+
+STEP 3 — SIGNED OUTPUT HANDLING
+
+Rules:
+
+Rendering occurs after output signing
+
+Signature applies to original text
+
+Renderer must:
+
+include signature reference
+
+NOT re-sign rendered artifacts
+
+STEP 4 — AUDIT INTEGRATION
+
+Emit ledger events:
+
+summary_render_started
+
+summary_render_completed
+
+summary_render_failed
+
+Include:
+
+summary_id
+
+output_format
+
+output_hash
+
+EXPLICITLY FORBIDDEN
+
+Markdown rendering engines
+
+Rich text editors
+
+Dynamic HTML
+
+External fonts or assets
+
+Re-wrapping or paraphrasing text
+
+DELIVERABLE
+
+Respond with:
+
+Updated directory tree
+
+Renderer function signatures
+
+Determinism guarantees per format
+
+What is still NOT implemented after this phase
+
+End with:
+
+“Phase 5.3 rendering layer implemented. Ready for templates and CLI.”
+
+Promot End*

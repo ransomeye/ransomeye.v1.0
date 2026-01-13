@@ -1,0 +1,294 @@
+****Promot Start****
+
+### PHASE N1 — THREAT RESPONSE ENGINE (TRE) **ENFORCEMENT MODE ACTIVATION WITH RBAC + HAF (NO ASSUMPTIONS)**
+
+You are to **activate REAL enforcement** in the Threat Response Engine.
+This is **NOT a design discussion**. This is an **implementation mandate**.
+
+---
+
+## 0. NON-NEGOTIABLE PRINCIPLES (READ FIRST)
+
+1. **RBAC IS AUTHORITATIVE**
+
+   * No TRE action may execute unless RBAC explicitly allows it.
+   * UI state is irrelevant. Backend must enforce.
+
+2. **HAF IS A HARD GATE**
+
+   * For destructive or irreversible actions, Human Authority approval is mandatory.
+   * RBAC check **always happens before** HAF.
+
+3. **NO AUTONOMOUS ACTIONS**
+
+   * TRE executes only **policy decisions** or **explicit human-triggered actions**.
+   * TRE never “decides”.
+
+4. **DEFAULT = DENY**
+
+   * If anything is missing, unclear, or malformed → FAIL FAST.
+
+5. **NO PLACEHOLDERS**
+
+   * No TODO, no “future”, no stubs, no mock logic.
+
+---
+
+## 1. ENFORCEMENT MODES (MANDATORY)
+
+Implement **exactly three enforcement modes** (enum, frozen):
+
+```
+TRE_MODE = {
+  DRY_RUN,        # Existing behavior – simulate only
+  GUARDED_EXEC,   # Execute only actions marked SAFE
+  FULL_ENFORCE    # Execute all actions, HAF required where applicable
+}
+```
+
+### Mode Behavior Rules
+
+| Mode         | SAFE actions  | DESTRUCTIVE actions                 |
+| ------------ | ------------- | ----------------------------------- |
+| DRY_RUN      | Simulate only | Simulate only                       |
+| GUARDED_EXEC | Execute       | BLOCKED                             |
+| FULL_ENFORCE | Execute       | Execute **only after HAF approval** |
+
+Mode must be:
+
+* Stored in DB
+* Loaded at runtime
+* Changeable **only by SUPER_ADMIN**
+* Logged to audit ledger on change
+
+---
+
+## 2. ACTION CLASSIFICATION (FROZEN)
+
+Classify actions **EXACTLY** as follows:
+
+### SAFE ACTIONS
+
+* BLOCK_PROCESS
+* BLOCK_NETWORK_CONNECTION
+* TEMPORARY_FIREWALL_RULE
+* QUARANTINE_FILE
+
+### DESTRUCTIVE / HIGH-IMPACT ACTIONS
+
+* ISOLATE_HOST
+* LOCK_USER
+* DISABLE_SERVICE
+* MASS_PROCESS_KILL
+* NETWORK_SEGMENT_ISOLATION
+
+This classification must be:
+
+* Enforced in code
+* Not configurable
+* Documented as immutable
+
+---
+
+## 3. EXECUTION FLOW (MANDATORY ORDER)
+
+Implement the **exact execution pipeline** below:
+
+```
+Policy Decision
+   ↓
+RBAC Permission Check
+   ↓
+TRE Mode Check
+   ↓
+Action Classification Check
+   ↓
+HAF Approval Check (if required)
+   ↓
+Agent Command Signing
+   ↓
+Agent Execution
+   ↓
+Execution Result Recording
+   ↓
+Rollback Record Creation
+   ↓
+Audit Ledger Write
+```
+
+If any step fails:
+
+* STOP
+* LOG
+* RETURN FAILURE
+* DO NOT EXECUTE
+
+---
+
+## 4. RBAC INTEGRATION (STRICT)
+
+### Required Permissions (EXACT)
+
+| Action                     | Required Permission     |
+| -------------------------- | ----------------------- |
+| Execute SAFE action        | TRE_EXECUTE_SAFE        |
+| Execute DESTRUCTIVE action | TRE_EXECUTE_DESTRUCTIVE |
+| Approve via HAF            | HAF_APPROVE_ACTION      |
+| Rollback action            | TRE_ROLLBACK            |
+| Change TRE mode            | TRE_ADMIN               |
+
+If permission missing:
+
+* Return HTTP 403
+* Emit RBAC_DENY ledger event
+* Do not call HAF
+
+---
+
+## 5. HAF INTEGRATION (STRICT)
+
+For DESTRUCTIVE actions in FULL_ENFORCE:
+
+1. Create **pending authority request**
+2. Persist immutable approval request
+3. Wait for explicit approval
+4. Approval must include:
+
+   * approver_user_id
+   * role (must be SUPER_ADMIN or SECURITY_ANALYST with approval rights)
+   * timestamp
+   * signed decision
+5. Only then proceed to execution
+
+If rejected or expired → FAIL CLOSED.
+
+---
+
+## 6. AGENT COMMAND EXECUTION (STRICT)
+
+Every command sent to agents must:
+
+* Be signed with **ed25519**
+* Include:
+
+  * command_id
+  * action_type
+  * target_id
+  * incident_id
+  * issued_by_user_id
+  * tre_mode
+  * approval_id (if applicable)
+* Be **idempotent**
+* Support rollback token generation
+
+Agent must:
+
+* Verify signature
+* Verify freshness
+* Execute exactly once
+* Emit execution receipt
+
+---
+
+## 7. ROLLBACK (MANDATORY)
+
+For every executed action:
+
+* Create rollback record BEFORE execution
+* Rollback must:
+
+  * Require RBAC check
+  * Require HAF approval if original action was destructive
+  * Be fully auditable
+* Rollback failures must be logged but **never silently ignored**
+
+---
+
+## 8. DATABASE REQUIREMENTS
+
+Ensure tables exist and are used (no bypass):
+
+* tre_execution_modes
+* tre_action_executions
+* tre_action_approvals
+* tre_rollback_records
+
+All records:
+
+* Immutable
+* Timestamped
+* Linked via IDs
+
+---
+
+## 9. AUDIT LEDGER (MANDATORY EVENTS)
+
+Emit ledger events for:
+
+* TRE_MODE_CHANGED
+* TRE_ACTION_REQUESTED
+* TRE_ACTION_BLOCKED
+* TRE_ACTION_APPROVED
+* TRE_ACTION_EXECUTED
+* TRE_ACTION_FAILED
+* TRE_ROLLBACK_REQUESTED
+* TRE_ROLLBACK_EXECUTED
+* TRE_RBAC_DENY
+* TRE_HAF_DENY
+
+Every event must include:
+
+* user_id
+* role
+* action_type
+* target
+* incident_id (if any)
+* outcome
+
+---
+
+## 10. UI REQUIREMENTS (ROLE-AWARE)
+
+UI must:
+
+* Show **Execute buttons only if RBAC allows**
+* Show **Approval queue only to HAF approvers**
+* Clearly label:
+
+  * SAFE vs DESTRUCTIVE
+  * DRY_RUN vs ENFORCE
+* Show immutable execution history
+* Prevent bulk destructive actions without confirmation
+
+UI hiding is **NOT security** — backend already enforces.
+
+---
+
+## 11. VERIFICATION (MANDATORY)
+
+Deliver:
+
+1. `VERIFICATION.md` with:
+
+   * Negative tests
+   * RBAC bypass tests
+   * HAF rejection tests
+2. Proof that:
+
+   * Destructive actions do NOT run without approval
+   * Rollback is impossible without permission
+   * Audit trail is complete and replayable
+
+---
+
+## 12. FINAL OUTPUT EXPECTATION
+
+When complete, report **ONLY**:
+
+* Compliance status (PASS / FAIL)
+* List of files created/modified
+* Verification summary
+
+No explanations. No assumptions. No opinions.
+
+****Promot end****

@@ -1,0 +1,193 @@
+🔴 PROMPT 4 — LLM INFERENCE ENGINE (OFFLINE, DETERMINISTIC)
+
+Start Promot*
+
+You are Cursor, acting as the implementation engineer for
+Phase 5.2 — LLM Inference Engine (Offline, Deterministic).
+
+CONTEXT (FROZEN)
+
+Phase 5.1 foundation is COMPLETE and FROZEN.
+
+You must integrate inference without changing:
+
+schemas
+
+redaction
+
+prompt assembly
+
+audit semantics
+
+OBJECTIVE
+
+Implement actual LLM inference for llm-summarizer/ using offline GGUF models, with strict determinism and safety.
+
+HARD CONSTRAINTS (NON-NEGOTIABLE)
+
+Offline only (no network)
+
+GGUF format only
+
+Deterministic inference:
+
+temperature = 0.0
+
+fixed seed
+
+Fail-closed on:
+
+model hash mismatch
+
+non-PROMOTED model
+
+token overflow
+
+timeout
+
+memory breach
+
+No prompt mutation
+
+No post-generation editing
+
+Same prompt + same model → same output (bit-for-bit)
+
+IMPLEMENT IN THIS ORDER
+STEP 1 — MODEL LOADER
+
+Create:
+
+llm/model_loader.py
+
+Responsibilities:
+
+Load GGUF model from filesystem
+
+Model path from ENV only
+
+Calculate model SHA256
+
+Verify:
+
+model exists
+
+hash matches ai-model-registry
+
+model state == PROMOTED
+
+Fail-closed on any mismatch
+
+STEP 2 — TOKENIZATION (REAL)
+
+Upgrade:
+
+llm/token_manager.py
+
+Requirements:
+
+Use the actual tokenizer for the chosen model
+
+Accurate input + output token counting
+
+Reject on overflow before inference
+
+STEP 3 — INFERENCE ENGINE
+
+Create:
+
+llm/inference_engine.py
+
+Responsibilities:
+
+Accept final prompt string
+
+Run deterministic inference
+
+Enforce:
+
+token limits
+
+execution timeout
+
+Return:
+
+generated_text
+
+token counts
+
+inference time (ms)
+
+STEP 4 — SANDBOX INTEGRATION
+
+Wire inference into:
+
+llm/sandbox.py
+
+Requirements:
+
+Memory limit enforcement
+
+Timeout enforcement
+
+No subprocess escape
+
+Explicit failure exceptions
+
+STEP 5 — AUDIT INTEGRATION
+
+Emit ledger events:
+
+llm_model_loaded
+
+llm_inference_started
+
+llm_inference_completed
+
+llm_inference_failed (if applicable)
+
+Include:
+
+model_id
+
+model_version
+
+model_hash
+
+input_tokens
+
+output_tokens
+
+inference_time_ms
+
+EXPLICITLY FORBIDDEN
+
+Online APIs
+
+Auto-retries
+
+Sampling
+
+Temperature tuning
+
+Streaming output
+
+Partial results
+
+DELIVERABLE
+
+Respond with:
+
+Updated directory tree
+
+Key class/function signatures
+
+How determinism is guaranteed
+
+What is still NOT implemented after this phase
+
+End with:
+
+“Phase 5.2 inference layer implemented. Ready for rendering layer.”
+
+Promot End*

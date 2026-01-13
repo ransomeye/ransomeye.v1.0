@@ -1,0 +1,144 @@
+🔴 PROMPT 6 — JINJA2 PROMPT TEMPLATES (AUTHORITATIVE CONTENT)
+
+Start Promot*
+
+You are Cursor, acting as the implementation engineer for
+Phase 5.4 — Authoritative Prompt Templates (Jinja2).
+
+CONTEXT (FROZEN)
+
+Prompt registry, assembler, hashing, and inference are COMPLETE.
+
+This phase is content definition, not logic.
+
+Templates are security-critical artifacts.
+
+OBJECTIVE
+
+Create the initial frozen prompt templates that control exactly what the LLM may say.
+
+TEMPLATES TO CREATE (MANDATORY)
+
+Create directory:
+
+prompts/templates/
+
+
+Create exactly these files:
+
+soc_narrative_v1.0.0.jinja2
+
+executive_summary_v1.0.0.jinja2
+
+legal_narrative_v1.0.0.jinja2
+
+No others.
+
+HARD CONSTRAINTS (NON-NEGOTIABLE)
+
+Templates MUST:
+
+Use only structured inputs
+
+Never speculate
+
+Never introduce new facts
+
+No adjectives implying certainty unless supported by evidence
+
+Explicitly distinguish:
+
+Observed facts
+
+Correlated inferences
+
+Policy decisions
+
+No mitigation advice
+
+No blame language
+
+No probabilistic wording unless numeric confidence exists
+
+Deterministic ordering of sections
+
+REQUIRED STRUCTURE (ALL TEMPLATES)
+
+Each template MUST include sections in this exact order:
+
+Header
+
+Scope & Source of Information
+
+Incident Timeline (facts only)
+
+Observed Behaviors
+
+Correlated Findings
+
+Policy & Response Actions (facts only)
+
+Evidence References
+
+Limitations & Assumptions
+
+Closing Statement
+
+AUDIENCE-SPECIFIC RULES
+SOC Narrative
+
+Technical
+
+Precise
+
+No simplification
+
+No business language
+
+Executive Summary
+
+Non-technical
+
+No timestamps unless necessary
+
+Focus on impact and containment
+
+Max 1 page equivalent
+
+Legal / Regulator Narrative
+
+Formal tone
+
+No abbreviations
+
+Explicit disclaimers
+
+Chain-of-custody emphasis
+
+Jurisdiction-neutral language
+
+VERSIONING RULES
+
+Version = v1.0.0
+
+Templates are immutable
+
+Any change requires new version
+
+Do NOT register templates yet
+
+DELIVERABLE
+
+Respond with:
+
+Full contents of all three template files
+
+Explanation of how each section avoids hallucination
+
+Explicit statement of what the templates will never say
+
+End with:
+
+“Phase 5.4 prompt templates defined. Ready for CLI tools.”
+
+Promot End*

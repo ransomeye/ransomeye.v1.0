@@ -1,0 +1,105 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RansomEye LLM Summarizer - Summary Output",
+  "description": "Frozen schema for generated summaries. All fields are mandatory. No optional fields allowed.",
+  "type": "object",
+  "required": [
+    "summary_id",
+    "summary_request_id",
+    "narrative_type",
+    "generated_text",
+    "output_hash",
+    "signature",
+    "signing_key_id",
+    "prompt_template_id",
+    "prompt_template_version",
+    "prompt_hash",
+    "model_id",
+    "model_version",
+    "redaction_log_id",
+    "generated_at",
+    "generated_by"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "summary_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this summary (UUID v4)"
+    },
+    "summary_request_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Summary request identifier"
+    },
+    "narrative_type": {
+      "type": "string",
+      "enum": [
+        "SOC_NARRATIVE",
+        "EXECUTIVE_SUMMARY",
+        "LEGAL_NARRATIVE"
+      ],
+      "description": "Type of narrative generated"
+    },
+    "generated_text": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Generated narrative text"
+    },
+    "output_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA256 hash of generated_text"
+    },
+    "signature": {
+      "type": "string",
+      "description": "ed25519 signature of output_hash"
+    },
+    "signing_key_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Signing key identifier"
+    },
+    "prompt_template_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Prompt template identifier used"
+    },
+    "prompt_template_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "Prompt template version (semver)"
+    },
+    "prompt_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA256 hash of assembled prompt"
+    },
+    "model_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "LLM model identifier from registry"
+    },
+    "model_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "LLM model version (semver)"
+    },
+    "redaction_log_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Redaction log identifier"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp of generation"
+    },
+    "generated_by": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Entity that generated summary"
+    }
+  }
+}

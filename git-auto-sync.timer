@@ -1,0 +1,11 @@
+[Unit]
+Description=GitHub Auto-Sync Timer for RansomEye Repository
+Requires=git-auto-sync.service
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=15min
+Unit=git-auto-sync.service
+
+[Install]
+WantedBy=timers.target

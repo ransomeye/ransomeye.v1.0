@@ -1,0 +1,241 @@
+
+## NEXT PHASE: **PHASE N2 — AGENT-SIDE ENFORCEMENT & HARDENED COMMAND EXECUTION**
+
+This phase is **required** to make the already-compliant TRE **actually enforceable at endpoint level**.
+TRE enforcement is incomplete unless agents are hardened to **execute, verify, rollback, and resist abuse**.
+
+This is a **control-plane → data-plane hardening phase**.
+
+---
+
+****Promot Start****
+
+### PHASE N2 — AGENT-SIDE ENFORCEMENT, HARDENING & ROLLBACK GUARANTEES
+
+(**Linux Agent + Windows Agent + DPI Probe where applicable**)
+
+You are implementing **endpoint-side execution authority**.
+Agents are no longer passive collectors.
+
+---
+
+## 0. ABSOLUTE RULES (NO EXCEPTIONS)
+
+1. **Agents NEVER trust the network**
+2. **Agents NEVER trust the UI**
+3. **Agents ONLY trust signed commands**
+4. **Agents FAIL CLOSED**
+5. **Rollback is mandatory for every action**
+6. **No background autonomy**
+7. **No assumptions**
+
+---
+
+## 1. AGENT COMMAND ACCEPTANCE GATE (MANDATORY)
+
+Every agent MUST implement a **single command intake gate**:
+
+```
+receive_command()
+   ↓
+schema validation
+   ↓
+timestamp + nonce freshness check
+   ↓
+ed25519 signature verification
+   ↓
+issuer trust verification (TRE public key)
+   ↓
+RBAC + role assertion validation (embedded)
+   ↓
+HAF approval presence (if required)
+   ↓
+idempotency check (command_id)
+   ↓
+execution OR rejection
+```
+
+If ANY step fails → **REJECT + LOG + AUDIT**
+
+---
+
+## 2. COMMAND STRUCTURE (FROZEN — NO CHANGES)
+
+Agents must accept **ONLY** this structure:
+
+```
+{
+  command_id: UUID,
+  action_type: ENUM,
+  target: OBJECT,
+  incident_id: UUID | null,
+  tre_mode: ENUM,
+  issued_by_user_id: UUID,
+  issued_by_role: ENUM,
+  approval_id: UUID | null,
+  issued_at: RFC3339,
+  expires_at: RFC3339,
+  rollback_token: SHA256,
+  signature: ed25519
+}
+```
+
+No extra fields.
+No optional logic.
+Reject unknown fields.
+
+---
+
+## 3. ACTION EXECUTION MODULES (MANDATORY)
+
+Implement **explicit execution modules** per agent.
+
+### Linux Agent
+
+* process_blocker.py (kill + cgroup deny)
+* network_blocker.py (iptables / nftables)
+* file_quarantine.py (immutable quarantine dir)
+* host_isolator.py (network namespace isolation)
+* rollback_engine.py
+
+### Windows Agent
+
+* process_blocker.ps1 / .py (Terminate + deny restart)
+* firewall_blocker.ps1 (Windows Firewall)
+* file_quarantine.ps1
+* host_isolator.ps1 (NIC disable / VLAN)
+* rollback_engine.ps1
+
+### DPI Probe
+
+* network_blocker ONLY (no host actions)
+
+Each module must:
+
+* Validate action applicability
+* Emit execution receipt
+* Produce rollback artifact
+
+---
+
+## 4. ROLLBACK GUARANTEE (HARD REQUIREMENT)
+
+For **every executed action**:
+
+1. Generate rollback artifact BEFORE execution
+2. Store rollback artifact locally (encrypted)
+3. Report rollback token to TRE
+4. Reject execution if rollback cannot be created
+
+Rollback execution requires:
+
+* Signed rollback command
+* RBAC permission TRE_ROLLBACK
+* HAF approval if original action was destructive
+
+---
+
+## 5. LOCAL AGENT AUDIT LOG (MANDATORY)
+
+Agents must maintain **append-only local audit log**:
+
+* command_received
+* command_rejected (with reason)
+* command_executed
+* command_failed
+* rollback_created
+* rollback_executed
+
+Logs must be:
+
+* Tamper-evident
+* Rotated safely
+* Forwarded to Core when available
+
+---
+
+## 6. SECURITY HARDENING (MANDATORY)
+
+Agents must enforce:
+
+* Replay protection (nonce cache)
+* Clock skew tolerance (±60s max)
+* Command expiry enforcement
+* Rate limiting on command intake
+* One-shot execution per command_id
+
+---
+
+## 7. FAILURE BEHAVIOR (STRICT)
+
+| Scenario            | Behavior             |
+| ------------------- | -------------------- |
+| Signature invalid   | Reject + audit       |
+| Expired command     | Reject + audit       |
+| Missing approval    | Reject + audit       |
+| Rollback prep fails | Reject               |
+| Partial execution   | Rollback immediately |
+| Agent offline       | No queued execution  |
+
+---
+
+## 8. UI INTEGRATION SIGNALS
+
+Agents must expose status to UI via Core:
+
+* Last command received
+* Last command executed
+* Pending rollback
+* Isolation state
+* Enforcement readiness (YES/NO)
+
+---
+
+## 9. AUDIT LEDGER EVENTS (AGENT SIDE)
+
+Emit to Core for ledger:
+
+* AGENT_COMMAND_RECEIVED
+* AGENT_COMMAND_REJECTED
+* AGENT_COMMAND_EXECUTED
+* AGENT_COMMAND_FAILED
+* AGENT_ROLLBACK_CREATED
+* AGENT_ROLLBACK_EXECUTED
+
+All events must include:
+
+* agent_id
+* command_id
+* action_type
+* outcome
+* timestamp
+
+---
+
+## 10. VERIFICATION (NON-NEGOTIABLE)
+
+Deliver:
+
+1. `AGENT_ENFORCEMENT_VERIFICATION.md`
+2. Proof that:
+
+   * Unsigned commands are rejected
+   * Replayed commands are rejected
+   * Destructive actions without approval are rejected
+   * Rollback always works
+3. Cross-agent parity proof (Linux == Windows behavior)
+
+---
+
+## 11. OUTPUT FORMAT (STRICT)
+
+When complete, respond with **ONLY**:
+
+* Compliance status
+* Files created/modified
+* Verification summary
+
+No commentary.
+
+****Promot end****
+

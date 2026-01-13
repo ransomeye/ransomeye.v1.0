@@ -1,0 +1,196 @@
+SECURITY INCIDENT NARRATIVE — LEGAL AND REGULATORY VIEW
+
+================================================================================
+SCOPE & SOURCE OF INFORMATION
+================================================================================
+
+This narrative is generated from structured security telemetry and correlation data maintained by the RansomEye security platform. All statements are derived from recorded events, policy decisions, and forensic metadata. No external intelligence, speculation, or inference beyond explicit correlation rules is included.
+
+This narrative is intended for legal, regulatory, and compliance purposes. It provides a factual record of security events as recorded by the platform.
+
+Source Components:
+- Correlation Engine: Incident timeline and event correlation
+- KillChain Forensics: MITRE ATT&CK framework stage mapping and campaign correlation
+- AI Core: SHAP feature importance scores (numeric values only)
+- Forensic Evidence: Artifact metadata references with cryptographic hashes
+- Policy Engine: Decision records and enforcement actions (factual records only)
+
+Incident Identifier: {{ incident_id }}
+Narrative Generation Timestamp: {{ requested_at }}
+Redaction Policy Applied: {{ redaction_policy }}
+Narrative Type: Legal and Regulatory
+
+================================================================================
+INCIDENT TIMELINE (FACTS ONLY)
+================================================================================
+
+The following timeline is constructed from recorded events maintained in the platform's event log. Events are ordered by observed timestamp as recorded by the system. No temporal inference, interpolation, or speculation is applied.
+
+{% if incident_timeline %}
+{% for event in incident_timeline %}
+Event Record:
+- Event Identifier: {{ event.event_id }}
+- Observed Timestamp: {{ event.timestamp }}
+- Event Type: {{ event.event_type }}
+- Source Host Identifier: {{ event.source_host }}
+- Target Host Identifier: {{ event.target_host }}
+{% if event.description %}- Event Description: {{ event.description }}{% endif %}
+
+{% endfor %}
+{% else %}
+No timeline events recorded for this incident in the platform's event log.
+
+{% endif %}
+
+================================================================================
+OBSERVED BEHAVIORS
+================================================================================
+
+The following behaviors were directly observed and recorded in security telemetry. Each behavior is a recorded fact from the platform's event log. No inference, speculation, or external intelligence is applied.
+
+{% if killchain_stages %}
+KillChain Stage Progression:
+
+The following stages were identified through deterministic mapping to the MITRE ATT&CK framework. Stage identification is based on explicit rule matching, not machine learning inference.
+
+{% for stage in killchain_stages %}
+Stage Record:
+- Stage Identifier: {{ stage.stage_id }}
+- Stage Name: {{ stage.stage_name }}
+- MITRE ATT&CK Technique Identifier: {{ stage.mitre_technique_id }}
+- Stage Start Timestamp: {{ stage.start_timestamp }}
+- Stage End Timestamp: {{ stage.end_timestamp }}
+{% if stage.description %}- Stage Description: {{ stage.description }}{% endif %}
+
+{% endfor %}
+{% else %}
+No KillChain stages were identified for this incident through the platform's deterministic mapping logic.
+
+{% endif %}
+
+{% if shap_explanations %}
+Feature Importance Scores (SHAP Values):
+
+The following numeric scores indicate which features contributed most to the detection of this incident. These are numeric values only, not risk assessments, threat evaluations, or confidence statements. Higher absolute values indicate stronger contribution to detection.
+
+{% for explanation in shap_explanations %}
+Feature Importance Record:
+- Explanation Identifier: {{ explanation.explanation_id }}
+- Feature Name: {{ explanation.feature_name }}
+- SHAP Value: {{ explanation.shap_value }}
+
+{% endfor %}
+{% else %}
+No SHAP feature importance scores are available for this incident.
+
+{% endif %}
+
+================================================================================
+CORRELATED FINDINGS
+================================================================================
+
+The following findings are derived from deterministic correlation logic applied to observed events. Correlation is based on explicit matching rules using shared identifiers such as IP addresses, malware family classifications, user account identifiers, and host identifiers. Correlation does not imply causation, attribution, or intent.
+
+{% if killchain_stages %}
+Campaign Correlation:
+
+Multiple stages were correlated into a single campaign based on shared identifiers (IP addresses, malware families, user accounts, host identifiers). The correlation logic is deterministic, rule-based, and does not employ machine learning inference beyond the explicit matching rules.
+
+{% endif %}
+
+================================================================================
+POLICY & RESPONSE ACTIONS (FACTS ONLY)
+================================================================================
+
+The following policy decisions and response actions were recorded in the platform's policy engine. These are factual records of what was decided and executed by the system. No evaluation of decision quality, effectiveness, or appropriateness is included.
+
+{% if policy_decisions %}
+{% for decision in policy_decisions %}
+Policy Decision Record:
+- Decision Identifier: {{ decision.decision_id }}
+- Decision Type: {{ decision.decision_type }}
+- Decision Timestamp: {{ decision.decision_timestamp }}
+- Decision Outcome: {{ decision.decision_outcome }}
+{% if decision.reasoning %}- Decision Reasoning: {{ decision.reasoning }}{% endif %}
+
+{% endfor %}
+{% else %}
+No policy decisions were recorded for this incident in the platform's policy engine.
+
+{% endif %}
+
+================================================================================
+EVIDENCE REFERENCES
+================================================================================
+
+The following forensic artifacts were collected, indexed, and stored by the platform's forensic evidence management system. Artifacts are referenced by unique identifier, type, cryptographic hash, and collection timestamp. Raw artifact content is not included in this narrative. Artifact integrity is maintained through cryptographic hashing (SHA256). Chain-of-custody records are maintained separately in the platform's audit ledger.
+
+{% if forensic_artifacts_metadata %}
+{% for artifact in forensic_artifacts_metadata %}
+Forensic Artifact Record:
+- Artifact Identifier: {{ artifact.artifact_id }}
+- Artifact Type: {{ artifact.artifact_type }}
+- Artifact Cryptographic Hash (SHA256): {{ artifact.artifact_hash }}
+- Collection Timestamp: {{ artifact.collected_at }}
+{% if artifact.description %}- Artifact Description: {{ artifact.description }}{% endif %}
+
+{% endfor %}
+{% else %}
+No forensic artifacts were collected and indexed for this incident.
+
+{% endif %}
+
+================================================================================
+LIMITATIONS & ASSUMPTIONS
+================================================================================
+
+This narrative is limited to:
+
+1. Recorded telemetry events only. Events not captured by security agents or deep packet inspection probes are not included in this narrative.
+2. Deterministic correlation rules only. No machine learning inference beyond explicit SHAP feature importance scores is applied.
+3. Policy decision records only. No evaluation of decision quality, effectiveness, or appropriateness is included.
+4. Forensic artifact metadata only. Raw artifact content is not analyzed, summarized, or interpreted in this narrative.
+5. Temporal ordering by recorded timestamps. Clock skew, delayed ingestion, or network latency may affect event ordering accuracy.
+
+This narrative does NOT include:
+
+- External threat intelligence or open-source intelligence
+- Speculation about attacker identity, intent, or motivation
+- Mitigation recommendations or security advice
+- Blame, attribution, or responsibility statements
+- Probabilistic assessments without explicit numeric confidence scores
+- Information not present in the structured input data provided to the summarization engine
+- Legal opinions or compliance assessments
+- Regulatory interpretations or guidance
+
+The narrative is generated at a specific point in time and reflects the state of information available at that time. Additional events, evidence, or analysis discovered after narrative generation are not included.
+
+================================================================================
+CHAIN-OF-CUSTODY STATEMENT
+================================================================================
+
+All events, policy decisions, and forensic artifacts referenced in this narrative are recorded in the platform's audit ledger with cryptographic signatures. The audit ledger maintains an append-only, tamper-evident record of all security-relevant actions. Each ledger entry is cryptographically signed using ed25519 signatures.
+
+This narrative itself is generated from structured data and is signed with the following cryptographic identifiers:
+
+- Prompt Hash (SHA256): {{ prompt_hash }}
+- Output Hash (SHA256): {{ output_hash }}
+{% if signature %}- Output Signature: {{ signature }}{% endif %}
+{% if signing_key_id %}- Signing Key Identifier: {{ signing_key_id }}{% endif %}
+
+The narrative can be verified against the audit ledger and the original structured input data using these cryptographic hashes.
+
+================================================================================
+CLOSING STATEMENT
+================================================================================
+
+This narrative is a factual reconstruction based on recorded security telemetry maintained by the RansomEye security platform. All statements are derived from structured data provided to the summarization engine. No external knowledge, speculation, inference beyond explicit correlation rules, or information not present in the structured input data is included.
+
+This narrative is intended for legal, regulatory, and compliance purposes. It provides a factual record suitable for audit, investigation, and regulatory reporting. For detailed technical analysis, refer to the SOC analyst narrative. For executive-level overview, refer to the executive summary.
+
+Narrative generated by: RansomEye LLM Summarizer
+Model Identifier: {{ model_id }}
+Model Version: {{ model_version }}
+Prompt Hash: {{ prompt_hash }}
+Output Hash: {{ output_hash }}
+Generation Timestamp: {{ generated_at }}

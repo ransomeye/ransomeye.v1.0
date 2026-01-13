@@ -1,0 +1,29 @@
+Implement the Threat Response Engine (TRE) for RansomEye with the following STRICT constraints:
+
+1. TRE is execution-only, not decision-making
+2. TRE executes ONLY final Policy Engine decisions
+3. TRE enforces Human Authority (HAF) where required
+4. All actions are signed (ed25519), auditable, and rollback-capable
+5. Agents validate and execute commands but never decide
+6. Rollback is mandatory and first-class
+7. All records are immutable and audit-anchored
+8. No placeholders, no dummy data, no heuristics, no ML
+
+Deliverables:
+- Full directory structure
+- Frozen schemas (zero optional fields)
+- Action validation engine
+- Secure command signing and verification
+- Agent command dispatch protocol
+- Rollback manager
+- Audit ledger integration
+- DB schema additions
+- CLI tools for execution and rollback
+- README with legal and regulatory positioning
+
+The design must align with:
+- Policy Engine
+- Human Authority Framework (HAF)
+- System Explanation Engine (SEE)
+- Audit Ledger
+- Existing Linux/Windows agents

@@ -39,27 +39,29 @@ def get_db_connection():
     Read-only enforcement: Policy Engine must never write to DB.
     Abort Core if any write is attempted.
     Connection safety: Validate health before returning.
+    
+    GA-BLOCKING FIX: Removed fallback psycopg2.connect() path.
+    Fail-fast if common/db/safety.py utilities are not available.
     """
-    if _common_db_safety_available:
-        conn = create_readonly_connection(
-            host=os.getenv("RANSOMEYE_DB_HOST", "localhost"),
-            port=int(os.getenv("RANSOMEYE_DB_PORT", "5432")),
-            database=os.getenv("RANSOMEYE_DB_NAME", "ransomeye"),
-            user=os.getenv("RANSOMEYE_DB_USER", "ransomeye"),
-            password=os.getenv("RANSOMEYE_DB_PASSWORD", ""),
-            isolation_level=IsolationLevel.READ_COMMITTED,
-            logger=_logger
-        )
-        return conn
-    else:
-        # Fallback
-        return psycopg2.connect(
-            host=os.getenv("RANSOMEYE_DB_HOST", "localhost"),
-            port=int(os.getenv("RANSOMEYE_DB_PORT", "5432")),
-            database=os.getenv("RANSOMEYE_DB_NAME", "ransomeye"),
-            user=os.getenv("RANSOMEYE_DB_USER", "ransomeye"),
-            password=os.getenv("RANSOMEYE_DB_PASSWORD", "")
-        )
+    if not _common_db_safety_available:
+        error_msg = "CRITICAL: Database safety utilities (common/db/safety.py) are not available. Core must terminate."
+        if _logger:
+            _logger.fatal(error_msg)
+        else:
+            print(f"FATAL: {error_msg}", file=sys.stderr)
+        from common.shutdown import ExitCode, exit_fatal
+        exit_fatal(error_msg, ExitCode.STARTUP_ERROR)
+    
+    conn = create_readonly_connection(
+        host=os.getenv("RANSOMEYE_DB_HOST", "localhost"),
+        port=int(os.getenv("RANSOMEYE_DB_PORT", "5432")),
+        database=os.getenv("RANSOMEYE_DB_NAME", "ransomeye"),
+        user=os.getenv("RANSOMEYE_DB_USER", "ransomeye"),
+        password=os.getenv("RANSOMEYE_DB_PASSWORD", ""),
+        isolation_level=IsolationLevel.READ_COMMITTED,
+        logger=_logger
+    )
+    return conn
 
 
 def get_unresolved_incidents(conn) -> List[Dict[str, Any]]:
@@ -99,10 +101,18 @@ def get_unresolved_incidents(conn) -> List[Dict[str, Any]]:
         finally:
             cur.close()
     
-    if _common_db_safety_available:
-        return execute_read_operation(conn, "get_unresolved_incidents", _do_read, _logger, enforce_readonly=True)
-    else:
-        return _do_read()
+    # GA-BLOCKING FIX: Removed fallback read operation path.
+    # Fail-fast if common/db/safety.py utilities are not available.
+    if not _common_db_safety_available:
+        error_msg = "CRITICAL: Database safety utilities (common/db/safety.py) are not available. Core must terminate."
+        if _logger:
+            _logger.fatal(error_msg)
+        else:
+            print(f"FATAL: {error_msg}", file=sys.stderr)
+        from common.shutdown import ExitCode, exit_fatal
+        exit_fatal(error_msg, ExitCode.STARTUP_ERROR)
+    
+    return execute_read_operation(conn, "get_unresolved_incidents", _do_read, _logger, enforce_readonly=True)
 
 
 def check_incident_evaluated(incident_id: str) -> bool:

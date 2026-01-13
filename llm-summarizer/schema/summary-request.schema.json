@@ -1,0 +1,228 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RansomEye LLM Summarizer - Summary Request",
+  "description": "Frozen schema for summary generation requests. All fields are mandatory. No optional fields allowed.",
+  "type": "object",
+  "required": [
+    "summary_request_id",
+    "narrative_type",
+    "incident_id",
+    "incident_timeline",
+    "killchain_stages",
+    "shap_explanations",
+    "forensic_artifacts_metadata",
+    "policy_decisions",
+    "redaction_policy",
+    "requested_at",
+    "requested_by"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "summary_request_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this summary request (UUID v4)"
+    },
+    "narrative_type": {
+      "type": "string",
+      "enum": [
+        "SOC_NARRATIVE",
+        "EXECUTIVE_SUMMARY",
+        "LEGAL_NARRATIVE"
+      ],
+      "description": "Type of narrative to generate"
+    },
+    "incident_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Incident identifier"
+    },
+    "incident_timeline": {
+      "type": "array",
+      "description": "Incident timeline events from correlation engine",
+      "items": {
+        "type": "object",
+        "required": [
+          "event_id",
+          "timestamp",
+          "event_type",
+          "source_host",
+          "target_host"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "event_type": {
+            "type": "string"
+          },
+          "source_host": {
+            "type": "string"
+          },
+          "target_host": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "killchain_stages": {
+      "type": "array",
+      "description": "KillChain stages from killchain-forensics",
+      "items": {
+        "type": "object",
+        "required": [
+          "stage_id",
+          "stage_name",
+          "mitre_technique_id",
+          "start_timestamp",
+          "end_timestamp"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "stage_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "stage_name": {
+            "type": "string"
+          },
+          "mitre_technique_id": {
+            "type": "string"
+          },
+          "start_timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "end_timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "description": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "shap_explanations": {
+      "type": "array",
+      "description": "SHAP explanations from AI core (numeric only)",
+      "items": {
+        "type": "object",
+        "required": [
+          "explanation_id",
+          "feature_name",
+          "shap_value"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "explanation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "feature_name": {
+            "type": "string"
+          },
+          "shap_value": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    "forensic_artifacts_metadata": {
+      "type": "array",
+      "description": "Forensic artifact metadata (NOT raw dumps)",
+      "items": {
+        "type": "object",
+        "required": [
+          "artifact_id",
+          "artifact_type",
+          "artifact_hash",
+          "collected_at"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "artifact_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "artifact_type": {
+            "type": "string"
+          },
+          "artifact_hash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "collected_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "description": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "policy_decisions": {
+      "type": "array",
+      "description": "Policy decisions from policy engine (facts only)",
+      "items": {
+        "type": "object",
+        "required": [
+          "decision_id",
+          "decision_type",
+          "decision_timestamp",
+          "decision_outcome"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "decision_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "decision_type": {
+            "type": "string"
+          },
+          "decision_timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "decision_outcome": {
+            "type": "string"
+          },
+          "reasoning": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "redaction_policy": {
+      "type": "string",
+      "enum": [
+        "STRICT",
+        "BALANCED",
+        "FORENSIC"
+      ],
+      "description": "PII redaction policy mode"
+    },
+    "requested_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp of request"
+    },
+    "requested_by": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Entity that requested summary"
+    }
+  }
+}

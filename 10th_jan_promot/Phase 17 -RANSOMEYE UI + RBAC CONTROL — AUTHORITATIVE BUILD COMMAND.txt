@@ -1,0 +1,383 @@
+
+### ****Promot Start****
+
+You are implementing **FULL, PRODUCTION-GRADE ROLE-BASED ACCESS CONTROL (RBAC)** for **RansomEye**, covering **both backend and UI**, with **ZERO assumptions** and **ZERO implicit behavior**.
+
+This is a **GA-critical, security-enforcing subsystem**.
+Any deviation, shortcut, assumption, or partial implementation is **NOT ACCEPTABLE**.
+
+---
+
+## 1. ABSOLUTE CONSTRAINTS (NON-NEGOTIABLE)
+
+You **MUST** comply with **ALL** of the following:
+
+1. **Server-side enforcement is mandatory**
+
+   * UI hiding or disabling buttons is **NOT sufficient**
+   * Every protected backend API **must enforce permissions**
+   * If UI is bypassed, backend **must still block** unauthorized actions
+
+2. **Explicit permission model**
+
+   * Default behavior = **DENY**
+   * No implied permissions
+   * No role-name checks in code (e.g., `if role == "ADMIN"` is forbidden)
+   * All access decisions must be made using **explicit permission checks**
+
+3. **Exactly FIVE roles — NO MORE, NO LESS**
+
+   ```
+   SUPER_ADMIN
+   SECURITY_ANALYST
+   POLICY_MANAGER
+   IT_ADMIN
+   AUDITOR
+   ```
+
+   * No custom roles
+   * No dynamic roles
+   * No role inheritance
+   * No role stacking
+   * Each user has **exactly ONE role**
+
+4. **Multiple users per role**
+
+   * RBAC must support unlimited users per role
+   * Roles are **not users**
+
+5. **Audit logging is mandatory**
+
+   * Every permission-sensitive action MUST emit audit ledger entries
+   * Both ALLOWED and DENIED actions must be logged
+
+6. **NO placeholders**
+
+   * No TODO
+   * No FIXME
+   * No dummy values
+   * No mock data
+   * No static JSON datasets
+   * No demo-only logic
+
+7. **Production UI only**
+
+   * Must integrate with existing RansomEye UI
+   * No fake dashboards
+   * No hardcoded UI assumptions
+
+---
+
+## 2. ROLE DEFINITIONS (FROZEN — EXACT MATCH REQUIRED)
+
+You must implement **exactly** the following roles with **exact behavior**.
+
+### 🔴 SUPER_ADMIN
+
+**Who**: CTO / Head of Security / Platform Owner
+**Authority Level**: Absolute
+
+Must be able to:
+
+* View, create, edit, and delete **ALL users**
+* Assign roles to users
+* View and edit **ALL configuration**
+* Manage billing, licenses, subscriptions
+* Configure SSO, API keys, integrations
+* Override enforcement system-wide
+* Access every UI tab and backend API
+
+---
+
+### 🟠 SECURITY_ANALYST (SecOps)
+
+**Who**: SOC analysts, threat hunters
+**Goal**: Actively defend against attacks
+
+Allowed:
+
+* View incidents and alerts
+* Assign incidents
+* Execute Threat Response actions:
+
+  * Isolate host
+  * Kill process
+  * Block network
+  * Rollback actions
+* Access forensics (logs, memory dumps)
+* Generate incident-scoped reports
+
+Explicitly FORBIDDEN:
+
+* Editing policies
+* Managing users
+* Managing agents
+* Billing or licensing
+* Deleting logs
+
+---
+
+### 🔵 POLICY_MANAGER
+
+**Who**: Senior security engineers
+**Goal**: Prevention and detection tuning
+
+Allowed:
+
+* View and edit policies
+* Configure detection thresholds
+* Manage whitelists / blacklists
+* Configure deception / honeypots
+* Run policy simulations
+
+Explicitly FORBIDDEN:
+
+* Executing response actions
+* Managing users
+* Managing agents
+* Billing
+* Viewing raw forensics
+
+---
+
+### 🟣 IT_ADMIN
+
+**Who**: Sysadmins, infrastructure teams
+**Goal**: Platform health and deployment
+
+Allowed:
+
+* Install / uninstall agents
+* Upgrade agents
+* View agent health
+* Group devices
+* View host status
+
+Explicitly FORBIDDEN:
+
+* Viewing incident details
+* Viewing forensics
+* Executing threat responses
+* Editing policies
+* Billing or licensing
+
+---
+
+### 🟢 AUDITOR
+
+**Who**: Compliance officers, external auditors
+**Goal**: Verification and compliance
+
+Allowed:
+
+* Read-only dashboards
+* View audit logs
+* Generate compliance reports (PDF/CSV)
+* View incidents (read-only)
+* View policies (read-only)
+
+Explicitly FORBIDDEN:
+
+* Clicking ANY action buttons
+* Executing responses
+* Editing anything
+* Managing users
+* Managing agents
+
+---
+
+## 3. PERMISSION MODEL (MANDATORY)
+
+You must implement an **explicit permission system**, not role checks.
+
+### Example permission categories (expand as needed, but be explicit):
+
+```
+INCIDENT_VIEW
+INCIDENT_ASSIGN
+RESPONSE_EXECUTE
+RESPONSE_ROLLBACK
+FORENSICS_VIEW
+FORENSICS_EXPORT
+POLICY_VIEW
+POLICY_EDIT
+POLICY_SIMULATE
+AGENT_INSTALL
+AGENT_UNINSTALL
+AGENT_UPDATE
+AGENT_VIEW
+USER_CREATE
+USER_DELETE
+USER_ROLE_ASSIGN
+BILLING_VIEW
+BILLING_MANAGE
+AUDIT_VIEW
+REPORT_GENERATE
+REPORT_EXPORT
+SYSTEM_SETTINGS_EDIT
+```
+
+Rules:
+
+* Permissions must be **enumerated**
+* Permissions must be **versioned**
+* Permissions must be checked **before every protected operation**
+
+---
+
+## 4. DATABASE REQUIREMENTS (MANDATORY)
+
+You MUST implement persistent RBAC storage.
+
+### Required tables (minimum):
+
+```
+users (
+  user_id UUID PRIMARY KEY,
+  email TEXT UNIQUE NOT NULL,
+  role_id TEXT NOT NULL,
+  status ENUM('ACTIVE','SUSPENDED'),
+  created_at TIMESTAMP
+)
+
+roles (
+  role_id TEXT PRIMARY KEY
+)
+
+permissions (
+  permission_id TEXT PRIMARY KEY
+)
+
+role_permissions (
+  role_id TEXT,
+  permission_id TEXT,
+  PRIMARY KEY (role_id, permission_id)
+)
+```
+
+Rules:
+
+* role_permissions mapping is **immutable at runtime**
+* No soft deletes
+* No dynamic permission injection
+
+---
+
+## 5. BACKEND ENFORCEMENT (CRITICAL)
+
+You MUST:
+
+1. Implement RBAC middleware / guards
+2. Enforce permissions in:
+
+   * Threat Response Engine (TRE)
+   * Policy Engine
+   * Agent management APIs
+   * Reporting APIs
+   * User management APIs
+3. Block unauthorized requests even if:
+
+   * UI is bypassed
+   * API is called directly
+4. Fail closed (deny by default)
+
+---
+
+## 6. UI REQUIREMENTS (MANDATORY)
+
+You MUST implement **role-aware UI rendering**:
+
+* Tabs are visible **only if permission exists**
+* Buttons are hidden **and disabled** if forbidden
+* Attempting forbidden actions must:
+
+  * Show clear error
+  * Be audit logged
+* UI must reflect **real backend permissions**, not assumptions
+
+---
+
+## 7. INTEGRATION REQUIREMENTS (MANDATORY)
+
+RBAC must integrate with:
+
+* **Threat Response Engine (TRE)**
+
+  * RESPONSE_EXECUTE and RESPONSE_ROLLBACK enforced
+* **Policy Engine**
+
+  * POLICY_EDIT / POLICY_SIMULATE enforced
+* **Human Authority Framework (HAF)**
+
+  * RBAC check happens BEFORE authority check
+* **Audit Ledger**
+
+  * Log allow/deny for every protected action
+* **Signed Reporting**
+
+  * Report access controlled by role & permission
+
+---
+
+## 8. AUDIT LEDGER EVENTS (MANDATORY)
+
+For every protected action, emit:
+
+```
+USER_ACTION_ATTEMPTED
+USER_ACTION_ALLOWED
+USER_ACTION_DENIED
+```
+
+Each event must include:
+
+* user_id
+* role_id
+* permission
+* resource_id
+* outcome
+* timestamp
+
+---
+
+## 9. DELIVERABLES REQUIRED
+
+You MUST return:
+
+1. RBAC architecture explanation
+2. Permission enum definition
+3. Exact role → permission mapping
+4. Database schema changes
+5. Backend enforcement logic
+6. UI role-aware rendering logic
+7. Audit ledger event definitions
+8. README documenting RBAC model
+9. Verification checklist proving enforcement
+
+---
+
+## 10. ABSOLUTELY FORBIDDEN
+
+You must NOT:
+
+* Assume permissions
+* Hardcode role names in logic
+* Skip backend checks
+* Add bypass flags
+* Add temporary admin shortcuts
+* Add feature flags to avoid RBAC
+
+---
+
+## FINAL INSTRUCTION
+
+This RBAC system **must behave like a military-grade security control plane**.
+
+If something is unclear:
+
+* You must FAIL
+* You must NOT guess
+
+Deviation from this specification is **not allowed**.
+
+### ****Promot End****

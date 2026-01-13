@@ -1,0 +1,173 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RansomEye Threat Response Action",
+  "description": "Frozen schema for threat response actions. All fields are mandatory. No optional fields allowed.",
+  "type": "object",
+  "required": [
+    "action_id",
+    "policy_decision_id",
+    "incident_id",
+    "machine_id",
+    "command_type",
+    "command_payload",
+    "command_signature",
+    "command_signing_key_id",
+    "required_authority",
+    "authority_action_id",
+    "execution_status",
+    "executed_at",
+    "executed_by",
+    "rollback_capable",
+    "rollback_id",
+    "ledger_entry_id"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "action_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this response action (UUID v4)"
+    },
+    "policy_decision_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Policy decision identifier that triggered this action"
+    },
+    "incident_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Incident identifier that triggered this action"
+    },
+    "machine_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255,
+      "description": "Machine identifier where action is executed"
+    },
+    "command_type": {
+      "type": "string",
+      "enum": [
+        "ISOLATE_HOST",
+        "QUARANTINE_HOST",
+        "BLOCK_PROCESS",
+        "BLOCK_NETWORK",
+        "QUARANTINE_FILE",
+        "TERMINATE_PROCESS",
+        "DISABLE_USER",
+        "REVOKE_ACCESS"
+      ],
+      "description": "Type of command to execute (frozen enum)"
+    },
+    "command_payload": {
+      "type": "object",
+      "description": "Command payload (command_id, command_type, target_machine_id, incident_id, issued_at)",
+      "required": [
+        "command_id",
+        "command_type",
+        "target_machine_id",
+        "incident_id",
+        "issued_at"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "command_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Command identifier (UUID v4)"
+        },
+        "command_type": {
+          "type": "string",
+          "enum": [
+            "ISOLATE_HOST",
+            "QUARANTINE_HOST",
+            "BLOCK_PROCESS",
+            "BLOCK_NETWORK",
+            "QUARANTINE_FILE",
+            "TERMINATE_PROCESS",
+            "DISABLE_USER",
+            "REVOKE_ACCESS"
+          ],
+          "description": "Command type"
+        },
+        "target_machine_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255,
+          "description": "Target machine identifier"
+        },
+        "incident_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Incident identifier"
+        },
+        "issued_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "RFC3339 UTC timestamp when command was issued"
+        }
+      }
+    },
+    "command_signature": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9+/=]+$",
+      "description": "Base64-encoded ed25519 signature of command payload"
+    },
+    "command_signing_key_id": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA256 hash of TRE signing public key"
+    },
+    "required_authority": {
+      "type": "string",
+      "enum": [
+        "NONE",
+        "HUMAN",
+        "ROLE"
+      ],
+      "description": "Required authority level for execution"
+    },
+    "authority_action_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Human authority action identifier (if required_authority is HUMAN or ROLE)"
+    },
+    "execution_status": {
+      "type": "string",
+      "enum": [
+        "PENDING",
+        "EXECUTING",
+        "SUCCEEDED",
+        "FAILED",
+        "ROLLED_BACK"
+      ],
+      "description": "Execution status (frozen enum)"
+    },
+    "executed_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp when action was executed (NULL if not executed)"
+    },
+    "executed_by": {
+      "type": "string",
+      "enum": [
+        "TRE",
+        "HUMAN"
+      ],
+      "description": "Entity that executed the action"
+    },
+    "rollback_capable": {
+      "type": "boolean",
+      "description": "Whether this action can be rolled back"
+    },
+    "rollback_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Rollback identifier (if rolled back)"
+    },
+    "ledger_entry_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Audit ledger entry ID for this action"
+    }
+  }
+}

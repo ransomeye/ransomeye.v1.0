@@ -1,0 +1,153 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RansomEye Threat Response Rollback Record",
+  "description": "Frozen schema for rollback records. All fields are mandatory. No optional fields allowed.",
+  "type": "object",
+  "required": [
+    "rollback_id",
+    "action_id",
+    "rollback_reason",
+    "rollback_type",
+    "rollback_payload",
+    "rollback_signature",
+    "rollback_signing_key_id",
+    "required_authority",
+    "authority_action_id",
+    "rollback_status",
+    "rolled_back_at",
+    "rolled_back_by",
+    "ledger_entry_id"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "rollback_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this rollback (UUID v4)"
+    },
+    "action_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Response action identifier being rolled back"
+    },
+    "rollback_reason": {
+      "type": "string",
+      "enum": [
+        "FALSE_POSITIVE",
+        "HUMAN_OVERRIDE",
+        "SYSTEM_ERROR",
+        "POLICY_CHANGE",
+        "OTHER"
+      ],
+      "description": "Reason for rollback (frozen enum)"
+    },
+    "rollback_type": {
+      "type": "string",
+      "enum": [
+        "FULL",
+        "PARTIAL"
+      ],
+      "description": "Type of rollback (FULL = complete reversal, PARTIAL = partial reversal)"
+    },
+    "rollback_payload": {
+      "type": "object",
+      "description": "Rollback command payload",
+      "required": [
+        "rollback_command_id",
+        "action_id",
+        "rollback_type",
+        "rollback_reason",
+        "issued_at"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "rollback_command_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Rollback command identifier (UUID v4)"
+        },
+        "action_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Action identifier being rolled back"
+        },
+        "rollback_type": {
+          "type": "string",
+          "enum": [
+            "FULL",
+            "PARTIAL"
+          ],
+          "description": "Rollback type"
+        },
+        "rollback_reason": {
+          "type": "string",
+          "enum": [
+            "FALSE_POSITIVE",
+            "HUMAN_OVERRIDE",
+            "SYSTEM_ERROR",
+            "POLICY_CHANGE",
+            "OTHER"
+          ],
+          "description": "Rollback reason"
+        },
+        "issued_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "RFC3339 UTC timestamp when rollback was issued"
+        }
+      }
+    },
+    "rollback_signature": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9+/=]+$",
+      "description": "Base64-encoded ed25519 signature of rollback payload"
+    },
+    "rollback_signing_key_id": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA256 hash of TRE signing public key"
+    },
+    "required_authority": {
+      "type": "string",
+      "enum": [
+        "NONE",
+        "HUMAN",
+        "ROLE"
+      ],
+      "description": "Required authority level for rollback"
+    },
+    "authority_action_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Human authority action identifier (if required_authority is HUMAN or ROLE)"
+    },
+    "rollback_status": {
+      "type": "string",
+      "enum": [
+        "PENDING",
+        "EXECUTING",
+        "SUCCEEDED",
+        "FAILED"
+      ],
+      "description": "Rollback execution status (frozen enum)"
+    },
+    "rolled_back_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 UTC timestamp when rollback was executed (NULL if not executed)"
+    },
+    "rolled_back_by": {
+      "type": "string",
+      "enum": [
+        "TRE",
+        "HUMAN"
+      ],
+      "description": "Entity that executed the rollback"
+    },
+    "ledger_entry_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Audit ledger entry ID for this rollback"
+    }
+  }
+}
