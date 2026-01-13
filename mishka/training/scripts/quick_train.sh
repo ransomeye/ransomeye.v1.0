@@ -31,8 +31,8 @@ echo ""
 echo "Starting quick training session (1 hour limit, 200 samples)..."
 echo ""
 
-# Run with 1-hour limit
-python3 scripts/train_with_limits.py --config configs/training_config.yaml
+# Run with fixed training script (preserves all samples)
+python3 scripts/train_phase1_fixed.py --config configs/training_config.yaml
 
 echo ""
 echo "=========================================="

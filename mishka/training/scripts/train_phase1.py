@@ -201,43 +201,65 @@ class Phase1Trainer:
         )
         
         # For causal LM, labels are the same as input_ids
-        # Create labels by copying input_ids
-        labels = []
-        for input_ids in tokenized['input_ids']:
-            labels.append(input_ids.copy())
-        tokenized['labels'] = labels
+        # Create labels properly for batched data
+        if isinstance(tokenized['input_ids'], list):
+            # Batched: list of lists
+            tokenized['labels'] = [ids.copy() for ids in tokenized['input_ids']]
+        else:
+            # Single: just copy
+            tokenized['labels'] = tokenized['input_ids'].copy()
         
         return tokenized
     
     def prepare_dataset(self, dataset: Any) -> Any:
         """Prepare dataset for training with memory optimization."""
-        # Process in smaller batches to reduce memory spikes
-        batch_size = 32  # Smaller batches for memory efficiency
-        
         print(f"Tokenizing {len(dataset)} samples...")
         
+        # Use smaller batch size and ensure proper handling
+        batch_size = 16  # Smaller batches for stability
+        
+        # Tokenize without removing columns first (to debug)
         tokenized_dataset = dataset.map(
             self.tokenize_function,
             batched=True,
             batch_size=batch_size,
-            remove_columns=dataset.column_names,
-            desc="Tokenizing dataset"
+            desc="Tokenizing dataset",
+            num_proc=1  # Single process for stability
         )
         
-        print(f"Tokenized dataset has {len(tokenized_dataset)} samples")
+        print(f"After tokenization: {len(tokenized_dataset)} samples")
         
-        # Filter out any empty or invalid samples
+        # Verify samples are valid
+        valid_count = 0
+        for i in range(min(20, len(tokenized_dataset))):
+            sample = tokenized_dataset[i]
+            input_ids = sample.get('input_ids', [])
+            if len(input_ids) > 0:
+                valid_count += 1
+        
+        print(f"Valid samples (first 20 checked): {valid_count}/20")
+        
+        # Now remove original columns
+        tokenized_dataset = tokenized_dataset.remove_columns(
+            [col for col in dataset.column_names if col not in ['input_ids', 'attention_mask', 'labels']]
+        )
+        
+        # Only filter truly empty samples
         def filter_empty(example):
-            return len(example.get('input_ids', [])) > 0
+            input_ids = example.get('input_ids', [])
+            return len(input_ids) > 0
         
         original_len = len(tokenized_dataset)
-        tokenized_dataset = tokenized_dataset.filter(filter_empty)
-        filtered_len = len(tokenized_dataset)
+        tokenized_dataset = tokenized_dataset.filter(filter_empty, desc="Filtering empty")
         
-        if filtered_len < original_len:
-            print(f"Filtered out {original_len - filtered_len} empty samples")
+        if len(tokenized_dataset) < original_len:
+            print(f"⚠️  Filtered {original_len - len(tokenized_dataset)} empty samples")
         
         print(f"Final dataset size: {len(tokenized_dataset)} samples")
+        
+        if len(tokenized_dataset) < len(dataset) * 0.5:
+            print(f"⚠️  WARNING: Lost {len(dataset) - len(tokenized_dataset)} samples during tokenization!")
+            print(f"   This suggests a tokenization issue. Check tokenize_function.")
         
         return tokenized_dataset
     

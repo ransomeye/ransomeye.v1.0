@@ -15,6 +15,13 @@
       "status": "completed",
       "elapsed_hours": 0.6083271825975842,
       "end_time": "2026-01-13T17:50:11.660268"
+    },
+    {
+      "session_id": "session_1768307842",
+      "start_time": "2026-01-13T18:07:22.492438",
+      "start_timestamp": 1768307842.4924557,
+      "max_hours": 1.0,
+      "status": "running"
     }
   ],
   "daily_totals": {
