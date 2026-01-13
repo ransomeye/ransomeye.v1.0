@@ -44,34 +44,124 @@ def aggregate_ga_verdict(linux_results_path: str, windows_results_path: str) -> 
     """
     Aggregate GA verdict from Phase C-L and Phase C-W results.
     
+    Validates:
+    - Both result files exist
+    - Schema version is 1.0
+    - Required fields present
+    
     Args:
         linux_results_path: Path to phase_c_linux_results.json
         windows_results_path: Path to phase_c_windows_results.json
         
     Returns:
         Final GA verdict dictionary
+        
+    Raises:
+        FileNotFoundError: If result files don't exist
+        ValueError: If schema validation fails
     """
-    # Load Linux results
+    # Validate and load Linux results
     linux_path = Path(linux_results_path)
     if not linux_path.exists():
-        raise FileNotFoundError(f"Linux results file not found: {linux_results_path}")
+        error_msg = (
+            f"FATAL: Linux results file not found: {linux_results_path}\n"
+            "Phase C-L execution must complete before aggregation."
+        )
+        print(f"❌ {error_msg}", file=sys.stderr)
+        raise FileNotFoundError(error_msg)
     
-    with open(linux_path, 'r') as f:
-        linux_results = json.load(f)
+    try:
+        with open(linux_path, 'r') as f:
+            linux_results = json.load(f)
+    except json.JSONDecodeError as e:
+        error_msg = (
+            f"FATAL: Linux results file is corrupt (invalid JSON): {linux_results_path}\n"
+            f"Error: {e}"
+        )
+        print(f"❌ {error_msg}", file=sys.stderr)
+        raise ValueError(error_msg)
     
-    # Load Windows results
+    # Validate Linux results schema
+    if linux_results.get("schema_version") != "1.0":
+        error_msg = (
+            f"FATAL: Linux results schema version mismatch.\n"
+            f"Expected: 1.0, Found: {linux_results.get('schema_version', 'missing')}\n"
+            f"File: {linux_results_path}"
+        )
+        print(f"❌ {error_msg}", file=sys.stderr)
+        raise ValueError(error_msg)
+    
+    if linux_results.get("phase") != "Phase C-L":
+        error_msg = (
+            f"FATAL: Linux results phase mismatch.\n"
+            f"Expected: Phase C-L, Found: {linux_results.get('phase', 'missing')}\n"
+            f"File: {linux_results_path}"
+        )
+        print(f"❌ {error_msg}", file=sys.stderr)
+        raise ValueError(error_msg)
+    
+    # Validate and load Windows results
     windows_path = Path(windows_results_path)
     if not windows_path.exists():
-        raise FileNotFoundError(f"Windows results file not found: {windows_results_path}")
+        error_msg = (
+            f"FATAL: Windows results file not found: {windows_results_path}\n"
+            "Phase C-W execution must complete before aggregation."
+        )
+        print(f"❌ {error_msg}", file=sys.stderr)
+        raise FileNotFoundError(error_msg)
     
-    with open(windows_path, 'r') as f:
-        windows_results = json.load(f)
+    try:
+        with open(windows_path, 'r') as f:
+            windows_results = json.load(f)
+    except json.JSONDecodeError as e:
+        error_msg = (
+            f"FATAL: Windows results file is corrupt (invalid JSON): {windows_results_path}\n"
+            f"Error: {e}"
+        )
+        print(f"❌ {error_msg}", file=sys.stderr)
+        raise ValueError(error_msg)
     
+    # Validate Windows results schema
+    if windows_results.get("schema_version") != "1.0":
+        error_msg = (
+            f"FATAL: Windows results schema version mismatch.\n"
+            f"Expected: 1.0, Found: {windows_results.get('schema_version', 'missing')}\n"
+            f"File: {windows_results_path}"
+        )
+        print(f"❌ {error_msg}", file=sys.stderr)
+        raise ValueError(error_msg)
+    
+    if windows_results.get("phase") != "Phase C-W":
+        error_msg = (
+            f"FATAL: Windows results phase mismatch.\n"
+            f"Expected: Phase C-W, Found: {windows_results.get('phase', 'missing')}\n"
+            f"File: {windows_results_path}"
+        )
+        print(f"❌ {error_msg}", file=sys.stderr)
+        raise ValueError(error_msg)
+    
+    # Extract verdicts (validate structure)
     linux_verdict = linux_results.get("verdict", {})
     windows_verdict = windows_results.get("verdict", {})
     
-    linux_pass = linux_verdict.get("verdict") == "PASS"
-    windows_pass = windows_verdict.get("verdict") == "PASS"
+    if not linux_verdict:
+        error_msg = (
+            f"FATAL: Linux results missing verdict section.\n"
+            f"File: {linux_results_path}"
+        )
+        print(f"❌ {error_msg}", file=sys.stderr)
+        raise ValueError(error_msg)
+    
+    if not windows_verdict:
+        error_msg = (
+            f"FATAL: Windows results missing verdict section.\n"
+            f"File: {windows_results_path}"
+        )
+        print(f"❌ {error_msg}", file=sys.stderr)
+        raise ValueError(error_msg)
+    
+    linux_pass = linux_results.get("status") == "PASS" or linux_verdict.get("verdict") == "PASS"
+    windows_pass = windows_results.get("status") == "PASS" or windows_verdict.get("verdict") == "PASS"
     
     # Check for skipped mandatory tests
     linux_skipped = linux_verdict.get("skipped_tests", 0)

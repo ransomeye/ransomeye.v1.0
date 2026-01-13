@@ -72,13 +72,18 @@ class PhaseCExecutor:
             raise ValueError(f"Invalid execution mode: {execution_mode}. Must be 'linux' or 'windows'")
         
         # Test execution results (always initialize safely)
+        phase_name = "Phase C-L" if self.execution_mode == 'linux' else "Phase C-W"
         self.results: Dict[str, Any] = {
+            "schema_version": "1.0",
+            "phase": phase_name,
+            "status": "UNKNOWN",
             "execution_start": datetime.now(timezone.utc).isoformat(),
             "execution_end": None,
             "execution_mode": self.execution_mode,
             "platform": platform.system(),
             "platform_release": platform.release(),
             "tracks": {},
+            "tests": {},  # Flattened test results
             "verdict": {
                 "execution_mode": self.execution_mode,
                 "total_tests": 0,
@@ -98,11 +103,30 @@ class PhaseCExecutor:
         # Track execution state
         self.tracks_executed = False
         
+        # Preflight check state
+        self.preflight_checked = False
+    
+    def preflight_check(self):
+        """
+        Preflight validation checks (explicit, not in __init__).
+        
+        Validates:
+        - OS execution boundaries
+        - Database connectivity (HARD GATE)
+        
+        Must be called before run_all_tracks().
+        Fails fast with clear error messages.
+        """
+        if self.preflight_checked:
+            return  # Already checked
+        
         # Enforce OS execution boundaries
         self._enforce_os_boundaries()
         
         # Startup DB connectivity assertion (HARD GATE)
         self._assert_db_connectivity()
+        
+        self.preflight_checked = True
     
     def _enforce_os_boundaries(self):
         """
@@ -139,7 +163,7 @@ class PhaseCExecutor:
         If DB connection fails → immediate fatal exit
         No tracks execute
         No partial verdict
-        Clear error message required
+        Clear error message required (no Python tracebacks)
         """
         try:
             conn = self.get_db_connection()
@@ -148,11 +172,14 @@ class PhaseCExecutor:
             cur.fetchone()
             cur.close()
             conn.close()
-        except Exception as e:
+        except psycopg2.OperationalError as e:
+            # Extract clear error message (no traceback)
+            error_detail = str(e).split('\n')[0] if '\n' in str(e) else str(e)
             error_msg = (
                 f"FATAL: Database connectivity check failed.\n"
                 f"Phase C validation requires database connection.\n"
-                f"Error: {e}\n"
+                f"\n"
+                f"Error: {error_detail}\n"
                 f"\n"
                 f"Default credentials: gagan / gagan\n"
                 f"Override with environment variables:\n"
@@ -161,6 +188,20 @@ class PhaseCExecutor:
                 f"  RANSOMEYE_DB_NAME (default: ransomeye)\n"
                 f"  RANSOMEYE_DB_USER (default: gagan)\n"
                 f"  RANSOMEYE_DB_PASSWORD (default: gagan)"
+            )
+            print(f"❌ {error_msg}", file=sys.stderr)
+            sys.exit(1)
+        except Exception as e:
+            # Generic error (shouldn't happen, but handle gracefully)
+            error_detail = str(e).split('\n')[0] if '\n' in str(e) else str(e)
+            error_msg = (
+                f"FATAL: Database connectivity check failed.\n"
+                f"Phase C validation requires database connection.\n"
+                f"\n"
+                f"Error: {error_detail}\n"
+                f"\n"
+                f"Default credentials: gagan / gagan\n"
+                f"Check database configuration and connectivity."
             )
             print(f"❌ {error_msg}", file=sys.stderr)
             sys.exit(1)
@@ -328,6 +369,8 @@ class PhaseCExecutor:
             len(self.artifacts) > 0
         )
         
+        verdict_status = "PASS" if mode_ready else "FAIL"
+        
         verdict = {
             "execution_mode": self.execution_mode,
             "total_tests": total_tests,
@@ -337,11 +380,19 @@ class PhaseCExecutor:
             "all_tracks_passed": all_tracks_passed,
             "mode_ready": mode_ready,  # This mode passed
             "artifacts": self.artifacts,
-            "verdict": "PASS" if mode_ready else "FAIL",
+            "verdict": verdict_status,
             "verdict_timestamp": datetime.now(timezone.utc).isoformat()
         }
         
+        # Update results with verdict and status
         self.results["verdict"] = verdict
+        self.results["status"] = verdict_status
+        
+        # Flatten tests into results for easier access
+        for track_name, track_results in self.results["tracks"].items():
+            track_tests = track_results.get("tests", {})
+            for test_name, test_result in track_tests.items():
+                self.results["tests"][test_name] = test_result
         
         # Save mode-specific results file
         if self.execution_mode == 'linux':
@@ -509,9 +560,19 @@ class PhaseCExecutor:
         Phase C-L (Linux): Tracks 1-5 + Track 6-A (Linux Agent)
         Phase C-W (Windows): Track 6-B (Windows Agent/ETW)
         
-        Abort immediately on DB failure (already checked in __init__).
+        Preflight check must be called first.
+        Abort immediately on DB failure.
         Never compute verdict if tracks didn't execute.
         """
+        # Require preflight check
+        if not self.preflight_checked:
+            error_msg = (
+                "FATAL: preflight_check() must be called before run_all_tracks().\n"
+                "Call executor.preflight_check() first."
+            )
+            print(f"❌ {error_msg}", file=sys.stderr)
+            sys.exit(1)
+        
         print("="*80)
         if self.execution_mode == 'linux':
             print("Phase C-L Validation - Linux Execution")
@@ -530,10 +591,11 @@ class PhaseCExecutor:
             else:
                 self._run_windows_tracks()
         except Exception as e:
-            # Fatal error during track execution
+            # Fatal error during track execution (clear message, no traceback)
+            error_detail = str(e).split('\n')[0] if '\n' in str(e) else str(e)
             error_msg = (
                 f"FATAL: Track execution failed.\n"
-                f"Error: {e}\n"
+                f"Error: {error_detail}\n"
                 f"No verdict computed. Phase C execution aborted."
             )
             print(f"❌ {error_msg}", file=sys.stderr)
