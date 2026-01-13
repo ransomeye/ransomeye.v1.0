@@ -44,7 +44,10 @@ fi
 log "Changes detected. Staging files..."
 
 # Stage all changes (including new files and modifications)
+# Exclude large files that exceed GitHub's limits
 git add -A
+# Remove any large files that might have been staged
+git reset HEAD -- "*.deb" "*.rpm" "*.dmg" "*.pkg" 2>/dev/null || true
 
 # Check if there are staged changes
 if git diff --cached --quiet; then

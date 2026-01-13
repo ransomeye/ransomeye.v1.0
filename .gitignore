@@ -45,3 +45,9 @@ git token.txt
 .git-auto-sync.sh
 .git-auto-sync.log
 .git-auto-sync.lock
+
+# Large files (exceed GitHub's 100MB limit)
+*.deb
+*.rpm
+*.dmg
+*.pkg

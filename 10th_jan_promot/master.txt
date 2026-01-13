@@ -11710,6 +11710,201 @@ End with:
 
 Promot End*
 
+🔴 PROMPT 8 — WINDOWS AGENT ETW DEEP TELEMETRY
+
+Start Promot*
+
+You are Cursor, acting as the implementation engineer for
+Phase 6 — Windows Agent Deep ETW Telemetry.
+
+AUTHORITATIVE CONTEXT
+
+Linux Agent already provides deep telemetry via eBPF.
+
+Windows Agent currently implements command gate + enforcement, but lacks deep ETW-based visibility.
+
+This phase is DETECTION ONLY.
+
+No enforcement logic may be added or changed.
+
+OBJECTIVE
+
+Implement deep, deterministic ETW telemetry ingestion in the Windows Agent to reach parity with Linux Agent observability.
+
+TELEMETRY TO IMPLEMENT (MANDATORY)
+
+You MUST implement ETW collection for all of the following categories:
+
+1. PROCESS & THREAD ACTIVITY
+
+Process creation / termination
+
+Parent–child lineage
+
+Command line
+
+Image path & hash
+
+Thread start / injection indicators
+
+ETW Providers:
+
+Microsoft-Windows-Kernel-Process
+
+Microsoft-Windows-Kernel-Thread
+
+2. FILESYSTEM ACTIVITY
+
+File create / write / rename / delete
+
+File entropy change indicator (pre/post write size heuristic)
+
+Executable write detection
+
+ETW Providers:
+
+Microsoft-Windows-Kernel-File
+
+3. REGISTRY ACTIVITY
+
+Key creation / modification / deletion
+
+Autorun & persistence locations
+
+Service & driver registration
+
+ETW Providers:
+
+Microsoft-Windows-Kernel-Registry
+
+4. NETWORK INTENT (HOST-SIDE)
+
+Socket creation
+
+Bind / connect intent (not DPI)
+
+Process ↔ socket correlation
+
+ETW Providers:
+
+Microsoft-Windows-Kernel-Network
+
+Microsoft-Windows-TCPIP
+
+5. MEMORY & INJECTION SIGNALS (BEST-EFFORT)
+
+Remote thread creation
+
+Process hollowing indicators
+
+RWX memory allocation flags (where available)
+
+ETW Providers:
+
+Microsoft-Windows-Kernel-Memory
+
+Microsoft-Windows-Threat-Intelligence (if accessible)
+
+HARD CONSTRAINTS (NON-NEGOTIABLE)
+
+ETW READ-ONLY — no blocking, no hooking
+
+NO kernel drivers (user-mode ETW only)
+
+NO performance degradation >5% CPU
+
+Fail-open telemetry (agent must not crash)
+
+NO DB access
+
+ENV-only configuration
+
+Signed telemetry only
+
+Deterministic schemas
+
+Offline capable
+
+No ML inference on endpoint
+
+ARCHITECTURE REQUIREMENTS
+Module Placement
+ransomeye-agent-windows/
+└── agent/
+    ├── etw/
+    │   ├── providers.py
+    │   ├── session_manager.py
+    │   ├── event_parser.py
+    │   ├── schema_mapper.py
+    │   └── health_monitor.py
+
+Output
+
+Emit normalized protobuf events
+
+Same schema family as Linux Agent where possible
+
+Include:
+
+host_id
+
+process_id
+
+event_type
+
+timestamp (ETW native)
+
+raw_provider_id (for traceability)
+
+VALIDATION REQUIREMENTS
+
+You MUST provide:
+
+Event volume benchmarks (idle vs active)
+
+CPU / memory impact measurements
+
+Provider failure handling
+
+Session restart resilience
+
+Telemetry loss detection
+
+EXPLICITLY FORBIDDEN
+
+User-mode API hooking
+
+DLL injection
+
+Inline patching
+
+WMI polling loops
+
+Signature-based detection
+
+Any enforcement or blocking logic
+
+DELIVERABLE
+
+Respond with:
+
+ETW architecture design
+
+Provider list with rationale
+
+Normalized event schema examples
+
+Performance mitigation strategy
+
+Explicit list of what is NOT implemented
+
+End with:
+
+“Phase 6 Windows ETW telemetry designed. Ready for implementation approval.”
+
+Promot End*
+
+
 
 
 
