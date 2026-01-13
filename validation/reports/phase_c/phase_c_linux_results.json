@@ -1,0 +1,63 @@
+{
+  "execution_end": "2026-01-13T09:25:01.859625+00:00",
+  "execution_mode": "linux",
+  "execution_start": "2026-01-13T09:25:01.762344+00:00",
+  "platform": "Linux",
+  "platform_release": "6.17.0-8-generic",
+  "tracks": {
+    "TRACK_1_DETERMINISM": {
+      "all_passed": false,
+      "error": "connection to server at \"localhost\" (127.0.0.1), port 5432 failed: fe_sendauth: no password supplied\n",
+      "execution_time_seconds": 0.034932613372802734,
+      "execution_timestamp": "2026-01-13T09:25:01.812670+00:00",
+      "status": "failed"
+    },
+    "TRACK_2_REPLAY": {
+      "all_passed": false,
+      "error": "connection to server at \"localhost\" (127.0.0.1), port 5432 failed: fe_sendauth: no password supplied\n",
+      "execution_time_seconds": 0.00881505012512207,
+      "execution_timestamp": "2026-01-13T09:25:01.821548+00:00",
+      "status": "failed"
+    },
+    "TRACK_3_FAILURE_INJECTION": {
+      "all_passed": false,
+      "error": "connection to server at \"localhost\" (127.0.0.1), port 5432 failed: fe_sendauth: no password supplied\n",
+      "execution_time_seconds": 0.009678125381469727,
+      "execution_timestamp": "2026-01-13T09:25:01.831267+00:00",
+      "status": "failed"
+    },
+    "TRACK_4_SCALE_STRESS": {
+      "all_passed": false,
+      "error": "connection to server at \"localhost\" (127.0.0.1), port 5432 failed: fe_sendauth: no password supplied\n",
+      "execution_time_seconds": 0.008889198303222656,
+      "execution_timestamp": "2026-01-13T09:25:01.840256+00:00",
+      "status": "failed"
+    },
+    "TRACK_5_SECURITY_SAFETY": {
+      "all_passed": false,
+      "error": "connection to server at \"localhost\" (127.0.0.1), port 5432 failed: fe_sendauth: no password supplied\n",
+      "execution_time_seconds": 0.00980067253112793,
+      "execution_timestamp": "2026-01-13T09:25:01.850100+00:00",
+      "status": "failed"
+    },
+    "TRACK_6_AGENT_LINUX": {
+      "all_passed": false,
+      "error": "connection to server at \"localhost\" (127.0.0.1), port 5432 failed: fe_sendauth: no password supplied\n",
+      "execution_time_seconds": 0.009428977966308594,
+      "execution_timestamp": "2026-01-13T09:25:01.859602+00:00",
+      "status": "failed"
+    }
+  },
+  "verdict": {
+    "all_tracks_passed": false,
+    "artifacts": [],
+    "execution_mode": "linux",
+    "failed_tests": 0,
+    "mode_ready": false,
+    "passed_tests": 0,
+    "skipped_tests": 0,
+    "total_tests": 0,
+    "verdict": "FAIL",
+    "verdict_timestamp": "2026-01-13T09:25:01.859648+00:00"
+  }
+}

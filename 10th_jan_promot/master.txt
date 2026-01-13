@@ -13080,3 +13080,126 @@ Promt End
 
 
 
+Promot Start
+
+You are Cursor, acting as the Validation Execution Architect for
+Phase C — Global GA Validation (Multi-Host, Corrected Model).
+
+AUTHORITATIVE CONTEXT
+
+RansomEye is a multi-OS system.
+
+Linux and Windows agents cannot be validated on the same host.
+
+ETW is Windows-only and cannot run on Linux.
+
+GA certification must be technically defensible.
+
+This prompt replaces all previous Phase C execution assumptions.
+
+OBJECTIVE
+
+Implement Phase C execution as a two-run, multi-host validation process with a single authoritative GA verdict.
+
+EXECUTION MODEL (LOCKED)
+PHASE C-L — LINUX EXECUTION
+
+Runs on: Linux
+Mandatory Tracks:
+
+Track 1: Determinism (DET-001 → DET-006)
+
+Track 2: Replay (REP-A Identity, REP-B Evolution)
+
+Track 3: Failure Injection (FAIL-001 → FAIL-006)
+
+Track 4: Scale & Stress (with Disk I/O wait, Queue depth)
+
+Track 5: Security & Safety
+
+Track 6-A: Agent Reality Check — Linux Agent only
+
+Output Artifact (MANDATORY):
+
+phase_c_linux_results.json
+
+PHASE C-W — WINDOWS EXECUTION
+
+Runs on: Native Windows host
+Mandatory Tracks:
+
+Track 6-B: Agent Reality Check — Windows Agent (ETW)
+
+What must be validated:
+
+ETW event capture
+
+Normalization correctness
+
+PID reuse disambiguation
+
+Functional parity with simulator
+
+Deterministic schema output
+
+Output Artifact (MANDATORY):
+
+phase_c_windows_results.json
+
+GA VERDICT LOGIC (NON-NEGOTIABLE)
+
+GA verdict must be computed as:
+
+GA_READY =
+  phase_c_linux_results.PASS == true
+  AND
+  phase_c_windows_results.PASS == true
+
+
+Rules:
+
+Any skipped mandatory test = FAIL
+
+FAIL-006 cannot be skipped
+
+AGENT-002 cannot be skipped
+
+No partial or provisional GA allowed
+
+HARNESS REQUIREMENTS
+Linux Harness Must:
+
+Refuse to run AGENT-002
+
+Explicitly state:
+
+“Windows Agent validation must be run on Windows host”
+
+Windows Harness Must:
+
+Run only Track 6-B
+
+Validate ETW via real agent execution
+
+Produce standalone results file
+
+DELIVERABLE
+
+Respond with:
+
+Updated Phase C execution architecture
+
+Linux harness behavior changes
+
+Windows harness behavior changes
+
+GA verdict aggregation logic
+
+Explicit confirmation:
+
+“Phase C execution model corrected. GA validation is now OS-correct and audit-safe.”
+
+Promt End
+
+
+
