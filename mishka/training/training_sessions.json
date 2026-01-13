@@ -6,6 +6,13 @@
       "start_timestamp": 1768285641.6189973,
       "max_hours": 5.0,
       "status": "running"
+    },
+    {
+      "session_id": "session_1768304621",
+      "start_time": "2026-01-13T17:13:41.681642",
+      "start_timestamp": 1768304621.6816583,
+      "max_hours": 1.0,
+      "status": "running"
     }
   ],
   "daily_totals": {},
