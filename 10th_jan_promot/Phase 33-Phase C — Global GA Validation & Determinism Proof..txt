@@ -1,0 +1,145 @@
+Promot Start
+
+You are Cursor, acting as the Validation & GA Readiness Engineer for
+Phase C — Global GA Validation & Determinism Proof.
+
+AUTHORITATIVE CONTEXT
+
+All core modules are implemented.
+
+Data plane is hardened and frozen.
+
+Phase A (Detection), Phase B (Forensics) are complete.
+
+System must be GA-ready, auditable, and replay-verifiable.
+
+OBJECTIVE
+
+Prove that RansomEye is GA-ready by executing end-to-end validation with:
+
+Determinism guarantees
+
+Replay validation
+
+Failure injection
+
+Scale simulation
+
+Audit proof
+
+MANDATORY VALIDATION AREAS
+1. DETERMINISM PROOF
+
+Same input → same output
+
+Across:
+
+Detection
+
+Correlation
+
+Forensics
+
+Summaries
+
+Hash comparison required
+
+2. REPLAY VALIDATION
+
+Replay raw_events
+
+Rebuild normalized events
+
+Rebuild incidents
+
+Rebuild forensic summaries
+
+Verify identical hashes
+
+3. FAILURE INJECTION
+
+Simulate:
+
+DB restarts
+
+Queue overflow
+
+Agent disconnects
+
+Duplicate events
+
+Partial writes
+
+Verify:
+
+No corruption
+
+No silent loss
+
+Correct degradation
+
+4. SCALE VALIDATION
+
+Simulate:
+
+1M+ events
+
+Burst ingestion
+
+Sustained load
+
+POC single-host mode
+
+Measure:
+
+Latency
+
+Backpressure
+
+CPU/memory
+
+DB stability
+
+5. AUDIT & COMPLIANCE ARTIFACTS
+
+Produce:
+
+Determinism proof logs
+
+Replay verification logs
+
+Failure reports
+
+GA readiness checklist
+
+Signed validation report (PDF/JSON)
+
+HARD RULES
+
+No mocks
+
+No assumptions
+
+No “expected” language
+
+Evidence only
+
+DELIVERABLE
+
+Respond with:
+
+Validation architecture
+
+Test matrix
+
+Evidence artifacts
+
+GA readiness verdict
+
+Explicit list of residual risks (if any)
+
+End with:
+
+“Phase C validation complete. RansomEye is GA-ready.”
+
+Promt End
