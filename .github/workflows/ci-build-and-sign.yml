@@ -315,7 +315,8 @@ jobs:
             --version "${{ github.ref_name }}" \
             --build-id "${{ github.run_id }}" \
             --signing-key-id "${{ env.SIGNING_KEY_ID }}" \
-            --key-dir "$SIGNING_KEY_DIR" \
+            --vault-dir "$RANSOMEYE_KEY_VAULT_DIR" \
+            --registry-path "$RANSOMEYE_KEY_REGISTRY_PATH" \
             --output build/artifacts/sbom/manifest.json
         # PHASE 6: Fail-closed - SBOM generation must succeed
         continue-on-error: false
