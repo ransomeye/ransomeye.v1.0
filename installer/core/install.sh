@@ -556,12 +556,12 @@ RANSOMEYE_COMPONENT="core"
 RANSOMEYE_COMPONENT_INSTANCE_ID="${COMPONENT_INSTANCE_ID}"
 RANSOMEYE_VERSION="${RANSOMEYE_VERSION}"
 
-# Database configuration (user: gagan, password: gagan)
-RANSOMEYE_DB_HOST="localhost"
-RANSOMEYE_DB_PORT="5432"
-RANSOMEYE_DB_NAME="ransomeye"
-RANSOMEYE_DB_USER="gagan"
-RANSOMEYE_DB_PASSWORD="gagan"
+# Database configuration (from installer prompts, no defaults)
+RANSOMEYE_DB_HOST="${RANSOMEYE_DB_HOST}"
+RANSOMEYE_DB_PORT="${RANSOMEYE_DB_PORT}"
+RANSOMEYE_DB_NAME="${RANSOMEYE_DB_NAME}"
+RANSOMEYE_DB_USER="${RANSOMEYE_DB_USER}"
+RANSOMEYE_DB_PASSWORD="${RANSOMEYE_DB_PASSWORD}"
 
 # Service ports
 RANSOMEYE_INGEST_PORT="8000"
@@ -571,8 +571,8 @@ RANSOMEYE_UI_PORT="8080"
 RANSOMEYE_EVENT_ENVELOPE_SCHEMA_PATH="${INSTALL_ROOT}/config/contracts/event-envelope.schema.json"
 RANSOMEYE_POLICY_DIR="${INSTALL_ROOT}/config/policy"
 
-# Command signing key (required, minimum 32 characters)
-RANSOMEYE_COMMAND_SIGNING_KEY="test_signing_key_minimum_32_characters_long_for_validation_long_enough"
+# Command signing key (from installer prompt, no defaults)
+RANSOMEYE_COMMAND_SIGNING_KEY="${RANSOMEYE_COMMAND_SIGNING_KEY}"
 
 # Python path
 PYTHONPATH="${INSTALL_ROOT}/lib:\${PYTHONPATH:-}"
