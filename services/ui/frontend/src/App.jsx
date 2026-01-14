@@ -191,6 +191,76 @@ function App() {
                     <p>No timeline data</p>
                   )}
 
+                  {/* PHASE 5: Evidence Quality Indicators */}
+                  <h3>Evidence Quality Indicators</h3>
+                  {incidentDetail.evidence_quality ? (
+                    <div style={{ padding: '10px', backgroundColor: '#f5f5f5', borderRadius: '4px', marginBottom: '10px' }}>
+                      <p><strong>Evidence Count:</strong> {incidentDetail.evidence_quality.evidence_count}</p>
+                      <p>
+                        <strong>Evidence Completeness:</strong> 
+                        <span style={{
+                          color: incidentDetail.evidence_quality.evidence_completeness === 'COMPLETE' ? '#28a745' : '#ffc107',
+                          fontWeight: 'bold',
+                          marginLeft: '10px'
+                        }}>
+                          {incidentDetail.evidence_quality.evidence_completeness}
+                        </span>
+                        {incidentDetail.evidence_quality.evidence_completeness !== 'COMPLETE' && (
+                          <span style={{ color: '#ff6b6b', marginLeft: '10px' }}>⚠️</span>
+                        )}
+                      </p>
+                      <p>
+                        <strong>Determinism Status:</strong> 
+                        <span style={{
+                          color: incidentDetail.evidence_quality.determinism_status === 'DETERMINISTIC' ? '#28a745' : '#ffc107',
+                          marginLeft: '10px'
+                        }}>
+                          {incidentDetail.evidence_quality.determinism_status}
+                        </span>
+                      </p>
+                      <p>
+                        <strong>Contradiction Presence:</strong> 
+                        <span style={{
+                          color: incidentDetail.evidence_quality.has_contradiction ? '#ff6b6b' : '#28a745',
+                          fontWeight: 'bold',
+                          marginLeft: '10px'
+                        }}>
+                          {incidentDetail.evidence_quality.has_contradiction ? 'YES' : 'NO'}
+                        </span>
+                        {incidentDetail.evidence_quality.has_contradiction && (
+                          <span style={{ color: '#ff6b6b', marginLeft: '10px' }}>
+                            ({incidentDetail.evidence_quality.contradiction_count} contradiction(s) detected)
+                          </span>
+                        )}
+                      </p>
+                      <p>
+                        <strong>AI Provenance Available:</strong> 
+                        <span style={{
+                          color: incidentDetail.evidence_quality.has_ai_provenance ? '#28a745' : '#ffc107',
+                          marginLeft: '10px'
+                        }}>
+                          {incidentDetail.evidence_quality.has_ai_provenance ? 'YES' : 'NO'}
+                        </span>
+                        {!incidentDetail.evidence_quality.has_ai_provenance && (
+                          <span style={{ color: '#ffc107', marginLeft: '10px' }}>
+                            (AI output is advisory only)
+                          </span>
+                        )}
+                      </p>
+                      <p>
+                        <strong>SHAP Explanation Available:</strong> 
+                        <span style={{
+                          color: incidentDetail.evidence_quality.has_shap_explanation ? '#28a745' : '#ffc107',
+                          marginLeft: '10px'
+                        }}>
+                          {incidentDetail.evidence_quality.has_shap_explanation ? 'YES' : 'NO'}
+                        </span>
+                      </p>
+                    </div>
+                  ) : (
+                    <p>No evidence quality data</p>
+                  )}
+                  
                   <h3>Evidence Summary</h3>
                   {incidentDetail.evidence_summary ? (
                     <p>Evidence Count: {incidentDetail.evidence_summary.evidence_count}</p>
