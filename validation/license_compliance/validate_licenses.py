@@ -112,7 +112,14 @@ class LicenseValidator:
     
     def get_inventory_names(self) -> Set[str]:
         """Get all dependency names from inventory."""
-        return {name.lower() for name in self.inventory.keys()}
+        names = set()
+        for name in self.inventory.keys():
+            names.add(name.lower())
+            # Also add normalized versions for scoped packages
+            normalized = name.replace('@', '').replace('/', '-').lower()
+            if normalized != name.lower():
+                names.add(normalized)
+        return names
     
     def validate_completeness(self) -> bool:
         """Verify that all dependencies are in inventory."""
