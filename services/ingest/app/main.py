@@ -699,17 +699,21 @@ async def ingest_event(request: Request):
             conn = get_db_connection()
             with conn.cursor() as cur:
                 cur.execute("""
-                    INSERT INTO event_validation_log (
-                        event_id, validation_status, validation_timestamp,
-                        error_code, error_message, validation_details
-                    )
-                    VALUES (NULL, %s, NOW(), %s, %s, %s::jsonb)
-                """, (
-                    VALIDATION_STATUS_SCHEMA_VALIDATION_FAILED,
-                    error_code,
-                    validation_details.get("error_message") if validation_details else None,
-                    json.dumps(validation_details) if validation_details else None
-                ))
+                    # PHASE 2: Use deterministic timestamp from envelope (observed_at)
+                    observed_at = parser.isoparse(envelope.get("observed_at", envelope.get("ingested_at")))
+                    cur.execute("""
+                        INSERT INTO event_validation_log (
+                            event_id, validation_status, validation_timestamp,
+                            error_code, error_message, validation_details
+                        )
+                        VALUES (NULL, %s, %s, %s, %s, %s::jsonb)
+                    """, (
+                        VALIDATION_STATUS_SCHEMA_VALIDATION_FAILED,
+                        observed_at,  # PHASE 2: Deterministic timestamp from envelope
+                        error_code,
+                        validation_details.get("error_message") if validation_details else None,
+                        json.dumps(validation_details) if validation_details else None
+                    ))
             conn.commit()
             logger.warning(f"Schema validation failed: {error_code}", event_id=envelope.get("event_id"))
         except Exception as e:
