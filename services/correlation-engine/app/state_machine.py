@@ -106,10 +106,11 @@ def apply_contradiction_decay(current_confidence: float) -> float:
 
 def determine_stage(confidence: float) -> str:
     """
-    GA-BLOCKING: Determine incident stage based on confidence score.
+    PHASE 3: Determine incident stage based on confidence score.
     
-    State transitions:
-    - confidence < PROBABLE_THRESHOLD → SUSPICIOUS
+    State transitions (deterministic):
+    - confidence == 0.0 → CLEAN (no signals, incident should not exist)
+    - 0.0 < confidence < PROBABLE_THRESHOLD → SUSPICIOUS
     - PROBABLE_THRESHOLD <= confidence < CONFIRMED_THRESHOLD → PROBABLE
     - confidence >= CONFIRMED_THRESHOLD → CONFIRMED
     
@@ -119,7 +120,9 @@ def determine_stage(confidence: float) -> str:
     Returns:
         Incident stage string
     """
-    if confidence >= CONFIDENCE_THRESHOLD_CONFIRMED:
+    if confidence == 0.0:
+        return 'CLEAN'  # PHASE 3: CLEAN state (no signals)
+    elif confidence >= CONFIDENCE_THRESHOLD_CONFIRMED:
         return 'CONFIRMED'
     elif confidence >= CONFIDENCE_THRESHOLD_PROBABLE:
         return 'PROBABLE'
