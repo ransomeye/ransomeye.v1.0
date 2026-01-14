@@ -23,17 +23,19 @@ This document provides a complete inventory of all third-party software dependen
 
 | License | Type | Status | Count | Notes |
 |---------|------|--------|-------|-------|
-| MIT | Permissive | ✅ ALLOWED | 20 | Most permissive, no restrictions |
-| Apache-2.0 | Permissive | ✅ ALLOWED | 12 | Patent grant included |
-| BSD-3-Clause | Permissive | ✅ ALLOWED | 7 | Minimal restrictions |
+| MIT | Permissive | ✅ ALLOWED | 16 | Most permissive, no restrictions |
+| Apache-2.0 | Permissive | ✅ ALLOWED | 8 | Patent grant included |
+| BSD-3-Clause | Permissive | ✅ ALLOWED | 5 | Minimal restrictions |
+| BSD-3-Clause (with Apache-2.0 components) | Permissive | ✅ ALLOWED | 1 | PyTorch - includes bundled Apache-2.0 components |
 | BSD-2-Clause | Permissive | ✅ ALLOWED | 1 | Minimal restrictions |
 | MPL-2.0 | Permissive | ✅ ALLOWED | 1 | File-level copyleft only |
+| Dual-Licensed (Apache-2.0 OR MIT / MIT OR Apache-2.0) | Permissive | ✅ ALLOWED | 6 | RansomEye may choose either license term |
 | LGPL-3.0 | Weak Copyleft | ⚠️ CONDITIONAL | 1 | Dynamic linking only (psycopg2-binary) |
 | GPL-2.0 | Strong Copyleft | ❌ FORBIDDEN | 0 | Not used |
 | GPL-3.0 | Strong Copyleft | ❌ FORBIDDEN | 0 | Not used |
 | AGPL-3.0 | Strong Copyleft | ❌ FORBIDDEN | 0 | Not used |
 
-**Total Dependencies:** 42  
+**Total Dependencies:** 39 direct dependencies (transitive dependencies excluded by policy)  
 **Forbidden Dependencies:** 0  
 **Conditionally Allowed:** 1 (LGPL-3.0, dynamic linking only)
 

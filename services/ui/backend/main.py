@@ -233,7 +233,7 @@ def require_ui_permission(permission: str):
 
 # PHASE 5: Helper function to check if action requires warning
 def requires_operator_warning(evidence_quality: Optional[Dict[str, Any]], 
-                               ai_insights: Optional[Dict[str, Any]]) -> tuple[bool, List[str]]:
+                               ai_insights: Optional[Dict[str, Any]]) -> Tuple[bool, List[str]]:
     """
     PHASE 5: Determine if operator action requires warning.
     
