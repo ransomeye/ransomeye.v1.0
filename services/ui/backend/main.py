@@ -365,12 +365,10 @@ async def get_active_incidents():
             elif incident.get('stage') == 'SUSPICIOUS':
                 certainty_state = "SUSPICIOUS"
             
-            enriched_incident = {
-                ...incident,
-                'certainty_state': certainty_state,
-                'is_probabilistic': (certainty_state != 'CONFIRMED'),
-                'has_contradiction': eq.get('has_contradiction', False)
-            }
+            enriched_incident = incident.copy()
+            enriched_incident['certainty_state'] = certainty_state
+            enriched_incident['is_probabilistic'] = (certainty_state != 'CONFIRMED')
+            enriched_incident['has_contradiction'] = eq.get('has_contradiction', False)
             enriched_incidents.append(enriched_incident)
         
         return {"incidents": enriched_incidents}
