@@ -96,8 +96,8 @@
       "enforcement": "license_scan.py and validate_licenses.py must check against forbidden_licenses"
     },
     "version_pinning": {
-      "rule": "All dependencies must have explicit version constraints (no unpinned dependencies)",
-      "enforcement": "validate_licenses.py must verify version constraints exist"
+      "rule": "All dependencies must have explicit version constraints (no unpinned dependencies). Version constraints may use >= (minimum version) or == (exact version). Production services should prefer == for reproducibility, while development/training components may use >= for flexibility.",
+      "enforcement": "validate_licenses.py must verify version constraints exist. Version format is not enforced (>= vs ==) as different components have different requirements."
     },
     "license_accuracy": {
       "rule": "License information in inventory must match actual package licenses. Manual verification required for new dependencies.",
