@@ -229,11 +229,44 @@ def run_ai_core():
                 conn.rollback()
                 raise
         
-        # Phase 6 requirement: Unsupervised Clustering (scikit-learn)
+        # PHASE 3: Unsupervised Clustering (scikit-learn) with model persistence
         # Cluster incidents using KMeans
         try:
+            # PHASE 3: Compute training data hash for model persistence
+            from model_storage import ModelStorage
+            model_storage = ModelStorage()
+            training_data_hash = model_storage.compute_training_data_hash(feature_vectors)
+            
             n_clusters = min(3, len(incidents))  # Phase 6 minimal: up to 3 clusters
-            cluster_labels, kmeans_model = cluster_incidents(feature_vectors, n_clusters=n_clusters, random_state=42)
+            
+            # PHASE 3: Try to load existing model (replay support)
+            existing_model = model_storage.load_model('CLUSTERING', '1.0.0', training_data_hash)
+            
+            if existing_model is not None:
+                # PHASE 3: Use existing model for replay (deterministic)
+                logger.info(f"Loaded existing model for replay", 
+                          model_type='CLUSTERING', training_data_hash=training_data_hash[:16])
+                kmeans_model = existing_model
+                # Predict using existing model
+                cluster_labels = kmeans_model.predict(feature_vectors).tolist()
+            else:
+                # PHASE 3: Train new model and persist it
+                cluster_labels, kmeans_model = cluster_incidents(feature_vectors, n_clusters=n_clusters, random_state=42)
+                
+                # PHASE 3: Persist trained model (not retrain silently)
+                model_params = {
+                    'n_clusters': n_clusters,
+                    'random_state': 42,
+                    'n_init': 10
+                }
+                model_path = model_storage.save_model(
+                    kmeans_model, 'CLUSTERING', '1.0.0', 
+                    training_data_hash, model_params
+                )
+                model_hash = model_storage.get_model_hash(kmeans_model)
+                logger.info(f"Trained and persisted model", 
+                          model_path=model_path, model_hash=model_hash[:16],
+                          training_data_hash=training_data_hash[:16])
         except MemoryError:
             error_msg = "MEMORY ALLOCATION FAILURE: Failed to cluster incidents"
             logger.fatal(error_msg)
