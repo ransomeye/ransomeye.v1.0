@@ -16,7 +16,7 @@
     "identity",
     "integrity"
   ],
-  "additionalProperties": false,
+  "additionalProperties": true,
   "properties": {
     "event_id": {
       "type": "string",
@@ -110,6 +110,15 @@
           "description": "SHA256 hash of the previous event in the sequence. MUST be null for the first event (sequence=0), otherwise MUST be a 64-character hexadecimal string matching the hash_sha256 of the preceding event."
         }
       }
+    },
+    "signature": {
+      "type": "string",
+      "description": "Base64-encoded ed25519 signature of the event envelope hash. REQUIRED for telemetry authentication (PHASE 1)."
+    },
+    "signing_key_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "SHA256 hash of the public key used to sign this event. REQUIRED for telemetry authentication (PHASE 1). Used for key rotation support."
     }
   }
 }
