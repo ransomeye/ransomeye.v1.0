@@ -13,12 +13,74 @@ import hashlib
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 
-# Add supply-chain to path
-_supply_chain_dir = Path(__file__).parent.parent / "supply-chain"
-sys.path.insert(0, str(_supply_chain_dir))
+# Add supply-chain to path (try multiple locations for air-gapped scenarios)
+_supply_chain_dir = None
+for possible_dir in [
+    Path(__file__).parent.parent / "supply-chain",  # Development environment
+    Path(__file__).parent / "supply-chain",  # Release bundle
+    Path("/opt/ransomeye/lib/supply-chain"),  # Installed location
+]:
+    if possible_dir.exists():
+        _supply_chain_dir = possible_dir
+        sys.path.insert(0, str(_supply_chain_dir))
+        break
 
-from crypto.artifact_verifier import ArtifactVerifier, ArtifactVerificationError
-from crypto.vendor_key_manager import VendorKeyManager, VendorKeyManagerError
+if _supply_chain_dir:
+    from crypto.artifact_verifier import ArtifactVerifier, ArtifactVerificationError
+    from crypto.vendor_key_manager import VendorKeyManager, VendorKeyManagerError
+else:
+    # Fallback: Minimal inline implementation for air-gapped scenarios
+    class ArtifactVerificationError(Exception):
+        pass
+    class VendorKeyManagerError(Exception):
+        pass
+    
+    # Minimal inline verifier (for air-gapped scenarios without full supply-chain module)
+    class ArtifactVerifier:
+        def __init__(self, public_key=None, public_key_path=None):
+            if public_key_path:
+                from cryptography.hazmat.primitives import serialization
+                from cryptography.hazmat.backends import default_backend
+                public_key_bytes = public_key_path.read_bytes()
+                self.public_key = serialization.load_pem_public_key(
+                    public_key_bytes, backend=default_backend()
+                )
+            else:
+                self.public_key = public_key
+        
+        def verify_manifest_signature(self, manifest):
+            # Inline implementation (same as supply-chain version)
+            signature_b64 = manifest.get('signature', '')
+            if not signature_b64:
+                return False
+            manifest_copy = manifest.copy()
+            manifest_copy.pop('signature', None)
+            canonical_json = json.dumps(manifest_copy, sort_keys=True, separators=(',', ':'), ensure_ascii=False)
+            manifest_hash = hashlib.sha256(canonical_json.encode('utf-8')).digest()
+            signature_bytes = base64.b64decode(signature_b64.encode('ascii'))
+            self.public_key.verify(signature_bytes, manifest_hash)
+            return True
+        
+        def verify_artifact_hash(self, artifact_path, expected_sha256):
+            hash_obj = hashlib.sha256()
+            with open(artifact_path, 'rb') as f:
+                for chunk in iter(lambda: f.read(4096), b''):
+                    hash_obj.update(chunk)
+            computed_hash = hash_obj.hexdigest()
+            return computed_hash == expected_sha256.lower()
+    
+    class VendorKeyManager:
+        def __init__(self, key_dir):
+            self.key_dir = Path(key_dir)
+        
+        def get_public_key(self, key_id):
+            from cryptography.hazmat.primitives import serialization
+            from cryptography.hazmat.backends import default_backend
+            public_key_path = self.key_dir / f"{key_id}.pub"
+            if not public_key_path.exists():
+                return None
+            public_key_bytes = public_key_path.read_bytes()
+            return serialization.load_pem_public_key(public_key_bytes, backend=default_backend())
 
 
 class SBOMVerificationError(Exception):
