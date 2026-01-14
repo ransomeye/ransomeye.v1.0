@@ -56,6 +56,8 @@ except ImportError as e:
     _common_integrity_available = False
     _common_db_safety_available = False
     _common_resource_safety_available = False
+    _telemetry_verification_available = False
+    _service_auth_available = False
     def safe_create_directory(*args, **kwargs): raise RuntimeError("Resource safety utilities not available")
     def safe_read_file(*args, **kwargs): raise RuntimeError("Resource safety utilities not available")
     def safe_write_file(*args, **kwargs): raise RuntimeError("Resource safety utilities not available")
@@ -64,6 +66,12 @@ except ImportError as e:
     def verify_sequence_monotonicity(*args, **kwargs): return (True, None)
     def verify_idempotency(*args, **kwargs): return True
     def detect_corruption(*args, **kwargs): return (False, None)
+    class TelemetryVerifier:
+        def __init__(self, *args, **kwargs): pass
+        def verify_envelope(self, *args, **kwargs): return (False, "Telemetry verification not available")
+        def verify_component_identity(self, *args, **kwargs): return (False, "Component identity verification not available")
+    class ServiceAuthMiddleware:
+        def __init__(self, *args, **kwargs): pass
     # Fallback: if common modules not available, use basic error handling
     print(f"WARNING: Could not import common modules: {e}", file=sys.stderr)
     # Define minimal fallbacks
