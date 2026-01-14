@@ -1,0 +1,111 @@
+Prompt Start
+
+You are fixing PHASE 6 — CI, QA & RELEASE GATES for RansomEye.
+
+This phase is GA-BLOCKING.
+No release, no installer, no package may exist without this phase being PASS.
+
+OBJECTIVE
+
+Make it impossible to ship a broken, unsigned, or non-compliant build.
+
+After this phase:
+
+CI must fail-closed
+
+Releases must be cryptographically gated
+
+No manual bypass without audit
+
+No unsigned artifact can exist
+
+MANDATORY FIXES (ALL REQUIRED)
+1. CI Fail-Closed Enforcement
+
+You MUST:
+
+Block CI on any failed validation phase (01–40)
+
+Treat warnings as failures for security phases
+
+Prevent merge if CI is red
+
+2. Deterministic Test Harness
+
+You MUST:
+
+Generate synthetic test data only
+
+Ensure tests are replayable
+
+No network access unless explicitly env-enabled
+
+3. Artifact Signing & Verification
+
+You MUST:
+
+Sign all build artifacts
+
+Verify signatures in CI
+
+Refuse unsigned artifacts
+
+4. Release Gate Policy
+
+You MUST:
+
+Define explicit GA gate checklist
+
+Fail release if:
+
+Any validation incomplete
+
+Any artifact unsigned
+
+Any audit step missing
+
+FILES YOU MUST INSPECT & MODIFY
+
+(quote exact paths and lines)
+
+.github/workflows/* or equivalent CI config
+
+Build scripts
+
+Artifact signing scripts
+
+Validation harness
+
+FORBIDDEN
+
+No manual override
+
+No “allow failures”
+
+No unsigned test builds
+
+No sample datasets committed
+
+EVIDENCE REQUIRED IN YOUR RESPONSE
+
+You MUST provide:
+
+CI workflow diffs
+
+Failing build example (what breaks)
+
+Passing build example (what passes)
+
+Signature verification proof
+
+GA gate checklist
+
+Mapping required to:
+
+Validation File 15
+
+Validation File 21
+
+If a broken build can ship → FAIL.
+
+Prompt Ends
