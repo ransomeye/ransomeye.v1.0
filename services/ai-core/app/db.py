@@ -330,7 +330,8 @@ def store_cluster(conn, cluster_id: str, model_version_id: str, cluster_label: s
             raise
 
 
-def store_cluster_membership(conn, cluster_id: str, incident_id: str, membership_score: Optional[float]):
+def store_cluster_membership(conn, cluster_id: str, incident_id: str, membership_score: Optional[float],
+                             added_at: Optional[datetime] = None):
     """
     Store cluster membership (incident belongs to cluster).
     Transaction discipline: Explicit begin, commit on success, rollback on failure.
