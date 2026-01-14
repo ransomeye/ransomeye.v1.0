@@ -129,7 +129,7 @@ def get_hostname() -> str:
         return 'unknown'
 
 
-def load_and_validate_phase_8_1(project_root: Path) -> tuple[Dict[str, Any], str]:
+def load_and_validate_phase_8_1(project_root: Path) -> Tuple[Dict[str, Any], str]:
     """
     Load and validate Phase 8.1 results.
     
@@ -167,7 +167,7 @@ def load_and_validate_phase_8_1(project_root: Path) -> tuple[Dict[str, Any], str
     return result, file_hash
 
 
-def load_and_validate_phase_8_2(project_root: Path) -> tuple[Dict[str, Any], str]:
+def load_and_validate_phase_8_2(project_root: Path) -> Tuple[Dict[str, Any], str]:
     """
     Load and validate Phase 8.2 results.
     
