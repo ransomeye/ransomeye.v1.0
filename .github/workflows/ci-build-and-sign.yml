@@ -323,13 +323,18 @@ jobs:
       
       - name: Verify SBOM signature
         env:
-          SIGNING_KEY_DIR: /tmp/ci-signing-keys
+          RANSOMEYE_KEY_VAULT_DIR: ${{ secrets.RANSOMEYE_KEY_VAULT_DIR || 'keys/vault' }}
+          RANSOMEYE_KEY_REGISTRY_PATH: ${{ secrets.RANSOMEYE_KEY_REGISTRY_PATH || 'keys/registry.json' }}
+          SIGNING_KEY_ID: ${{ env.SIGNING_KEY_ID }}
         run: |
           python3 ${{ github.workspace }}/release/verify_sbom.py \
             --release-root build/artifacts \
             --manifest build/artifacts/sbom/manifest.json \
             --signature build/artifacts/sbom/manifest.json.sig \
-            --key-dir "$SIGNING_KEY_DIR"
+            --vault-dir "$RANSOMEYE_KEY_VAULT_DIR" \
+            --registry-path "$RANSOMEYE_KEY_REGISTRY_PATH" \
+            --signing-key-id "$SIGNING_KEY_ID" \
+            --check-revocation
         # PHASE 6: Fail-closed - SBOM signature must be valid
         continue-on-error: false
       
