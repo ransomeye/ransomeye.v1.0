@@ -612,6 +612,82 @@ async def ingest_event(request: Request):
             detail={"error_code": "INVALID_JSON"}
         )
     
+    # PHASE 1: Telemetry signature verification (CRITICAL - reject unsigned/spoofed telemetry)
+    if telemetry_verifier:
+        is_valid, error_msg = telemetry_verifier.verify_envelope(envelope)
+        if not is_valid:
+            conn = None
+            try:
+                conn = get_db_connection()
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        INSERT INTO event_validation_log (
+                            event_id, validation_status, validation_timestamp,
+                            error_code, error_message
+                        )
+                        VALUES (%s, %s, NOW(), %s, %s)
+                    """, (
+                        envelope.get("event_id"),
+                        "SIGNATURE_VERIFICATION_FAILED",
+                        "SIGNATURE_VERIFICATION_FAILED",
+                        error_msg
+                    ))
+                conn.commit()
+                logger.warning(f"Telemetry signature verification failed: {error_msg}", event_id=envelope.get("event_id"))
+            except Exception as e:
+                if conn:
+                    conn.rollback()
+                logger.db_error(str(e), "log_signature_failure")
+            finally:
+                if conn:
+                    put_db_connection(conn)
+            
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail={"error_code": "SIGNATURE_VERIFICATION_FAILED", "message": error_msg}
+            )
+        
+        # PHASE 1: Component identity binding verification
+        is_valid, error_msg = telemetry_verifier.verify_component_identity(envelope)
+        if not is_valid:
+            conn = None
+            try:
+                conn = get_db_connection()
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        INSERT INTO event_validation_log (
+                            event_id, validation_status, validation_timestamp,
+                            error_code, error_message
+                        )
+                        VALUES (%s, %s, NOW(), %s, %s)
+                    """, (
+                        envelope.get("event_id"),
+                        "COMPONENT_IDENTITY_VERIFICATION_FAILED",
+                        "COMPONENT_IDENTITY_VERIFICATION_FAILED",
+                        error_msg
+                    ))
+                conn.commit()
+                logger.warning(f"Component identity verification failed: {error_msg}", event_id=envelope.get("event_id"))
+            except Exception as e:
+                if conn:
+                    conn.rollback()
+                logger.db_error(str(e), "log_identity_failure")
+            finally:
+                if conn:
+                    put_db_connection(conn)
+            
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail={"error_code": "COMPONENT_IDENTITY_VERIFICATION_FAILED", "message": error_msg}
+            )
+    else:
+        # PHASE 1: Fail-closed if telemetry verification is not available
+        logger.fatal("Telemetry signature verification not available - rejecting all telemetry")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"error_code": "TELEMETRY_VERIFICATION_UNAVAILABLE", "message": "Telemetry verification service unavailable"}
+        )
+    
     is_valid, error_code, validation_details = validate_schema(envelope)
     if not is_valid:
         conn = None
