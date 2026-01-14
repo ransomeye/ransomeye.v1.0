@@ -70,6 +70,18 @@ class CommandDispatcher:
         """
         # PHASE 4: Build agent command payload (matches agent-command.schema.json)
         command_payload = signed_command['payload']
+        
+        # PHASE 4: Compute expires_at (default: 1 hour from issued_at)
+        from dateutil import parser
+        issued_at_dt = parser.isoparse(command_payload['issued_at'])
+        expires_at_dt = issued_at_dt + timedelta(hours=1)
+        expires_at = expires_at_dt.isoformat().replace('+00:00', 'Z')
+        
+        # PHASE 4: Generate rollback_token (SHA256 hash of command_id + action_type)
+        import hashlib
+        rollback_data = f"{command_payload['command_id']}:{command_payload.get('command_type', command_payload.get('action_type', ''))}"
+        rollback_token = hashlib.sha256(rollback_data.encode('utf-8')).hexdigest()
+        
         agent_command = {
             'command_id': command_payload['command_id'],
             'action_type': command_payload.get('command_type', command_payload.get('action_type')),  # Support both field names
@@ -79,8 +91,8 @@ class CommandDispatcher:
             'issued_by_user_id': command_payload.get('issued_by_user_id', ''),
             'issued_by_role': command_payload.get('issued_by_role', 'SECURITY_ANALYST'),
             'issued_at': command_payload['issued_at'],
-            'expires_at': command_payload.get('expires_at', ''),  # PHASE 4: Expiry timestamp
-            'rollback_token': command_payload.get('rollback_token', ''),  # PHASE 4: Rollback token
+            'expires_at': command_payload.get('expires_at', expires_at),  # PHASE 4: Expiry timestamp
+            'rollback_token': command_payload.get('rollback_token', rollback_token),  # PHASE 4: Rollback token
             'signature': signed_command['signature'],
             'signing_key_id': signed_command['signing_key_id'],
             'signing_algorithm': signed_command.get('signing_algorithm', 'ed25519'),  # PHASE 4: Signing algorithm
