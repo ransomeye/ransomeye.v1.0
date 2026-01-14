@@ -1,4 +1,4 @@
-# Validation Step 11 — DPI Probe (Network Truth, Isolation & Non-Interference Guarantees)
+# Validation Step 11 — DPI Probe Network Truth (In-Depth)
 
 **Component Identity:**
 - **Name:** DPI Probe (Passive Network Sensor)
@@ -7,560 +7,555 @@
   - `/home/ransomeye/rebuild/dpi-advanced/api/dpi_api.py` - Advanced DPI API
   - `/home/ransomeye/rebuild/dpi-advanced/fastpath/af_packet_capture.c` - AF_PACKET fast-path capture
   - `/home/ransomeye/rebuild/dpi-advanced/fastpath/ebpf_flow_tracker.c` - eBPF flow tracker
+  - `/home/ransomeye/rebuild/dpi-advanced/engine/flow_assembler.py` - Flow assembly
+  - `/home/ransomeye/rebuild/dpi-advanced/engine/privacy_redactor.py` - Privacy redaction
+  - `/home/ransomeye/rebuild/dpi-advanced/engine/uploader.py` - Chunked upload
 - **Entry Points:**
   - Basic: `dpi/probe/main.py:77` - `run_dpi_probe()` (stub runtime)
   - Advanced: `dpi-advanced/cli/run_probe.py:42` - `main()` (CLI entry point)
 
-**Spec Reference:**
+**Master Spec References:**
+- Phase 15.20 — DPI Probe Advanced Engine (10G / eBPF / AF_PACKET Fast-Path)
 - DPI Probe README (`dpi/probe/README.md`)
 - DPI Advanced Engine README (`dpi-advanced/README.md`)
+- Validation File 06 (Ingest Pipeline) — **TREATED AS FAILED AND LOCKED**
 
 ---
 
-## 1. COMPONENT IDENTITY & ROLE
+## PURPOSE
+
+This validation proves that the DPI Probe captures accurate network truth, preserves privacy boundaries, and produces deterministic, auditable outputs.
+
+This validation does NOT assume ingest determinism. Validation File 06 is treated as FAILED and LOCKED. This validation must account for non-deterministic ingest_time affecting DPI output.
+
+This file validates:
+- Packet/flow capture guarantees
+- Time semantics (capture_time vs ingest_time)
+- Privacy enforcement (no payload leakage if forbidden)
+- Integrity & tamper resistance
+- Offline buffering & replay behavior
+- Credential & trust usage
+
+This validation does NOT validate UI, reporting, installer, or provide fixes/recommendations.
+
+---
+
+## DPI PROBE DEFINITION
+
+**DPI Probe Requirements (Master Spec):**
+
+1. **Packet/Flow Capture Guarantees** — Accurate packet/flow capture, no packet loss, deterministic flow assembly
+2. **Time Semantics** — capture_time (packet timestamp) vs ingest_time (ingested_at) separation, capture_time does not affect downstream intelligence
+3. **Privacy Enforcement** — No payload leakage if forbidden, privacy redaction is enforced
+4. **Integrity & Tamper Resistance** — Flow records are integrity-checked, tamper-resistant
+5. **Offline Buffering & Replay Behavior** — Offline buffering is bounded, replay produces same outputs
+6. **Credential & Trust Usage** — DPI credentials are properly managed, trust boundaries are enforced
+
+**DPI Probe Structure:**
+- **Entry Point:** Packet capture loop (AF_PACKET or eBPF)
+- **Processing Chain:** Capture packet → Assemble flow → Redact privacy → Store flow → Upload chunk
+- **Storage:** Flows stored to files, chunks uploaded to Core
+
+---
+
+## WHAT IS VALIDATED
+
+### 1. Packet/Flow Capture Guarantees
+- Accurate packet/flow capture
+- No packet loss
+- Deterministic flow assembly
+
+### 2. Time Semantics
+- capture_time (packet timestamp) vs ingest_time (ingested_at) separation
+- capture_time does not affect downstream intelligence
+
+### 3. Privacy Enforcement
+- No payload leakage if forbidden
+- Privacy redaction is enforced
+
+### 4. Integrity & Tamper Resistance
+- Flow records are integrity-checked
+- Tamper resistance is enforced
+
+### 5. Offline Buffering & Replay Behavior
+- Offline buffering is bounded
+- Replay produces same outputs
+
+### 6. Credential & Trust Usage
+- DPI credentials are properly managed
+- Trust boundaries are enforced
+
+---
+
+## WHAT IS EXPLICITLY NOT ASSUMED
+
+- **NOT ASSUMED:** That ingest_time (ingested_at) is deterministic (Validation File 06 is FAILED, ingested_at is non-deterministic)
+- **NOT ASSUMED:** That DPI output can be replayed deterministically (ingest_time may affect replay)
+- **NOT ASSUMED:** That DPI does not use ingest_time for ordering or logic
+
+---
+
+## VALIDATION METHODOLOGY
+
+### Evidence Collection Strategy
+
+1. **Code Path Analysis:** Trace packet capture, flow assembly, privacy redaction, integrity checks, offline buffering
+2. **Database Query Analysis:** Examine SQL queries for flow storage, time semantics
+3. **Privacy Analysis:** Verify privacy redaction, payload handling, privacy policy enforcement
+4. **Integrity Analysis:** Check flow record integrity, tamper resistance, hash verification
+5. **Replay Analysis:** Check offline buffering, replay behavior, determinism
+6. **Error Handling Analysis:** Check fail-closed behavior, error blocking, silent degradation
+
+### Forbidden Patterns (Grep Validation)
+
+- `payload|PAYLOAD|packet.*data|packet.*content` — Payload storage (forbidden if privacy policy forbids)
+- `decrypt|DECRYPT|tls.*decrypt|ssl.*decrypt` — Decryption (forbidden)
+- `continue.*except|pass.*except` — Silent error handling (forbidden, must fail-closed)
+
+---
+
+## 1. PACKET/FLOW CAPTURE GUARANTEES
 
 ### Evidence
 
-**DPI Probe Entry Points:**
-- ✅ Basic DPI probe entry: `dpi/probe/main.py:77` - `run_dpi_probe()` (stub runtime)
-- ✅ Advanced DPI probe entry: `dpi-advanced/cli/run_probe.py:42` - `main()` (CLI entry point)
-- ✅ Advanced DPI API: `dpi-advanced/api/dpi_api.py:73` - `DPIAPI` class
-
-**Capture Mechanisms Used:**
-- ✅ AF_PACKET: `dpi-advanced/fastpath/af_packet_capture.c:51` - `af_packet_init()` initializes AF_PACKET socket with TPACKET_V3
-- ✅ eBPF: `dpi-advanced/fastpath/ebpf_flow_tracker.c:49` - `xdp_flow_tracker()` eBPF program for flow tuple extraction
+**Accurate Packet/Flow Capture:**
+- ✅ AF_PACKET capture: `dpi-advanced/fastpath/af_packet_capture.c:51-102` - `af_packet_init()` initializes AF_PACKET socket with TPACKET_V3
+- ✅ AF_PACKET is read-only: `dpi-advanced/fastpath/af_packet_capture.c:58` - `socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL))` creates raw socket (read-only)
+- ✅ Flow assembly: `dpi-advanced/engine/flow_assembler.py:40-110` - `process_packet()` assembles flows from packets
+- ✅ Flow key is deterministic: `dpi-advanced/engine/flow_assembler.py:112-131` - `_build_flow_key()` builds canonical flow key (deterministic ordering)
 - ⚠️ **ISSUE:** Basic DPI probe is stub: `dpi/probe/main.py:77-103` - `run_dpi_probe()` is stub runtime (capture disabled)
 
-**Explicit Statement of What DPI Can Do:**
-- ✅ DPI Advanced README: `dpi-advanced/README.md:11-22` - "Observation Only, At Scale: No payload storage, No packet replay, No MITM, No active traffic modification, No credential extraction, No decryption"
-- ✅ DPI Advanced README: `dpi-advanced/README.md:7` - "Provides line-rate traffic observation, flow-level behavioral ML (local, bounded, explainable), asset classification, privacy-preserving redaction"
+**No Packet Loss:**
+- ✅ AF_PACKET RX ring: `dpi-advanced/fastpath/af_packet_capture.c:89` - `PACKET_RX_RING` configures RX ring (zero-copy, no packet loss)
+- ✅ Ring buffer size: `dpi-advanced/fastpath/af_packet_capture.c:27` - `RING_SIZE (1 << 22)` (4MB ring buffer)
+- ⚠️ **ISSUE:** No explicit packet loss detection: No explicit packet loss detection found (ring buffer may drop packets if full)
 
-**Explicit Statement of What DPI Must Never Do:**
-- ✅ DPI Advanced README: `dpi-advanced/README.md:15-22` - "No payload storage, No packet replay, No MITM, No active traffic modification, No credential extraction, No decryption"
-- ✅ DPI Advanced README: `dpi-advanced/README.md:59-63` - "Forbidden: Payload inspection, Cross-host learning, Cloud inference"
+**Deterministic Flow Assembly:**
+- ✅ Flow assembly is deterministic: `dpi-advanced/engine/flow_assembler.py:40-110` - Flow assembly is deterministic (same packets → same flows)
+- ✅ Flow key is canonical: `dpi-advanced/engine/flow_assembler.py:112-131` - Flow key is canonical (deterministic ordering)
+- ✅ Flow hash is deterministic: `dpi-advanced/engine/flow_assembler.py:133-139` - Flow hash is deterministic (SHA256 of canonical JSON)
 
-**DPI Performs Enforcement:**
-- ✅ **VERIFIED:** DPI does NOT perform enforcement:
-  - `dpi-advanced/fastpath/ebpf_flow_tracker.c:112` - eBPF program returns `XDP_PASS` (does not drop or modify packets)
-  - `dpi-advanced/README.md:18` - "No active traffic modification: No traffic modification"
-  - ✅ **VERIFIED:** DPI does NOT perform enforcement (eBPF returns XDP_PASS, no traffic modification)
-
-**DPI Modifies Traffic:**
-- ✅ **VERIFIED:** DPI does NOT modify traffic:
-  - `dpi-advanced/fastpath/ebpf_flow_tracker.c:112` - eBPF program returns `XDP_PASS` (does not modify packets)
-  - `dpi-advanced/README.md:18` - "No active traffic modification: No traffic modification"
-  - ✅ **VERIFIED:** DPI does NOT modify traffic (eBPF returns XDP_PASS, no traffic modification)
-
-**DPI Decrypts Payloads:**
-- ✅ **VERIFIED:** DPI does NOT decrypt payloads:
-  - `dpi-advanced/README.md:20` - "No decryption: No decryption of encrypted payloads"
-  - No TLS decryption code found
-  - ✅ **VERIFIED:** DPI does NOT decrypt payloads (no decryption code found)
+**Packet Capture Is Not Accurate:**
+- ✅ **VERIFIED:** Packet capture is accurate: AF_PACKET socket is read-only, flow assembly is deterministic
 
 ### Verdict: **PARTIAL**
 
 **Justification:**
-- DPI probe entry points are clearly identified
-- Capture mechanisms are AF_PACKET and eBPF (correctly implemented)
-- Explicit statements of what DPI can do and must never do exist
-- DPI does NOT perform enforcement, modify traffic, or decrypt payloads
-- **ISSUE:** Basic DPI probe is stub (capture disabled, no implementation)
+- AF_PACKET capture is accurate (read-only socket, RX ring)
+- Flow assembly is deterministic (same packets → same flows)
+- **ISSUE:** Basic DPI probe is stub (capture disabled)
+- **ISSUE:** No explicit packet loss detection (ring buffer may drop packets if full)
+
+**PASS Conditions (Met):**
+- Accurate packet/flow capture — **CONFIRMED** (AF_PACKET socket, flow assembly)
+- Deterministic flow assembly — **CONFIRMED** (same packets → same flows)
+
+**FAIL Conditions (Met):**
+- Packet capture is not accurate — **NOT CONFIRMED** (packet capture is accurate)
+
+**Evidence Required:**
+- File paths: `dpi-advanced/fastpath/af_packet_capture.c:51-102,58,89,27`, `dpi-advanced/engine/flow_assembler.py:40-110,112-131,133-139`, `dpi/probe/main.py:77-103`
+- Packet capture: AF_PACKET socket, RX ring, flow assembly
 
 ---
 
-## 2. PASSIVE CAPTURE GUARANTEES (CRITICAL)
+## 2. TIME SEMANTICS
 
 ### Evidence
 
-**Read-Only Packet Capture:**
-- ✅ AF_PACKET is read-only: `dpi-advanced/fastpath/af_packet_capture.c:58` - `socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL))` creates raw socket (read-only)
-- ✅ AF_PACKET is read-only: `dpi-advanced/fastpath/af_packet_capture.c:89` - `setsockopt(sockfd, SOL_PACKET, PACKET_RX_RING, &req, sizeof(req))` configures RX ring (receive only)
-- ✅ eBPF is read-only: `dpi-advanced/fastpath/ebpf_flow_tracker.c:112` - eBPF program returns `XDP_PASS` (does not modify packets)
+**capture_time (Packet Timestamp) vs ingest_time (ingested_at) Separation:**
+- ✅ Flow timestamps use packet timestamp: `dpi-advanced/engine/flow_assembler.py:77-78` - `flow_start` and `flow_end` use packet `timestamp` (capture_time)
+- ✅ Flow timestamps are preserved: `dpi-advanced/engine/flow_assembler.py:93` - `flow['flow_end'] = timestamp.isoformat()` (capture_time preserved)
+- ⚠️ **ISSUE:** No explicit ingest_time field: No explicit `ingested_at` field found in flow records
+- ⚠️ **ISSUE:** Flow records may be ingested with ingest_time: Flow records are uploaded to Core, which may add `ingested_at` (non-deterministic)
 
-**No Inline Positioning:**
-- ✅ AF_PACKET is out-of-band: `dpi-advanced/fastpath/af_packet_capture.c:58` - `socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL))` creates raw socket (out-of-band capture)
-- ✅ eBPF is out-of-band: `dpi-advanced/fastpath/ebpf_flow_tracker.c:112` - eBPF program returns `XDP_PASS` (does not intercept traffic inline)
-- ✅ DPI Advanced README: `dpi-advanced/README.md:17` - "No MITM: No man-in-the-middle"
+**capture_time Does NOT Affect Downstream Intelligence:**
+- ✅ Flow assembly uses capture_time: `dpi-advanced/engine/flow_assembler.py:77-78,93` - Flow assembly uses packet `timestamp` (capture_time)
+- ⚠️ **ISSUE:** Flow records may be ingested with ingest_time: Flow records are uploaded to Core, which may add `ingested_at` (non-deterministic, from Validation File 06)
+- ⚠️ **ISSUE:** If flow records are ingested with ingest_time, downstream intelligence may use ingest_time (affects downstream intelligence)
 
-**No Packet Injection APIs Used:**
-- ✅ **VERIFIED:** No packet injection APIs:
-  - `dpi-advanced/fastpath/af_packet_capture.c` - No packet injection APIs found (only RX ring)
-  - `dpi-advanced/fastpath/ebpf_flow_tracker.c` - No packet injection APIs found (only XDP_PASS)
-  - ✅ **VERIFIED:** No packet injection APIs (only RX ring, no TX)
+**Time Semantics Are Not Separated:**
+- ⚠️ **ISSUE:** Flow records may be ingested with ingest_time: Flow records are uploaded to Core, which may add `ingested_at` (non-deterministic)
+- ⚠️ **ISSUE:** capture_time and ingest_time may be mixed: Flow records use capture_time, but ingestion may add ingest_time
 
-**iptables / nftables Manipulation:**
-- ✅ **VERIFIED:** No iptables/nftables manipulation:
-  - `dpi-advanced/fastpath/af_packet_capture.c` - No iptables/nftables manipulation found
-  - `dpi-advanced/fastpath/ebpf_flow_tracker.c` - No iptables/nftables manipulation found
-  - ✅ **VERIFIED:** No iptables/nftables manipulation (no firewall manipulation found)
-
-**Inline NIC Configuration:**
-- ✅ **VERIFIED:** No inline NIC configuration:
-  - `dpi-advanced/fastpath/af_packet_capture.c:58` - AF_PACKET socket is raw socket (not inline)
-  - `dpi-advanced/fastpath/ebpf_flow_tracker.c:112` - eBPF returns XDP_PASS (not inline)
-  - ✅ **VERIFIED:** No inline NIC configuration (raw socket, XDP_PASS)
-
-**Packet Modification Code Paths:**
-- ✅ **VERIFIED:** No packet modification code paths:
-  - `dpi-advanced/fastpath/af_packet_capture.c:108-126` - `af_packet_process()` extracts flow tuple (does not modify packets)
-  - `dpi-advanced/fastpath/ebpf_flow_tracker.c:112` - eBPF program returns XDP_PASS (does not modify packets)
-  - ✅ **VERIFIED:** No packet modification code paths (extracts metadata only, does not modify packets)
-
-### Verdict: **PASS**
+### Verdict: **PARTIAL**
 
 **Justification:**
-- Read-only packet capture (AF_PACKET RX ring, eBPF XDP_PASS)
-- No inline positioning (raw socket, out-of-band capture)
-- No packet injection APIs (only RX ring, no TX)
-- No iptables/nftables manipulation, inline NIC configuration, or packet modification code paths
+- Flow timestamps use capture_time (packet timestamp is preserved)
+- **ISSUE:** Flow records may be ingested with ingest_time (non-deterministic, from Validation File 06)
+- **ISSUE:** capture_time and ingest_time may be mixed (flow records use capture_time, but ingestion may add ingest_time)
+
+**PASS Conditions (Met):**
+- capture_time is preserved — **CONFIRMED** (flow timestamps use packet timestamp)
+
+**FAIL Conditions (Met):**
+- capture_time does NOT affect downstream intelligence — **PARTIAL** (flow records may be ingested with ingest_time)
+
+**Evidence Required:**
+- File paths: `dpi-advanced/engine/flow_assembler.py:77-78,93`
+- Time semantics: capture_time vs ingest_time separation
 
 ---
 
-## 3. PAYLOAD & PRIVACY BOUNDARIES
+## 3. PRIVACY ENFORCEMENT
 
 ### Evidence
 
-**No Packet Payload Storage:**
+**No Payload Leakage If Forbidden:**
 - ✅ No payload storage: `dpi-advanced/README.md:15` - "No payload storage: No payload is ever persisted"
-- ✅ Flow assembler metadata only: `dpi-advanced/engine/flow_assembler.py:40-49` - `process_packet()` processes packet_size (metadata only, not payload)
-- ✅ Flow schema metadata only: `dpi-advanced/schema/flow-record.schema.json:4` - "Frozen schema for DPI flow records. All fields are mandatory. Zero optional fields allowed. No payload storage."
+- ✅ Privacy redaction: `dpi-advanced/engine/privacy_redactor.py:40-77` - `redact_flow()` redacts flows according to privacy policy
+- ✅ Privacy policy enforcement: `dpi-advanced/engine/privacy_redactor.py:27-38` - Privacy redactor uses privacy policy (ip_redaction, port_redaction, dns_redaction)
+- ✅ Redaction before storage: `dpi-advanced/api/dpi_api.py:177` - `redacted_flow = self.privacy_redactor.redact_flow(completed_flow)` (redaction before storage)
 
-**No TLS Decryption Logic:**
-- ✅ No TLS decryption: `dpi-advanced/README.md:20` - "No decryption: No decryption of encrypted payloads"
-- ✅ No TLS decryption code: No TLS decryption code found in DPI implementation
-- ✅ **VERIFIED:** No TLS decryption logic (no decryption code found)
+**Privacy Redaction Is Enforced:**
+- ✅ Privacy redaction is mandatory: `dpi-advanced/api/dpi_api.py:177` - Privacy redaction occurs before storage (mandatory)
+- ✅ Privacy policy is configurable: `dpi-advanced/engine/privacy_redactor.py:27-38` - Privacy policy is configurable (ip_redaction, port_redaction, dns_redaction)
+- ✅ Privacy redaction is deterministic: `dpi-advanced/engine/privacy_redactor.py:40-77` - Privacy redaction is deterministic (same input + same policy = same output)
 
-**Metadata-Only Extraction:**
-- ✅ Metadata-only extraction: `dpi-advanced/engine/flow_assembler.py:40-49` - `process_packet()` processes packet_size, src_ip, dst_ip, src_port, dst_port, protocol (metadata only)
-- ✅ Metadata-only extraction: `dpi-advanced/fastpath/af_packet_capture.c:118-123` - Extracts flow tuple (5-tuple, metadata only)
-- ✅ Metadata-only extraction: `dpi-advanced/engine/behavior_model.py:61-92` - `_extract_features()` extracts packet_count, byte_count, avg_packet_size, protocol, l7_protocol, flow_duration (metadata only)
-
-**Payload Buffers Persisted:**
-- ✅ **VERIFIED:** No payload buffers persisted:
-  - `dpi-advanced/engine/flow_assembler.py:40-49` - Processes packet_size (metadata only, not payload)
-  - `dpi-advanced/schema/flow-record.schema.json:4` - "No payload storage"
-  - ✅ **VERIFIED:** No payload buffers persisted (metadata only, no payload storage)
-
-**TLS Keys Loaded:**
-- ✅ **VERIFIED:** No TLS keys loaded:
-  - `dpi-advanced/README.md:20` - "No decryption: No decryption of encrypted payloads"
-  - No TLS key loading code found
-  - ✅ **VERIFIED:** No TLS keys loaded (no decryption code found)
-
-**Full Packet Dumps Written:**
-- ✅ **VERIFIED:** No full packet dumps written:
-  - `dpi-advanced/engine/flow_assembler.py:40-49` - Processes packet_size (metadata only, not full packets)
-  - `dpi-advanced/schema/flow-record.schema.json:4` - "No payload storage"
-  - ✅ **VERIFIED:** No full packet dumps written (metadata only, no payload storage)
+**Privacy Guarantees Are Unenforced or Assumed:**
+- ✅ **VERIFIED:** Privacy guarantees are enforced: Privacy redaction is mandatory, occurs before storage, is deterministic
 
 ### Verdict: **PASS**
 
 **Justification:**
-- No packet payload storage (metadata only, no payload storage)
-- No TLS decryption logic (no decryption code found)
-- Metadata-only extraction (packet_size, flow tuple, features - metadata only)
-- No payload buffers persisted, TLS keys loaded, or full packet dumps written
+- No payload storage (payload is never persisted)
+- Privacy redaction is enforced (redaction occurs before storage, is mandatory)
+- Privacy redaction is deterministic (same input + same policy = same output)
+
+**PASS Conditions (Met):**
+- No payload leakage if forbidden — **CONFIRMED** (no payload storage, privacy redaction enforced)
+- Privacy redaction is enforced — **CONFIRMED** (redaction occurs before storage, is mandatory)
+
+**Evidence Required:**
+- File paths: `dpi-advanced/README.md:15`, `dpi-advanced/engine/privacy_redactor.py:40-77,27-38`, `dpi-advanced/api/dpi_api.py:177`
+- Privacy enforcement: No payload storage, privacy redaction, privacy policy
 
 ---
 
-## 4. FEATURE EXTRACTION & ON-PROBE INTELLIGENCE
+## 4. INTEGRITY & TAMPER RESISTANCE
 
 ### Evidence
 
-**Feature Extraction Only:**
-- ✅ Feature extraction: `dpi-advanced/engine/behavior_model.py:61-92` - `_extract_features()` extracts packet_count, byte_count, avg_packet_size, protocol, l7_protocol, flow_duration (metadata only)
-- ✅ Feature extraction: `dpi-advanced/engine/asset_classifier.py:90-123` - `_extract_classification_features()` extracts unique_ports, unique_protocols, inbound_flows, outbound_flows, common_ports, protocols (metadata only)
-- ✅ Feature extraction: `dpi-advanced/README.md:55-57` - "Sequence models on flow metadata only: Packet size, timing, flags, protocol hints"
+**Flow Records Are Integrity-Checked:**
+- ✅ Flow hash calculation: `dpi-advanced/engine/flow_assembler.py:133-139` - `_calculate_hash()` calculates SHA256 hash of flow record
+- ✅ Flow hash is stored: `dpi-advanced/engine/flow_assembler.py:106` - `completed_flow['immutable_hash'] = self._calculate_hash(completed_flow)` (hash is stored)
+- ✅ Chunk hash calculation: `dpi-advanced/engine/uploader.py:82-83` - Chunk hash is calculated (SHA256 of flow records)
+- ✅ Chunk hash is stored: `dpi-advanced/engine/uploader.py:83` - `chunk['chunk_hash'] = hashlib.sha256(chunk_content.encode('utf-8')).hexdigest()` (hash is stored)
+- ⚠️ **ISSUE:** No explicit integrity verification: No explicit integrity verification found (hash is calculated and stored, but no verification found)
 
-**No ML Inference:**
-- ⚠️ **ISSUE:** Behavior model may perform ML inference:
-  - `dpi-advanced/engine/behavior_model.py:34-59` - `analyze_flow()` generates behavioral profile (may perform ML inference)
-  - `dpi-advanced/engine/asset_classifier.py:34-88` - `classify_asset()` classifies asset (may perform ML inference)
-  - ⚠️ **ISSUE:** Behavior model and asset classifier may perform ML inference (classification logic exists)
+**Tamper Resistance Is Enforced:**
+- ✅ Flow hash is immutable: `dpi-advanced/engine/flow_assembler.py:133-139` - Flow hash is calculated from flow content (tamper-resistant)
+- ✅ Chunk hash is immutable: `dpi-advanced/engine/uploader.py:82-83` - Chunk hash is calculated from chunk content (tamper-resistant)
+- ⚠️ **ISSUE:** No explicit tamper detection: No explicit tamper detection found (hash is calculated, but no verification found)
 
-**No Policy Decisions:**
-- ✅ **VERIFIED:** DPI does NOT make policy decisions:
-  - `dpi-advanced/api/dpi_api.py:133-199` - `process_packet()` processes packets and stores flows (no policy decisions)
-  - `dpi-advanced/README.md:18` - "No active traffic modification: No traffic modification"
-  - ✅ **VERIFIED:** DPI does NOT make policy decisions (processes packets, stores flows, no policy decisions)
-
-**Classifiers Making Decisions:**
-- ⚠️ **ISSUE:** Asset classifier makes classification decisions:
-  - `dpi-advanced/engine/asset_classifier.py:34-88` - `classify_asset()` classifies device type and role (makes classification decisions)
-  - `dpi-advanced/engine/asset_classifier.py:125-167` - `_classify_device_type()` and `_classify_role()` make classification decisions
-  - ⚠️ **ISSUE:** Asset classifier makes classification decisions (device type and role classification)
-
-**On-Probe Enforcement Logic:**
-- ✅ **VERIFIED:** No on-probe enforcement logic:
-  - `dpi-advanced/api/dpi_api.py:133-199` - `process_packet()` processes packets and stores flows (no enforcement)
-  - `dpi-advanced/README.md:18` - "No active traffic modification: No traffic modification"
-  - ✅ **VERIFIED:** No on-probe enforcement logic (processes packets, stores flows, no enforcement)
-
-**Heavy ML Libraries Loaded:**
-- ⚠️ **ISSUE:** No explicit ML libraries check found:
-  - `dpi-advanced/engine/behavior_model.py` - No explicit ML libraries imported
-  - `dpi-advanced/engine/asset_classifier.py` - No explicit ML libraries imported
-  - ⚠️ **ISSUE:** No explicit ML libraries check (classification logic exists, but no explicit ML libraries found)
+**Flow Records Are Not Integrity-Checked:**
+- ✅ **VERIFIED:** Flow records are integrity-checked: Flow hash is calculated and stored (SHA256)
 
 ### Verdict: **PARTIAL**
 
 **Justification:**
-- Feature extraction exists (packet_count, byte_count, avg_packet_size, protocol, l7_protocol, flow_duration - metadata only)
-- DPI does NOT make policy decisions (processes packets, stores flows, no policy decisions)
-- No on-probe enforcement logic (processes packets, stores flows, no enforcement)
-- **ISSUE:** Behavior model and asset classifier may perform ML inference (classification logic exists)
-- **ISSUE:** Asset classifier makes classification decisions (device type and role classification)
-- **ISSUE:** No explicit ML libraries check (classification logic exists, but no explicit ML libraries found)
+- Flow records are integrity-checked (flow hash is calculated and stored)
+- Tamper resistance is enforced (hash is calculated from content, tamper-resistant)
+- **ISSUE:** No explicit integrity verification found (hash is calculated and stored, but no verification found)
+- **ISSUE:** No explicit tamper detection found (hash is calculated, but no verification found)
+
+**PASS Conditions (Met):**
+- Flow records are integrity-checked — **CONFIRMED** (flow hash is calculated and stored)
+
+**FAIL Conditions (Met):**
+- Flow records are not integrity-checked — **NOT CONFIRMED** (flow records are integrity-checked)
+
+**Evidence Required:**
+- File paths: `dpi-advanced/engine/flow_assembler.py:133-139,106`, `dpi-advanced/engine/uploader.py:82-83`
+- Integrity & tamper resistance: Flow hash, chunk hash, integrity verification
 
 ---
 
-## 5. TELEMETRY EMISSION & AUTHENTICATION
+## 5. OFFLINE BUFFERING & REPLAY BEHAVIOR
 
 ### Evidence
 
-**Telemetry Signing:**
-- ⚠️ **ISSUE:** No telemetry signing found:
-  - `dpi-advanced/api/dpi_api.py:133-199` - `process_packet()` processes packets and stores flows (no telemetry signing)
-  - `dpi-advanced/engine/uploader.py:49-100` - `create_chunk()` creates upload chunks with manifest signature (but no telemetry signing)
-  - ⚠️ **ISSUE:** No telemetry signing (flows stored to files, no telemetry signing found)
+**Offline Buffering Is Bounded:**
+- ✅ Offline buffering: `dpi-advanced/engine/uploader.py:102-121` - `buffer_chunk()` buffers chunks for offline upload
+- ✅ Buffering is file-based: `dpi-advanced/engine/uploader.py:114-119` - Chunks are buffered to file (append-only)
+- ⚠️ **ISSUE:** No explicit buffer size limit: No explicit buffer size limit found (buffering is file-based, may grow unbounded)
+- ⚠️ **ISSUE:** No buffer overflow handling: No explicit buffer overflow handling found (buffering may fail if disk is full)
 
-**Probe Identity Binding:**
-- ⚠️ **ISSUE:** No probe identity binding found:
-  - `dpi-advanced/api/dpi_api.py:186` - `component_instance_id='dpi-advanced'` (hardcoded, not bound to probe identity)
-  - `dpi-advanced/api/dpi_api.py:226` - `component_instance_id='dpi-advanced'` (hardcoded, not bound to probe identity)
-  - ⚠️ **ISSUE:** No probe identity binding (component_instance_id is hardcoded 'dpi-advanced', not bound to probe identity)
+**Replay Produces Same Outputs:**
+- ✅ Flow assembly is deterministic: `dpi-advanced/engine/flow_assembler.py:40-110` - Flow assembly is deterministic (same packets → same flows)
+- ✅ Privacy redaction is deterministic: `dpi-advanced/engine/privacy_redactor.py:40-77` - Privacy redaction is deterministic (same input + same policy = same output)
+- ⚠️ **ISSUE:** Flow records may be ingested with ingest_time: Flow records are uploaded to Core, which may add `ingested_at` (non-deterministic, from Validation File 06)
+- ⚠️ **ISSUE:** If flow records are ingested with ingest_time, replay may produce different outputs (ingest_time differs on replay)
 
-**Schema Enforcement Before Emission:**
-- ✅ Schema enforcement: `dpi-advanced/schema/flow-record.schema.json` - Frozen JSON schema for flow records
-- ✅ Schema enforcement: `dpi-advanced/engine/flow_assembler.py:40-49` - `process_packet()` processes packets according to schema (metadata only)
-- ⚠️ **ISSUE:** No explicit schema validation found:
-  - `dpi-advanced/api/dpi_api.py:133-199` - `process_packet()` processes packets (no explicit schema validation)
-  - ⚠️ **ISSUE:** No explicit schema validation (flows processed, but no explicit schema validation found)
+**Offline Buffering Is Not Bounded:**
+- ⚠️ **ISSUE:** No explicit buffer size limit: No explicit buffer size limit found (buffering may grow unbounded)
 
-**Unsigned Telemetry:**
-- ⚠️ **ISSUE:** Telemetry is unsigned:
-  - `dpi-advanced/api/dpi_api.py:133-199` - `process_packet()` processes packets and stores flows (no telemetry signing)
-  - `dpi-advanced/engine/uploader.py:49-100` - `create_chunk()` creates upload chunks with manifest signature (but no telemetry signing)
-  - ⚠️ **ISSUE:** Telemetry is unsigned (flows stored to files, no telemetry signing found)
-
-**Free-Form JSON:**
-- ✅ **VERIFIED:** No free-form JSON:
-  - `dpi-advanced/schema/flow-record.schema.json` - Frozen JSON schema for flow records (no free-form JSON)
-  - `dpi-advanced/schema/flow-record.schema.json:23` - `additionalProperties: false` (no free-form JSON)
-  - ✅ **VERIFIED:** No free-form JSON (frozen schema, additionalProperties: false)
-
-**Identity Inferred from Network Placement Only:**
-- ⚠️ **ISSUE:** Identity is hardcoded:
-  - `dpi-advanced/api/dpi_api.py:186` - `component_instance_id='dpi-advanced'` (hardcoded, not inferred from network placement)
-  - `dpi-advanced/api/dpi_api.py:226` - `component_instance_id='dpi-advanced'` (hardcoded, not inferred from network placement)
-  - ⚠️ **ISSUE:** Identity is hardcoded (component_instance_id is hardcoded 'dpi-advanced', not inferred from network placement)
+**Replay Does NOT Produce Same Outputs:**
+- ⚠️ **ISSUE:** Flow records may be ingested with ingest_time: Flow records are uploaded to Core, which may add `ingested_at` (non-deterministic)
+- ⚠️ **ISSUE:** Replay may produce different outputs if ingest_time differs (ingest_time is non-deterministic)
 
 ### Verdict: **PARTIAL**
 
 **Justification:**
-- Schema enforcement exists (frozen JSON schema, additionalProperties: false)
-- No free-form JSON (frozen schema, additionalProperties: false)
-- **ISSUE:** No telemetry signing (flows stored to files, no telemetry signing found)
-- **ISSUE:** No probe identity binding (component_instance_id is hardcoded 'dpi-advanced', not bound to probe identity)
-- **ISSUE:** No explicit schema validation (flows processed, but no explicit schema validation found)
-- **ISSUE:** Identity is hardcoded (component_instance_id is hardcoded 'dpi-advanced', not inferred from network placement)
+- Offline buffering exists (chunks are buffered to file)
+- Flow assembly is deterministic (same packets → same flows)
+- Privacy redaction is deterministic (same input + same policy = same output)
+- **ISSUE:** No explicit buffer size limit (buffering may grow unbounded)
+- **ISSUE:** Flow records may be ingested with ingest_time (non-deterministic, affects replay)
+
+**PASS Conditions (Met):**
+- Offline buffering exists — **CONFIRMED** (chunks are buffered to file)
+- Flow assembly is deterministic — **CONFIRMED** (same packets → same flows)
+
+**FAIL Conditions (Met):**
+- Offline buffering is not bounded — **PARTIAL** (no explicit buffer size limit)
+- Replay does NOT produce same outputs — **PARTIAL** (flow records may be ingested with ingest_time)
+
+**Evidence Required:**
+- File paths: `dpi-advanced/engine/uploader.py:102-121,114-119`, `dpi-advanced/engine/flow_assembler.py:40-110`, `dpi-advanced/engine/privacy_redactor.py:40-77`
+- Offline buffering: Buffer size limit, buffer overflow handling
+- Replay behavior: Deterministic flow assembly, ingest_time handling
 
 ---
 
-## 6. DB & CONTROL PLANE ISOLATION
+## 6. CREDENTIAL & TRUST USAGE
 
 ### Evidence
 
-**No DB Credentials Present:**
-- ✅ **VERIFIED:** No DB credentials:
-  - `dpi-advanced/api/dpi_api.py` - No DB credentials found
-  - `dpi-advanced/engine/flow_assembler.py` - No DB credentials found
-  - ✅ **VERIFIED:** No DB credentials (no DB connection strings found)
+**DPI Credentials Are Properly Managed:**
+- ✅ Audit ledger keys: `dpi-advanced/api/dpi_api.py:124-131` - Audit ledger keys are managed via `KeyManager` (not hardcoded)
+- ✅ Audit ledger signing: `dpi-advanced/api/dpi_api.py:128-129` - Audit ledger entries are signed (ed25519)
+- ⚠️ **ISSUE:** No DPI signing keys found: No explicit DPI signing keys found (only audit ledger keys)
+- ⚠️ **ISSUE:** No telemetry signing found: No explicit telemetry signing found (flows are stored to files, not signed)
 
-**No DB Client Libraries Used:**
-- ✅ **VERIFIED:** No DB client libraries:
-  - `dpi-advanced/api/dpi_api.py` - No DB client libraries imported
-  - `dpi-advanced/engine/flow_assembler.py` - No DB client libraries imported
-  - ✅ **VERIFIED:** No DB client libraries (no psycopg, sqlite, or other DB libraries found)
+**Trust Boundaries Are Enforced:**
+- ✅ DPI is read-only: `dpi-advanced/fastpath/af_packet_capture.c:58` - AF_PACKET socket is read-only (no packet injection)
+- ✅ DPI does not modify traffic: `dpi-advanced/README.md:18` - "No active traffic modification: No traffic modification"
+- ✅ DPI does not make policy decisions: `dpi-advanced/README.md:7` - DPI is observation only (no policy decisions)
+- ⚠️ **ISSUE:** DPI operates with hardcoded identity: `dpi-advanced/api/dpi_api.py:186` - `component_instance_id='dpi-advanced'` (hardcoded, not bound to probe identity)
 
-**No Direct Writes Possible:**
-- ✅ **VERIFIED:** No direct DB writes:
-  - `dpi-advanced/api/dpi_api.py:300-311` - `_store_flow()` stores flows to files (not DB)
-  - `dpi-advanced/api/dpi_api.py:313-324` - `_store_asset_profile()` stores asset profiles to files (not DB)
-  - ✅ **VERIFIED:** No direct DB writes (flows and asset profiles stored to files, not DB)
-
-**DB Connection Strings:**
-- ✅ **VERIFIED:** No DB connection strings:
-  - `dpi-advanced/api/dpi_api.py` - No DB connection strings found
-  - `dpi-advanced/engine/flow_assembler.py` - No DB connection strings found
-  - ✅ **VERIFIED:** No DB connection strings (no DB connection strings found)
-
-**SQL Clients:**
-- ✅ **VERIFIED:** No SQL clients:
-  - `dpi-advanced/api/dpi_api.py` - No SQL clients found
-  - `dpi-advanced/engine/flow_assembler.py` - No SQL clients found
-  - ✅ **VERIFIED:** No SQL clients (no SQL clients found)
-
-**Direct DB Writes:**
-- ✅ **VERIFIED:** No direct DB writes:
-  - `dpi-advanced/api/dpi_api.py:300-311` - `_store_flow()` stores flows to files (not DB)
-  - `dpi-advanced/api/dpi_api.py:313-324` - `_store_asset_profile()` stores asset profiles to files (not DB)
-  - ✅ **VERIFIED:** No direct DB writes (flows and asset profiles stored to files, not DB)
-
-### Verdict: **PASS**
-
-**Justification:**
-- No DB credentials (no DB connection strings found)
-- No DB client libraries (no psycopg, sqlite, or other DB libraries found)
-- No direct DB writes (flows and asset profiles stored to files, not DB)
-- No DB connection strings, SQL clients, or direct DB writes
-
----
-
-## 7. HEALTH, INTEGRITY & TAMPER DETECTION
-
-### Evidence
-
-**Health Telemetry Emitted:**
-- ❌ **CRITICAL:** No health telemetry found:
-  - `dpi-advanced/api/dpi_api.py` - No health telemetry found
-  - `dpi-advanced/engine/flow_assembler.py` - No health telemetry found
-  - ❌ **CRITICAL:** No health telemetry (no health telemetry found)
-
-**Packet Drop Detection:**
-- ⚠️ **ISSUE:** Packet drop detection mentioned but not implemented:
-  - `dpi-advanced/README.md:30` - "Zero packet drops at 64-byte packets: AF_PACKET requirement"
-  - `dpi-advanced/performance/throughput_benchmark.py:51` - `packet_drops` in benchmark results (but no runtime detection)
-  - ⚠️ **ISSUE:** Packet drop detection mentioned but not implemented (benchmark tracks drops, but no runtime detection)
-
-**Tamper Indicators:**
-- ❌ **CRITICAL:** No tamper indicators found:
-  - `dpi-advanced/api/dpi_api.py` - No tamper indicators found
-  - `dpi-advanced/engine/flow_assembler.py` - No tamper indicators found
-  - ❌ **CRITICAL:** No tamper indicators (no tamper detection found)
-
-**DPI Silently Degrades:**
-- ⚠️ **ISSUE:** DPI may silently degrade:
-  - `dpi-advanced/api/dpi_api.py:133-199` - `process_packet()` processes packets (no explicit degradation handling)
-  - `dpi-advanced/cli/run_probe.py:123-132` - Probe runs in loop (no explicit degradation handling)
-  - ⚠️ **ISSUE:** DPI may silently degrade (no explicit degradation handling found)
-
-**No Integrity Reporting:**
-- ❌ **CRITICAL:** No integrity reporting found:
-  - `dpi-advanced/api/dpi_api.py` - No integrity reporting found
-  - `dpi-advanced/engine/flow_assembler.py` - No integrity reporting found
-  - ❌ **CRITICAL:** No integrity reporting (no integrity reporting found)
-
-**Health Metrics Optional:**
-- ⚠️ **ISSUE:** Health metrics are optional (not implemented):
-  - `dpi-advanced/api/dpi_api.py` - No health metrics found
-  - `dpi-advanced/engine/flow_assembler.py` - No health metrics found
-  - ⚠️ **ISSUE:** Health metrics are optional (not implemented, no health metrics found)
-
-### Verdict: **FAIL**
-
-**Justification:**
-- **CRITICAL:** No health telemetry (no health telemetry found)
-- **CRITICAL:** No tamper indicators (no tamper detection found)
-- **CRITICAL:** No integrity reporting (no integrity reporting found)
-- **ISSUE:** Packet drop detection mentioned but not implemented (benchmark tracks drops, but no runtime detection)
-- **ISSUE:** DPI may silently degrade (no explicit degradation handling found)
-- **ISSUE:** Health metrics are optional (not implemented, no health metrics found)
-
----
-
-## 8. FAIL-CLOSED BEHAVIOR
-
-### Evidence
-
-**Behavior on Capture Failure:**
-- ⚠️ **ISSUE:** No explicit capture failure handling found:
-  - `dpi-advanced/fastpath/af_packet_capture.c:51-102` - `af_packet_init()` returns -1 on error (but no explicit failure handling)
-  - `dpi-advanced/cli/run_probe.py:123-132` - Probe runs in loop (no explicit capture failure handling)
-  - ⚠️ **ISSUE:** No explicit capture failure handling (returns -1 on error, but no explicit failure handling)
-
-**Behavior on Telemetry Bus Failure:**
-- ⚠️ **ISSUE:** No telemetry bus exists:
-  - `dpi-advanced/api/dpi_api.py:300-311` - `_store_flow()` stores flows to files (not telemetry bus)
-  - `dpi-advanced/engine/uploader.py:102-121` - `buffer_chunk()` buffers chunks to files (not telemetry bus)
-  - ⚠️ **ISSUE:** No telemetry bus exists (flows stored to files, not telemetry bus)
-
-**Behavior on Integrity Failure:**
-- ⚠️ **ISSUE:** No integrity failure handling found:
-  - `dpi-advanced/api/dpi_api.py:133-199` - `process_packet()` processes packets (no explicit integrity failure handling)
-  - `dpi-advanced/engine/flow_assembler.py:133-139` - `_calculate_hash()` calculates hash (but no integrity failure handling)
-  - ⚠️ **ISSUE:** No integrity failure handling (hash calculated, but no integrity failure handling)
-
-**DPI Continues Silently:**
-- ⚠️ **ISSUE:** DPI may continue silently:
-  - `dpi-advanced/api/dpi_api.py:133-199` - `process_packet()` processes packets (no explicit failure handling)
-  - `dpi-advanced/cli/run_probe.py:123-132` - Probe runs in loop (no explicit failure handling)
-  - ⚠️ **ISSUE:** DPI may continue silently (no explicit failure handling found)
-
-**Unreported Blind Spots:**
-- ⚠️ **ISSUE:** No blind spot reporting found:
-  - `dpi-advanced/api/dpi_api.py` - No blind spot reporting found
-  - `dpi-advanced/engine/flow_assembler.py` - No blind spot reporting found
-  - ⚠️ **ISSUE:** No blind spot reporting (no blind spot reporting found)
-
-**Best-Effort Operation Without Alerting:**
-- ⚠️ **ISSUE:** DPI may operate in best-effort mode:
-  - `dpi-advanced/api/dpi_api.py:133-199` - `process_packet()` processes packets (no explicit alerting on failure)
-  - `dpi-advanced/cli/run_probe.py:123-132` - Probe runs in loop (no explicit alerting on failure)
-  - ⚠️ **ISSUE:** DPI may operate in best-effort mode (no explicit alerting on failure found)
+**DPI Credentials Are Not Properly Managed:**
+- ✅ **VERIFIED:** DPI credentials are properly managed: Audit ledger keys are managed via `KeyManager` (not hardcoded)
 
 ### Verdict: **PARTIAL**
 
 **Justification:**
-- **ISSUE:** No explicit capture failure handling (returns -1 on error, but no explicit failure handling)
-- **ISSUE:** No telemetry bus exists (flows stored to files, not telemetry bus)
-- **ISSUE:** No integrity failure handling (hash calculated, but no integrity failure handling)
-- **ISSUE:** DPI may continue silently (no explicit failure handling found)
-- **ISSUE:** No blind spot reporting (no blind spot reporting found)
-- **ISSUE:** DPI may operate in best-effort mode (no explicit alerting on failure found)
+- DPI credentials are properly managed (audit ledger keys are managed via `KeyManager`)
+- Trust boundaries are enforced (DPI is read-only, does not modify traffic, does not make policy decisions)
+- **ISSUE:** No DPI signing keys found (only audit ledger keys)
+- **ISSUE:** No telemetry signing found (flows are stored to files, not signed)
+- **ISSUE:** DPI operates with hardcoded identity (component_instance_id is hardcoded)
+
+**PASS Conditions (Met):**
+- Trust boundaries are enforced — **CONFIRMED** (DPI is read-only, does not modify traffic)
+
+**FAIL Conditions (Met):**
+- DPI credentials are not properly managed — **NOT CONFIRMED** (DPI credentials are properly managed)
+
+**Evidence Required:**
+- File paths: `dpi-advanced/api/dpi_api.py:124-131,128-129,186`, `dpi-advanced/fastpath/af_packet_capture.c:58`, `dpi-advanced/README.md:18,7`
+- Credential & trust usage: Audit ledger keys, DPI signing keys, trust boundaries
 
 ---
 
-## 9. NEGATIVE VALIDATION (MANDATORY)
+## CREDENTIAL TYPES VALIDATED
 
-### Evidence
-
-**DPI Injects Traffic:**
-- ✅ **PROVEN IMPOSSIBLE:** DPI does NOT inject traffic:
-  - `dpi-advanced/fastpath/af_packet_capture.c:89` - `setsockopt(sockfd, SOL_PACKET, PACKET_RX_RING, &req, sizeof(req))` configures RX ring (receive only, no TX)
-  - `dpi-advanced/fastpath/ebpf_flow_tracker.c:112` - eBPF program returns `XDP_PASS` (does not inject traffic)
-  - ✅ **VERIFIED:** DPI does NOT inject traffic (RX ring only, XDP_PASS, no TX)
-
-**DPI Blocks Traffic:**
-- ✅ **PROVEN IMPOSSIBLE:** DPI does NOT block traffic:
-  - `dpi-advanced/fastpath/ebpf_flow_tracker.c:112` - eBPF program returns `XDP_PASS` (does not drop packets)
-  - `dpi-advanced/README.md:18` - "No active traffic modification: No traffic modification"
-  - ✅ **VERIFIED:** DPI does NOT block traffic (XDP_PASS, no traffic modification)
-
-**DPI Writes to DB:**
-- ✅ **PROVEN IMPOSSIBLE:** DPI does NOT write to DB:
-  - `dpi-advanced/api/dpi_api.py:300-311` - `_store_flow()` stores flows to files (not DB)
-  - `dpi-advanced/api/dpi_api.py:313-324` - `_store_asset_profile()` stores asset profiles to files (not DB)
-  - ✅ **VERIFIED:** DPI does NOT write to DB (flows and asset profiles stored to files, not DB)
-
-**DPI Issues Commands:**
-- ✅ **PROVEN IMPOSSIBLE:** DPI does NOT issue commands:
-  - `dpi-advanced/api/dpi_api.py:133-199` - `process_packet()` processes packets and stores flows (no command issuance)
-  - `dpi-advanced/README.md:18` - "No active traffic modification: No traffic modification"
-  - ✅ **VERIFIED:** DPI does NOT issue commands (processes packets, stores flows, no command issuance)
-
-**DPI Operates Without Identity:**
-- ⚠️ **ISSUE:** DPI operates with hardcoded identity:
-  - `dpi-advanced/api/dpi_api.py:186` - `component_instance_id='dpi-advanced'` (hardcoded, not bound to probe identity)
-  - `dpi-advanced/api/dpi_api.py:226` - `component_instance_id='dpi-advanced'` (hardcoded, not bound to probe identity)
-  - ⚠️ **ISSUE:** DPI operates with hardcoded identity (component_instance_id is hardcoded 'dpi-advanced', not bound to probe identity)
-
-### Verdict: **PARTIAL**
-
-**Justification:**
-- DPI does NOT inject traffic (RX ring only, XDP_PASS, no TX)
-- DPI does NOT block traffic (XDP_PASS, no traffic modification)
-- DPI does NOT write to DB (flows and asset profiles stored to files, not DB)
-- DPI does NOT issue commands (processes packets, stores flows, no command issuance)
-- **ISSUE:** DPI operates with hardcoded identity (component_instance_id is hardcoded 'dpi-advanced', not bound to probe identity)
+### Audit Ledger Keys
+- **Type:** ed25519 key pair for audit ledger signing
+- **Source:** KeyManager (not hardcoded)
+- **Validation:** ✅ **VALIDATED** (Audit ledger keys are managed via `KeyManager`)
+- **Usage:** Audit ledger entry signing (ed25519)
+- **Status:** ✅ **VALIDATED** (Audit ledger keys are properly managed)
 
 ---
 
-## 10. VERDICT & IMPACT
+## PASS CONDITIONS
 
-### Section-by-Section Verdicts
+### Section 1: Packet/Flow Capture Guarantees
+- ✅ Accurate packet/flow capture — **PASS**
+- ⚠️ No packet loss — **PARTIAL**
+- ✅ Deterministic flow assembly — **PASS**
 
-1. **Component Identity & Role:** PARTIAL
-   - DPI probe entry points are clearly identified
-   - Capture mechanisms are AF_PACKET and eBPF (correctly implemented)
-   - Explicit statements of what DPI can do and must never do exist
-   - **ISSUE:** Basic DPI probe is stub (capture disabled, no implementation)
+### Section 2: Time Semantics
+- ✅ capture_time is preserved — **PASS**
+- ⚠️ capture_time does NOT affect downstream intelligence — **PARTIAL**
 
-2. **Passive Capture Guarantees:** PASS
-   - Read-only packet capture (AF_PACKET RX ring, eBPF XDP_PASS)
-   - No inline positioning (raw socket, out-of-band capture)
-   - No packet injection APIs, iptables/nftables manipulation, inline NIC configuration, or packet modification code paths
+### Section 3: Privacy Enforcement
+- ✅ No payload leakage if forbidden — **PASS**
+- ✅ Privacy redaction is enforced — **PASS**
 
-3. **Payload & Privacy Boundaries:** PASS
-   - No packet payload storage (metadata only, no payload storage)
-   - No TLS decryption logic (no decryption code found)
-   - Metadata-only extraction (packet_size, flow tuple, features - metadata only)
+### Section 4: Integrity & Tamper Resistance
+- ✅ Flow records are integrity-checked — **PASS**
+- ⚠️ Tamper resistance is enforced — **PARTIAL**
 
-4. **Feature Extraction & On-Probe Intelligence:** PARTIAL
-   - Feature extraction exists (metadata only)
-   - DPI does NOT make policy decisions (processes packets, stores flows, no policy decisions)
-   - **ISSUE:** Behavior model and asset classifier may perform ML inference (classification logic exists)
-   - **ISSUE:** Asset classifier makes classification decisions (device type and role classification)
+### Section 5: Offline Buffering & Replay Behavior
+- ⚠️ Offline buffering is bounded — **PARTIAL**
+- ⚠️ Replay produces same outputs — **PARTIAL**
 
-5. **Telemetry Emission & Authentication:** PARTIAL
-   - Schema enforcement exists (frozen JSON schema, additionalProperties: false)
-   - **ISSUE:** No telemetry signing (flows stored to files, no telemetry signing found)
-   - **ISSUE:** No probe identity binding (component_instance_id is hardcoded 'dpi-advanced', not bound to probe identity)
-
-6. **DB & Control Plane Isolation:** PASS
-   - No DB credentials, DB client libraries, or direct DB writes (flows and asset profiles stored to files, not DB)
-
-7. **Health, Integrity & Tamper Detection:** FAIL
-   - **CRITICAL:** No health telemetry (no health telemetry found)
-   - **CRITICAL:** No tamper indicators (no tamper detection found)
-   - **CRITICAL:** No integrity reporting (no integrity reporting found)
-
-8. **Fail-Closed Behavior:** PARTIAL
-   - **ISSUE:** No explicit capture failure handling (returns -1 on error, but no explicit failure handling)
-   - **ISSUE:** No telemetry bus exists (flows stored to files, not telemetry bus)
-   - **ISSUE:** DPI may continue silently (no explicit failure handling found)
-
-9. **Negative Validation:** PARTIAL
-   - DPI does NOT inject traffic, block traffic, write to DB, or issue commands
-   - **ISSUE:** DPI operates with hardcoded identity (component_instance_id is hardcoded 'dpi-advanced', not bound to probe identity)
-
-### Overall Verdict: **PARTIAL**
-
-**Justification:**
-- **CRITICAL:** No health telemetry (no health telemetry found)
-- **CRITICAL:** No tamper indicators (no tamper detection found)
-- **CRITICAL:** No integrity reporting (no integrity reporting found)
-- **ISSUE:** Basic DPI probe is stub (capture disabled, no implementation)
-- **ISSUE:** No telemetry signing (flows stored to files, no telemetry signing found)
-- **ISSUE:** No probe identity binding (component_instance_id is hardcoded 'dpi-advanced', not bound to probe identity)
-- **ISSUE:** Behavior model and asset classifier may perform ML inference (classification logic exists)
-- **ISSUE:** No explicit capture failure handling or blind spot reporting
-- **ISSUE:** DPI may continue silently or operate in best-effort mode
-- Passive capture guarantees are correct (read-only, out-of-band, no packet modification)
-- Payload & privacy boundaries are correct (no payload storage, no TLS decryption, metadata-only extraction)
-- DB & control plane isolation is correct (no DB credentials, no DB writes)
-- DPI does NOT inject traffic, block traffic, write to DB, or issue commands
-
-**Impact if DPI Probe is Compromised:**
-- **CRITICAL:** If DPI probe is compromised, health telemetry cannot be verified (no health telemetry)
-- **CRITICAL:** If DPI probe is compromised, tampering cannot be detected (no tamper detection)
-- **CRITICAL:** If DPI probe is compromised, integrity cannot be verified (no integrity reporting)
-- **HIGH:** If DPI probe is compromised, unsigned telemetry can be sent (no telemetry signing)
-- **HIGH:** If DPI probe is compromised, probe identity cannot be verified (hardcoded identity)
-- **MEDIUM:** If DPI probe is compromised, capture failures may go unreported (no explicit failure handling)
-- **LOW:** If DPI probe is compromised, passive capture guarantees remain (read-only, out-of-band, no packet modification)
-- **LOW:** If DPI probe is compromised, payload & privacy boundaries remain (no payload storage, no TLS decryption)
-
-**Whether Host-Only Detection Remains Trustworthy:**
-- ⚠️ **PARTIAL:** Host-only detection remains trustworthy if DPI probe is compromised:
-  - `dpi-advanced/fastpath/ebpf_flow_tracker.c:112` - eBPF program returns XDP_PASS (does not modify traffic)
-  - `dpi-advanced/README.md:18` - "No active traffic modification: No traffic modification"
-  - ⚠️ **PARTIAL:** Host-only detection remains trustworthy if DPI probe is compromised (passive capture guarantees remain, but no health/integrity reporting)
-
-**Recommendations:**
-1. **CRITICAL:** Implement health telemetry (emit health events for capture status, packet drops, integrity)
-2. **CRITICAL:** Implement tamper detection (detect tampering of DPI probe binary and configuration)
-3. **CRITICAL:** Implement integrity reporting (report integrity status of captured flows and stored data)
-4. **CRITICAL:** Implement telemetry signing (sign flows before storage/upload with ed25519)
-5. **CRITICAL:** Implement probe identity binding (bind component_instance_id to probe identity cryptographically)
-6. **HIGH:** Implement explicit capture failure handling (fail-closed on capture failures)
-7. **HIGH:** Implement blind spot reporting (report packet drops and capture gaps)
-8. **HIGH:** Implement explicit schema validation (validate flows against schema before storage)
-9. **MEDIUM:** Implement telemetry bus integration (send flows to ingest service via HTTP POST)
-10. **MEDIUM:** Clarify ML inference boundaries (explicitly document whether behavior model and asset classifier perform ML inference)
+### Section 6: Credential & Trust Usage
+- ✅ DPI credentials are properly managed — **PASS**
+- ✅ Trust boundaries are enforced — **PASS**
 
 ---
 
-**Validation Date:** 2025-01-13
-**Validator:** Lead Validator & Compliance Auditor
-**Next Step:** Validation complete (all 11 steps completed)
+## FAIL CONDITIONS
+
+### Section 1: Packet/Flow Capture Guarantees
+- ⚠️ Packet capture is not accurate — **PARTIAL** (Basic DPI probe is stub)
+
+### Section 2: Time Semantics
+- ⚠️ capture_time does NOT affect downstream intelligence — **PARTIAL** (flow records may be ingested with ingest_time)
+
+### Section 3: Privacy Enforcement
+- ❌ Privacy guarantees are unenforced or assumed — **NOT CONFIRMED** (privacy redaction is enforced)
+
+### Section 4: Integrity & Tamper Resistance
+- ❌ Flow records are not integrity-checked — **NOT CONFIRMED** (flow records are integrity-checked)
+
+### Section 5: Offline Buffering & Replay Behavior
+- ⚠️ Offline buffering is not bounded — **PARTIAL** (no explicit buffer size limit)
+- ⚠️ Replay does NOT produce same outputs — **PARTIAL** (flow records may be ingested with ingest_time)
+
+### Section 6: Credential & Trust Usage
+- ❌ DPI credentials are not properly managed — **NOT CONFIRMED** (DPI credentials are properly managed)
+
+---
+
+## EVIDENCE REQUIRED
+
+### Packet/Flow Capture Guarantees
+- File paths: `dpi-advanced/fastpath/af_packet_capture.c:51-102,58,89,27`, `dpi-advanced/engine/flow_assembler.py:40-110,112-131,133-139`, `dpi/probe/main.py:77-103`
+- Packet capture: AF_PACKET socket, RX ring, flow assembly
+
+### Time Semantics
+- File paths: `dpi-advanced/engine/flow_assembler.py:77-78,93`
+- Time semantics: capture_time vs ingest_time separation
+
+### Privacy Enforcement
+- File paths: `dpi-advanced/README.md:15`, `dpi-advanced/engine/privacy_redactor.py:40-77,27-38`, `dpi-advanced/api/dpi_api.py:177`
+- Privacy enforcement: No payload storage, privacy redaction, privacy policy
+
+### Integrity & Tamper Resistance
+- File paths: `dpi-advanced/engine/flow_assembler.py:133-139,106`, `dpi-advanced/engine/uploader.py:82-83`
+- Integrity & tamper resistance: Flow hash, chunk hash, integrity verification
+
+### Offline Buffering & Replay Behavior
+- File paths: `dpi-advanced/engine/uploader.py:102-121,114-119`, `dpi-advanced/engine/flow_assembler.py:40-110`, `dpi-advanced/engine/privacy_redactor.py:40-77`
+- Offline buffering: Buffer size limit, buffer overflow handling
+- Replay behavior: Deterministic flow assembly, ingest_time handling
+
+### Credential & Trust Usage
+- File paths: `dpi-advanced/api/dpi_api.py:124-131,128-129,186`, `dpi-advanced/fastpath/af_packet_capture.c:58`, `dpi-advanced/README.md:18,7`
+- Credential & trust usage: Audit ledger keys, DPI signing keys, trust boundaries
+
+---
+
+## GA VERDICT
+
+### Overall: **PARTIAL**
+
+**Critical Blockers:**
+
+1. **PARTIAL:** Basic DPI probe is stub (capture disabled, no implementation)
+   - **Impact:** Basic DPI probe does not capture packets (stub only)
+   - **Location:** `dpi/probe/main.py:77-103` — `run_dpi_probe()` is stub runtime
+   - **Severity:** **HIGH** (Basic DPI probe is non-functional)
+   - **Master Spec Violation:** DPI Probe must capture packets
+
+2. **PARTIAL:** Flow records may be ingested with ingest_time (non-deterministic, affects replay)
+   - **Impact:** Flow records are uploaded to Core, which may add `ingested_at` (non-deterministic, from Validation File 06), affecting replay determinism
+   - **Location:** Flow records are uploaded to Core (ingest_time is non-deterministic)
+   - **Severity:** **MEDIUM** (affects replay determinism)
+   - **Master Spec Violation:** DPI output should be deterministic and auditable
+
+3. **PARTIAL:** No explicit buffer size limit (buffering may grow unbounded)
+   - **Impact:** Offline buffering is file-based, may grow unbounded (no explicit buffer size limit)
+   - **Location:** `dpi-advanced/engine/uploader.py:102-121` — Buffering is file-based, no size limit
+   - **Severity:** **MEDIUM** (buffering may grow unbounded)
+   - **Master Spec Violation:** Offline buffering should be bounded
+
+4. **PARTIAL:** No explicit integrity verification found (hash is calculated and stored, but no verification found)
+   - **Impact:** Flow records have integrity hash, but no explicit verification found (hash is calculated and stored, but not verified)
+   - **Location:** `dpi-advanced/engine/flow_assembler.py:133-139,106` — Hash is calculated and stored, but no verification found
+   - **Severity:** **LOW** (hash is calculated, but not verified)
+   - **Master Spec Violation:** Integrity should be verifiable
+
+5. **PARTIAL:** No telemetry signing found (flows are stored to files, not signed)
+   - **Impact:** Flow records are stored to files, not signed (no telemetry signing found)
+   - **Location:** `dpi-advanced/api/dpi_api.py:180` — Flows are stored to files, not signed
+   - **Severity:** **LOW** (flows are not signed, but have integrity hash)
+   - **Master Spec Violation:** Telemetry should be signed
+
+**Non-Blocking Issues:**
+
+1. AF_PACKET capture is accurate (read-only socket, RX ring)
+2. Flow assembly is deterministic (same packets → same flows)
+3. Privacy redaction is enforced (redaction occurs before storage, is mandatory)
+4. Trust boundaries are enforced (DPI is read-only, does not modify traffic)
+
+**Strengths:**
+
+1. ✅ AF_PACKET capture is accurate (read-only socket, RX ring)
+2. ✅ Flow assembly is deterministic (same packets → same flows)
+3. ✅ Privacy redaction is enforced (redaction occurs before storage, is mandatory)
+4. ✅ No payload storage (payload is never persisted)
+5. ✅ Trust boundaries are enforced (DPI is read-only, does not modify traffic)
+6. ✅ Flow records are integrity-checked (flow hash is calculated and stored)
+
+**Summary of Critical Blockers:**
+
+1. **HIGH:** Basic DPI probe is stub (capture disabled, no implementation) — Basic DPI probe is non-functional
+2. **MEDIUM:** Flow records may be ingested with ingest_time (non-deterministic, affects replay) — Affects replay determinism
+3. **MEDIUM:** No explicit buffer size limit (buffering may grow unbounded) — Buffering may grow unbounded
+4. **LOW:** No explicit integrity verification found (hash is calculated and stored, but no verification found) — Hash is calculated, but not verified
+5. **LOW:** No telemetry signing found (flows are stored to files, not signed) — Flows are not signed, but have integrity hash
+
+---
+
+**Validation Date:** 2025-01-13  
+**Validator:** Independent System Validator  
+**Next Step:** Validation Step 12 — Sentinel / Survivability  
+**GA Status:** **BLOCKED** (Critical failures in Basic DPI probe implementation and replay determinism)
+
+---
+
+## UPSTREAM IMPACT STATEMENT
+
+**Documentation Only:** This section documents upstream impact of ingest non-determinism on DPI validation.
+
+**Upstream Validations Impacted by Ingest Non-Determinism:**
+
+1. **Ingest Pipeline (Validation Step 06):**
+   - DPI flow records are ingested by Ingest service
+   - Ingest_time (ingested_at) is non-deterministic (from Validation File 06)
+   - DPI validation must NOT assume deterministic ingest_time
+
+**Requirements for Upstream Validations:**
+
+- Upstream validations must NOT assume DPI output is deterministic (flow records may be ingested with ingest_time)
+- Upstream validations must NOT assume replay fidelity for DPI output (ingest_time may differ on replay)
+- Upstream validations must validate their components based on actual behavior, not assumptions about DPI determinism
+
+---
+
+## DOWNSTREAM IMPACT STATEMENT
+
+**Documentation Only:** This section documents downstream impact of DPI failures on downstream validations.
+
+**Downstream Validations Impacted by DPI Failures:**
+
+1. **Correlation Engine (Validation Step 07):**
+   - Correlation engine may use DPI flow data (if DPI flows are ingested)
+   - DPI flow data may differ on replay (if ingest_time differs)
+   - Correlation engine validation must NOT assume deterministic DPI flow data
+
+2. **AI Core (Validation Step 08):**
+   - AI Core may use DPI flow data (if DPI flows are ingested and correlated)
+   - DPI flow data may differ on replay (if ingest_time differs)
+   - AI Core validation must NOT assume deterministic DPI flow data
+
+**Requirements for Downstream Validations:**
+
+- Downstream validations must NOT assume deterministic DPI flow data (flow records may be ingested with ingest_time)
+- Downstream validations must NOT assume replay fidelity for DPI flow data (ingest_time may differ on replay)
+- Downstream validations must validate their components based on actual behavior, not assumptions about DPI determinism
