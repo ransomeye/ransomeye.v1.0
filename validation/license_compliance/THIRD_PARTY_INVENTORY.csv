@@ -36,5 +36,5 @@ anyhow,1.0,linux-agent,rust,"MIT OR Apache-2.0",permissive,static,agent,low,"Err
 hostname,0.4,linux-agent,rust,MIT,permissive,static,agent,low,"Hostname retrieval"
 react,"^18.2.0",ui-frontend,javascript,MIT,permissive,static,core,low,"React UI framework"
 react-dom,"^18.2.0",ui-frontend,javascript,MIT,permissive,static,core,low,"React DOM renderer"
-@vitejs/plugin-react,"^4.2.1",ui-frontend,javascript,MIT,permissive,static,core,low,"Vite React plugin"
+vitejs-plugin-react,"^4.2.1",ui-frontend,javascript,MIT,permissive,static,core,low,"Vite React plugin (@vitejs/plugin-react)"
 vite,"^5.0.0",ui-frontend,javascript,MIT,permissive,static,core,low,"Build tool"

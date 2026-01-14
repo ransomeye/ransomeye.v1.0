@@ -444,7 +444,7 @@
     "notes": "React DOM renderer"
   },
   {
-    "name": "@vitejs/plugin-react",
+    "name": "vitejs-plugin-react",
     "version": "^4.2.1",
     "component": "ui-frontend",
     "language": "javascript",
@@ -453,7 +453,7 @@
     "static_or_dynamic": "static",
     "distribution_scope": "core",
     "risk_level": "low",
-    "notes": "Vite React plugin"
+    "notes": "Vite React plugin (@vitejs/plugin-react)"
   },
   {
     "name": "vite",
