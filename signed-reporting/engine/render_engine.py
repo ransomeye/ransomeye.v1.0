@@ -42,10 +42,14 @@ class RenderEngine:
     def render_report(
         self,
         assembled_explanation: Dict[str, Any],
-        format_type: str
+        format_type: str,
+        incident_snapshot_time: Optional[str] = None
     ) -> bytes:
         """
         Render assembled explanation into specified format.
+        
+        GA-BLOCKING: Deterministic rendering with incident-anchored timestamps.
+        All timestamps derive from incident snapshot time, not system time.
         
         Rules:
         - Deterministic: Same inputs → same output
@@ -54,13 +58,15 @@ class RenderEngine:
         - No inference
         - No omission
         - Content blocks rendered as-is
+        - All timestamps use incident_snapshot_time (not system time)
         
         Args:
             assembled_explanation: Assembled explanation dictionary (read-only)
             format_type: Format type (PDF, HTML, CSV)
+            incident_snapshot_time: RFC3339 UTC timestamp of incident snapshot (resolved_at or last_observed_at)
         
         Returns:
-            Rendered report as bytes
+            Rendered report as bytes (evidence content only, branding excluded from hash domain)
         """
         if format_type not in ['PDF', 'HTML', 'CSV']:
             raise RenderError(f"Invalid format_type: {format_type}. Must be one of PDF, HTML, CSV")
@@ -73,11 +79,50 @@ class RenderEngine:
         sorted_blocks = sorted(content_blocks, key=lambda x: x.get('display_order', 0))
         
         if format_type == 'PDF':
-            return self._render_pdf(incident_id, view_type, sorted_blocks)
+            return self._render_pdf(incident_id, view_type, sorted_blocks, incident_snapshot_time)
         elif format_type == 'HTML':
-            return self._render_html(incident_id, view_type, sorted_blocks)
+            return self._render_html(incident_id, view_type, sorted_blocks, incident_snapshot_time)
         elif format_type == 'CSV':
-            return self._render_csv(incident_id, view_type, sorted_blocks)
+            return self._render_csv(incident_id, view_type, sorted_blocks, incident_snapshot_time)
+        else:
+            raise RenderError(f"Unsupported format: {format_type}")
+    
+    def render_evidence_content(
+        self,
+        assembled_explanation: Dict[str, Any],
+        format_type: str,
+        incident_snapshot_time: Optional[str] = None
+    ) -> bytes:
+        """
+        GA-BLOCKING: Render evidence content only (branding excluded from hash domain).
+        
+        This method returns only the evidence content, without branding header/footer.
+        The hash is computed on this content only, ensuring branding changes don't affect hash.
+        
+        Args:
+            assembled_explanation: Assembled explanation dictionary (read-only)
+            format_type: Format type (PDF, HTML, CSV)
+            incident_snapshot_time: RFC3339 UTC timestamp of incident snapshot
+        
+        Returns:
+            Evidence content as bytes (no branding)
+        """
+        if format_type not in ['PDF', 'HTML', 'CSV']:
+            raise RenderError(f"Invalid format_type: {format_type}. Must be one of PDF, HTML, CSV")
+        
+        view_type = assembled_explanation.get('view_type', '')
+        content_blocks = assembled_explanation.get('content_blocks', [])
+        incident_id = assembled_explanation.get('incident_id', '')
+        
+        # Sort content blocks by display_order (deterministic)
+        sorted_blocks = sorted(content_blocks, key=lambda x: x.get('display_order', 0))
+        
+        if format_type == 'PDF':
+            return self._render_pdf_evidence_only(incident_id, view_type, sorted_blocks, incident_snapshot_time)
+        elif format_type == 'HTML':
+            return self._render_html_evidence_only(incident_id, view_type, sorted_blocks, incident_snapshot_time)
+        elif format_type == 'CSV':
+            return self._render_csv_evidence_only(incident_id, view_type, sorted_blocks, incident_snapshot_time)
         else:
             raise RenderError(f"Unsupported format: {format_type}")
     
