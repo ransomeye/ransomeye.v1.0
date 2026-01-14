@@ -18,22 +18,16 @@ def get_test_db_connection():
     """
     Get database connection for validation.
     
-    Default credentials (POC + GA): gagan / gagan
-    Environment variables may override but absence must never break execution.
-    
-    Emits RuntimeWarning if default credentials are used.
+    PHASE-9: No default credentials - fail-fast if not provided.
+    Environment variables are required.
     """
-    db_user = os.getenv("RANSOMEYE_DB_USER", "gagan")
-    db_password = os.getenv("RANSOMEYE_DB_PASSWORD", "gagan")
+    db_user = os.getenv("RANSOMEYE_DB_USER")
+    db_password = os.getenv("RANSOMEYE_DB_PASSWORD")
     
-    # Emit warning if defaults are used
-    if db_user == "gagan" and db_password == "gagan":
-        import warnings
-        warnings.warn(
-            "Default POC credentials (gagan/gagan) in use — NOT production safe.",
-            RuntimeWarning,
-            stacklevel=2
-        )
+    if not db_user:
+        raise ValueError("RANSOMEYE_DB_USER environment variable is required for test database connection (no defaults allowed)")
+    if not db_password:
+        raise ValueError("RANSOMEYE_DB_PASSWORD environment variable is required for test database connection (no defaults allowed)")
     
     return psycopg2.connect(
         host=os.getenv("RANSOMEYE_DB_HOST", "localhost"),
