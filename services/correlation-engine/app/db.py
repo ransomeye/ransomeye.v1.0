@@ -9,7 +9,7 @@ import os
 import sys
 import psycopg2
 from typing import Optional, List, Dict, Any
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # Add common utilities to path
 _current_file = os.path.abspath(__file__)
