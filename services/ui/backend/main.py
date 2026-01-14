@@ -381,6 +381,15 @@ async def get_incident_detail(incident_id: str):
         # Phase 8 requirement: Get AI insights from view
         ai_insights = query_view(conn, "v_ai_insights", "incident_id", incident_id)
         
+        # PHASE 5: Get evidence quality indicators
+        evidence_quality = query_view(conn, "v_incident_evidence_quality", "incident_id", incident_id)
+        
+        # PHASE 5: Get AI provenance information
+        ai_provenance = query_view(conn, "v_incident_ai_provenance", "incident_id", incident_id)
+        
+        # PHASE 5: Get contradiction information
+        contradictions = query_view(conn, "v_incident_contradictions", "incident_id", incident_id)
+        
         # Phase 8 requirement: Get policy recommendations (file-based for Phase 8 minimal)
         policy_recommendations = []
         policy_dir = config.get("RANSOMEYE_POLICY_DIR", "/tmp/ransomeye/policy")
@@ -398,11 +407,28 @@ async def get_incident_detail(incident_id: str):
                     safe_error = str(e)
                 logger.warning(f"Failed to read policy decision file: {safe_error}", incident_id=incident_id)
         
+        # PHASE 5: Separate confidence from certainty (confirmation state)
+        incident_data = incident.copy() if incident else {}
+        certainty_state = "UNCONFIRMED"  # PHASE 5: Default to unconfirmed
+        if incident_data.get('stage') == 'CONFIRMED':
+            certainty_state = "CONFIRMED"
+        elif incident_data.get('stage') == 'PROBABLE':
+            certainty_state = "PROBABLE"
+        elif incident_data.get('stage') == 'SUSPICIOUS':
+            certainty_state = "SUSPICIOUS"
+        
+        # PHASE 5: Add certainty state to incident data
+        incident_data['certainty_state'] = certainty_state
+        incident_data['is_probabilistic'] = (certainty_state != 'CONFIRMED')  # PHASE 5: Only CONFIRMED is deterministic
+        
         return {
-            "incident": incident,
+            "incident": incident_data,
             "timeline": timeline,
             "evidence_summary": evidence_summary[0] if evidence_summary else None,
             "ai_insights": ai_insights[0] if ai_insights else None,
+            "evidence_quality": evidence_quality[0] if evidence_quality else None,  # PHASE 5: Evidence quality indicators
+            "ai_provenance": ai_provenance,  # PHASE 5: AI provenance information
+            "contradictions": contradictions[0] if contradictions else None,  # PHASE 5: Contradiction information
             "policy_recommendations": policy_recommendations
         }
     except HTTPException:
