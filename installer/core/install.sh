@@ -793,6 +793,9 @@ main() {
     create_system_user
     push_rollback "userdel ransomeye 2>/dev/null || true"
     
+    # GA-BLOCKING: Verify SBOM (manifest.json) before installation (fail-closed)
+    verify_sbom
+    
     # PHASE B2: Verify artifacts before installation
     verify_artifact_signatures
     
