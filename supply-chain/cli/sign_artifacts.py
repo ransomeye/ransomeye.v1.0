@@ -91,10 +91,18 @@ def main():
         if args.build_host_info:
             build_host_info = json.loads(args.build_host_info.read_text())
         
-        # Initialize components
-        key_manager = VendorKeyManager(args.key_dir)
-        private_key, public_key, key_id = key_manager.get_or_create_keypair(args.signing_key_id)
-        signer = ArtifactSigner(private_key, key_id)
+        # Initialize persistent signing authority
+        # PHASE-9: Use persistent signing authority (no ephemeral keys)
+        authority = PersistentSigningAuthority(
+            vault_dir=args.vault_dir,
+            registry_path=args.registry_path
+        )
+        
+        # Get signing key from persistent vault
+        private_key, public_key = authority.get_signing_key(args.signing_key_id, require_active=True)
+        
+        # Initialize signer and manifest builder
+        signer = ArtifactSigner(private_key, args.signing_key_id)
         manifest_builder = ManifestBuilder()
         
         # Build manifest
