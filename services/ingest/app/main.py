@@ -622,6 +622,8 @@ async def ingest_event(request: Request):
         if not is_valid:
             conn = None
             try:
+                # PHASE 2: Use deterministic timestamp from envelope (observed_at)
+                observed_at = parser.isoparse(envelope.get("observed_at", envelope.get("ingested_at")))
                 conn = get_db_connection()
                 with conn.cursor() as cur:
                     cur.execute("""
@@ -629,10 +631,11 @@ async def ingest_event(request: Request):
                             event_id, validation_status, validation_timestamp,
                             error_code, error_message
                         )
-                        VALUES (%s, %s, NOW(), %s, %s)
+                        VALUES (%s, %s, %s, %s, %s)
                     """, (
                         envelope.get("event_id"),
                         "SIGNATURE_VERIFICATION_FAILED",
+                        observed_at,  # PHASE 2: Deterministic timestamp from envelope
                         "SIGNATURE_VERIFICATION_FAILED",
                         error_msg
                     ))
