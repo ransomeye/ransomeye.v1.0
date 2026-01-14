@@ -53,6 +53,9 @@ function Receive-Command {
         # Step 8: Rate limiting
         Test-CommandRateLimit
         
+        # PHASE 4: Step 9: Policy authority validation
+        Test-CommandPolicyAuthority -Command $Command
+        
         # All checks passed
         Write-AuditLog -EventType "command_received" -CommandId $CommandId -Outcome "SUCCESS"
         
