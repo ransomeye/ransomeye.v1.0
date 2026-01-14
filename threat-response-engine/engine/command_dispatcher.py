@@ -68,17 +68,26 @@ class CommandDispatcher:
         Raises:
             DispatchError: If dispatch fails
         """
-        # Build agent command payload (matches agent-command.schema.json)
+        # PHASE 4: Build agent command payload (matches agent-command.schema.json)
         command_payload = signed_command['payload']
         agent_command = {
             'command_id': command_payload['command_id'],
-            'command_type': command_payload['command_type'],
-            'target_machine_id': command_payload['target_machine_id'],
+            'action_type': command_payload.get('command_type', command_payload.get('action_type')),  # Support both field names
+            'target': {'machine_id': command_payload['target_machine_id']},  # PHASE 4: Target object
             'incident_id': command_payload['incident_id'],
+            'tre_mode': command_payload.get('tre_mode', 'FULL_ENFORCE'),
+            'issued_by_user_id': command_payload.get('issued_by_user_id', ''),
+            'issued_by_role': command_payload.get('issued_by_role', 'SECURITY_ANALYST'),
             'issued_at': command_payload['issued_at'],
+            'expires_at': command_payload.get('expires_at', ''),  # PHASE 4: Expiry timestamp
+            'rollback_token': command_payload.get('rollback_token', ''),  # PHASE 4: Rollback token
             'signature': signed_command['signature'],
             'signing_key_id': signed_command['signing_key_id'],
-            'action_id': signed_command.get('action_id', str(uuid.uuid4()))
+            'signing_algorithm': signed_command.get('signing_algorithm', 'ed25519'),  # PHASE 4: Signing algorithm
+            'signed_at': signed_command.get('signed_at', ''),  # PHASE 4: Signed timestamp
+            'policy_id': command_payload.get('policy_id', ''),  # PHASE 4: Policy authority binding
+            'policy_version': command_payload.get('policy_version', ''),  # PHASE 4: Policy version
+            'issuing_authority': command_payload.get('issuing_authority', 'threat-response-engine')  # PHASE 4: Issuing authority
         }
         
         # Dispatch to agent endpoint

@@ -217,7 +217,26 @@ class LicenseScanner:
                 "message": f"Dependency {dep.name} not found in inventory - license unknown"
             }
         
-        # Check forbidden licenses
+        # Check conditionally allowed first (before checking forbidden)
+        conditionally_allowed = self.policy.get('conditionally_allowed', [])
+        conditionally_allowed_licenses = {cond.get('license', '').lower() for cond in conditionally_allowed}
+        
+        if dep.license.lower() in conditionally_allowed_licenses:
+            # Verify condition is met (e.g., dynamic linking)
+            # For now, we assume conditionally allowed are OK if in inventory
+            if dep.in_inventory:
+                return None  # OK - conditionally allowed and in inventory
+            else:
+                return {
+                    "type": "conditional_license_not_approved",
+                    "dependency": dep.name,
+                    "version": dep.version,
+                    "source": dep.source_file,
+                    "license": dep.license,
+                    "message": f"Dependency {dep.name} uses conditionally allowed license {dep.license} but is not properly documented in inventory"
+                }
+        
+        # Check forbidden licenses (skip if conditionally allowed)
         forbidden = self.policy.get('forbidden_licenses', [])
         for forbidden_license in forbidden:
             if forbidden_license.lower() in dep.license.lower():
@@ -229,24 +248,6 @@ class LicenseScanner:
                     "license": dep.license,
                     "message": f"Dependency {dep.name} uses FORBIDDEN license: {dep.license}"
                 }
-        
-        # Check conditionally allowed
-        conditionally_allowed = self.policy.get('conditionally_allowed', [])
-        for cond in conditionally_allowed:
-            if cond.get('license') == dep.license:
-                # Verify condition is met (e.g., dynamic linking)
-                # For now, we assume conditionally allowed are OK if in inventory
-                if dep.in_inventory:
-                    return None  # OK - conditionally allowed and in inventory
-                else:
-                    return {
-                        "type": "conditional_license_not_approved",
-                        "dependency": dep.name,
-                        "version": dep.version,
-                        "source": dep.source_file,
-                        "license": dep.license,
-                        "message": f"Dependency {dep.name} uses conditionally allowed license {dep.license} but is not properly documented in inventory"
-                    }
         
         return None
     
