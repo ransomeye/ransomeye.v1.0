@@ -237,7 +237,7 @@
     "static_or_dynamic": "dynamic",
     "distribution_scope": "core",
     "risk_level": "medium",
-    "notes": "PostgreSQL adapter - LGPL allows dynamic linking"
+    "notes": "PostgreSQL adapter. LGPL-3.0 allows dynamic linking only. Static bundling is FORBIDDEN. Used via Python's dynamic import mechanism (standard pip installation), which constitutes dynamic linking. No static linking occurs. RansomEye code is not a derivative work."
   },
   {
     "name": "fastapi-cors",
