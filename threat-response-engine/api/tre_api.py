@@ -261,22 +261,30 @@ class TREAPI:
                 # Execute - dispatch command
                 dispatch_result = self.dispatcher.dispatch_command(signed_command, command_payload['target_machine_id'])
                 
-                # Update action status
+                # PHASE 4: Update action status
                 update_action_status(conn, action_id, 'SUCCEEDED', datetime.now(timezone.utc))
                 
-                # Emit execution success event
+                # PHASE 4: Emit execution success event with explanation bundle reference
+                # Note: Initial audit entry was already emitted at line 232, this is for execution completion
                 if self.ledger:
+                    explanation_bundle_id = policy_decision.get('explanation_bundle_id')
                     self.ledger.append(
                         component='threat-response-engine',
                         component_instance_id=os.getenv('HOSTNAME', 'tre'),
-                        action_type='tre_action_executed',
+                        action_type='tre_action_execution_completed',
                         subject={'type': 'incident', 'id': policy_decision['incident_id']},
                         actor={'type': 'user', 'identifier': user_id or 'system'},
                         payload={
                             'action_id': action_id,
                             'command_type': command_payload['command_type'],
                             'machine_id': command_payload['target_machine_id'],
-                            'approval_id': enforcement_result.get('approval_id') if self.enforcement_pipeline else None
+                            'policy_id': command_payload.get('policy_id'),  # PHASE 4: Policy authority
+                            'policy_version': command_payload.get('policy_version'),  # PHASE 4: Policy version
+                            'issuing_authority': command_payload.get('issuing_authority'),  # PHASE 4: Issuing authority
+                            'approval_id': enforcement_result.get('approval_id') if self.enforcement_pipeline else None,
+                            'explanation_bundle_id': explanation_bundle_id,  # PHASE 4: Explanation bundle reference
+                            'execution_status': 'SUCCEEDED',
+                            'agent_response': dispatch_result.get('agent_response', {})
                         }
                     )
             
