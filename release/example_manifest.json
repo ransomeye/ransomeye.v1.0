@@ -1,0 +1,51 @@
+{
+  "version": "1.0.0",
+  "build_id": "abc123def456",
+  "generated_at": "2024-01-15T10:30:00Z",
+  "signing_key_id": "vendor-release-key-1",
+  "signature": "BASE64_ENCODED_ED25519_SIGNATURE_HERE",
+  "artifacts": [
+    {
+      "name": "install.sh",
+      "path": "core/install.sh",
+      "sha256": "d113a6bdeb8502e68f09c6978241bf7eb9fcb5df5c4c3de30d0fc6dcf863cf09",
+      "type": "core"
+    },
+    {
+      "name": "uninstall.sh",
+      "path": "core/uninstall.sh",
+      "sha256": "a3336582954d9f4f33ea3e2154411561dd77561cc86a8205f8efb019e7c6f50e",
+      "type": "core"
+    },
+    {
+      "name": "ransomeye-core.service",
+      "path": "core/ransomeye-core.service",
+      "sha256": "78702886a932dbdf8b75278f99cc3f4864f445ec28231cc2b20326d5395f9838",
+      "type": "core"
+    },
+    {
+      "name": "install.sh",
+      "path": "linux-agent/install.sh",
+      "sha256": "49693eb67ab7e58a3076c29023540ad2dae7b1540ae40834d68cf3698d44fac4",
+      "type": "linux_agent"
+    },
+    {
+      "name": "install.bat",
+      "path": "windows-agent/install.bat",
+      "sha256": "44e3f3b71390e285857a4e8cea4a37326e684a8720575cca71240261335fc7f4",
+      "type": "windows_agent"
+    },
+    {
+      "name": "install.sh",
+      "path": "dpi-probe/install.sh",
+      "sha256": "370ff9566c1704ce14cf063466986e9d4849f5db6d9dd1df1bb32912154706d6",
+      "type": "dpi_probe"
+    },
+    {
+      "name": "README.md",
+      "path": "README.md",
+      "sha256": "e9761bc02aac7d9796f43755f785eb77b50c62480ca06bff62a2c0dd8a166b29",
+      "type": "release"
+    }
+  ]
+}
