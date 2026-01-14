@@ -345,7 +345,7 @@
     "static_or_dynamic": "static",
     "distribution_scope": "agent",
     "risk_level": "low",
-    "notes": "UUID generation - dual licensed"
+    "notes": "Rust UUID generation crate (distinct from Python uuid package) - dual licensed"
   },
   {
     "name": "serde",
