@@ -46,7 +46,26 @@ class PhaseCExecutor:
     - Phase C-W (Windows): Track 6-B (Windows Agent/ETW)
     
     GA verdict requires both Phase C-L and Phase C-W results.
+    
+    GA-BLOCKING: OS-aware validation executor enforces hard OS gating:
+    - Linux-only tracks: TRACK_1_DETERMINISM, TRACK_2_REPLAY, TRACK_3_FAILURE_INJECTION,
+      TRACK_4_SCALE_STRESS, TRACK_5_SECURITY_SAFETY, TRACK_6_AGENT_LINUX
+    - Windows-only tracks: TRACK_6_AGENT_WINDOWS
+    - Blocks invalid track execution with fail-closed behavior
     """
+    
+    # GA-BLOCKING: Explicit track-to-OS mapping (audit-safe)
+    TRACK_OS_MAPPING = {
+        # Linux-only tracks (require eBPF, Linux-specific features)
+        'TRACK_1_DETERMINISM': 'linux',
+        'TRACK_2_REPLAY': 'linux',
+        'TRACK_3_FAILURE_INJECTION': 'linux',
+        'TRACK_4_SCALE_STRESS': 'linux',
+        'TRACK_5_SECURITY_SAFETY': 'linux',
+        'TRACK_6_AGENT_LINUX': 'linux',
+        # Windows-only tracks (require ETW, Windows-specific features)
+        'TRACK_6_AGENT_WINDOWS': 'windows',
+    }
     
     def __init__(self, output_dir: str = None, execution_mode: str = None):
         """
