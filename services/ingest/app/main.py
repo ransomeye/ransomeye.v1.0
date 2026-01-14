@@ -749,9 +749,11 @@ async def ingest_event(request: Request):
             detail={"error_code": error_code}
         )
     
+    # PHASE 2: Deterministic timestamp model - preserve ingested_at from envelope
+    # Do NOT overwrite ingested_at with current time (non-deterministic)
+    # ingested_at from envelope is the authoritative timestamp
     original_ingested_at = envelope["ingested_at"]
-    ingested_at_updated = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-    envelope["ingested_at"] = ingested_at_updated
+    # Keep ingested_at as-is from envelope (deterministic)
     
     is_valid, error_code, timestamp_details = validate_timestamps(envelope)
     if not is_valid:
