@@ -231,6 +231,43 @@ def require_ui_permission(permission: str):
         return wrapper
     return decorator
 
+# PHASE 5: Helper function to check if action requires warning
+def requires_operator_warning(evidence_quality: Optional[Dict[str, Any]], 
+                               ai_insights: Optional[Dict[str, Any]]) -> tuple[bool, List[str]]:
+    """
+    PHASE 5: Determine if operator action requires warning.
+    
+    Args:
+        evidence_quality: Evidence quality indicators dictionary
+        ai_insights: AI insights dictionary
+        
+    Returns:
+        Tuple of (requires_warning: bool, warning_reasons: List[str])
+    """
+    requires_warning = False
+    warning_reasons = []
+    
+    if not evidence_quality:
+        return False, []
+    
+    # Check for contradictions
+    if evidence_quality.get('has_contradiction', False):
+        requires_warning = True
+        warning_reasons.append('Contradictions detected in evidence')
+    
+    # Check for incomplete evidence
+    completeness = evidence_quality.get('evidence_completeness', 'UNKNOWN')
+    if completeness in ['INCOMPLETE', 'NO_EVIDENCE']:
+        requires_warning = True
+        warning_reasons.append(f'Evidence is {completeness.lower().replace("_", " ")}')
+    
+    # Check for missing AI provenance
+    if ai_insights and not evidence_quality.get('has_ai_provenance', False):
+        requires_warning = True
+        warning_reasons.append('AI output is advisory only (missing provenance)')
+    
+    return requires_warning, warning_reasons
+
 @app.on_event("startup")
 async def startup_event():
     """FastAPI startup event."""
