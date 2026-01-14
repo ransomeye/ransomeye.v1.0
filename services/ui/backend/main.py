@@ -508,6 +508,7 @@ async def get_incident_timeline(incident_id: str):
     Get incident timeline (stage transitions).
     Phase 8 requirement: Read-only, queries v_incident_timeline view only
     Security: Validates incident_id format before processing.
+    PHASE 5: RBAC enforcement - requires ui:read permission (if RBAC available)
     """
     if shutdown_handler.is_shutdown_requested():
         raise HTTPException(status_code=503, detail={"error_code": "SERVICE_SHUTTING_DOWN"})
