@@ -175,20 +175,35 @@ class ReportingAPI:
         if not assembled_explanation:
             raise ReportingAPIError("Assembled explanation not found")
         
-        # Render report (deterministic)
+        # GA-BLOCKING: Get incident snapshot time (resolved_at or last_observed_at)
+        # This ensures deterministic timestamps - same incident snapshot = same timestamp
+        incident_snapshot_time = self._get_incident_snapshot_time(incident_id)
+        
+        # GA-BLOCKING: Render evidence content only (branding excluded from hash domain)
+        # This ensures logo swap doesn't change hash
         try:
-            rendered_content = self.render_engine.render_report(assembled_explanation, format_type)
+            evidence_content = self.render_engine.render_evidence_content(
+                assembled_explanation, format_type, incident_snapshot_time
+            )
         except Exception as e:
-            raise ReportingAPIError(f"Failed to render report: {e}") from e
+            raise ReportingAPIError(f"Failed to render evidence content: {e}") from e
         
-        # Compute content hash
-        content_hash = self.render_hasher.hash_content(rendered_content)
+        # GA-BLOCKING: Compute content hash on evidence content only (branding excluded)
+        content_hash = self.render_hasher.hash_content(evidence_content)
         
-        # Sign content
+        # GA-BLOCKING: Sign evidence content only (branding excluded)
         try:
-            signature = self.report_signer.sign_content(rendered_content)
+            signature = self.report_signer.sign_content(evidence_content)
         except Exception as e:
             raise ReportingAPIError(f"Failed to sign report: {e}") from e
+        
+        # Render full report with branding (for storage/display, not hashed)
+        try:
+            full_report_content = self.render_engine.render_report(
+                assembled_explanation, format_type, incident_snapshot_time
+            )
+        except Exception as e:
+            raise ReportingAPIError(f"Failed to render full report: {e}") from e
         
         # Determine rendering profile
         rendering_profile_map = {
