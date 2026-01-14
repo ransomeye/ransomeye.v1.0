@@ -278,8 +278,25 @@ VALIDATION_STATUS_SCHEMA_VALIDATION_FAILED = "SCHEMA_VALIDATION_FAILED"
 VALIDATION_STATUS_TIMESTAMP_VALIDATION_FAILED = "TIMESTAMP_VALIDATION_FAILED"
 VALIDATION_STATUS_INTEGRITY_CHAIN_BROKEN = "INTEGRITY_CHAIN_BROKEN"
 
+# GA-BLOCKING: Import metrics collection for operational telemetry
+try:
+    from services.ingest.app.metrics import get_metrics
+    _metrics_available = True
+except ImportError:
+    _metrics_available = False
+    def get_metrics():
+        return None
+
 app = FastAPI(title="RansomEye Ingest Service", version="1.0.0")
 app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+# GA-BLOCKING: Register diagnostics router for /health/metrics endpoint
+try:
+    from services.ingest.app.routes.diagnostics import router as diagnostics_router
+    app.include_router(diagnostics_router)
+except ImportError:
+    # Diagnostics router not available - continue without it
+    pass
 
 @app.on_event("startup")
 async def startup_event():
