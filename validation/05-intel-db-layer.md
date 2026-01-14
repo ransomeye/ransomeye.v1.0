@@ -1,491 +1,586 @@
-# Validation Step 5 — Intel Database Layer (Schema, Access Control & Read/Write Boundaries)
+# Validation Step 5 — Database Layer & Intelligence Storage Validation
 
 **Component Identity:**
 - **Database Engine:** PostgreSQL 14+ (compatible)
 - **Schema Location:** `/home/ransomeye/rebuild/schemas/`
-- **Schema Authority:** `schemas/SCHEMA_BUNDLE.md` - FROZEN schema bundle v1.0.0
+- **Schema Authority:** `schemas/SCHEMA_BUNDLE.md` — FROZEN schema bundle v1.0.0
 - **Database Access Utilities:** `/home/ransomeye/rebuild/common/db/safety.py`
 
-**Spec Reference:**
+**Master Spec References:**
+- Phase 2 — Database First (Schema Bundle)
+- Phase 10.1 — Core Runtime Hardening (database layer hardening)
 - Schema Bundle (`schemas/SCHEMA_BUNDLE.md`)
 - Data Plane Hardening (`schemas/DATA_PLANE_HARDENING.md`)
-- Core Runtime (`core/runtime.py`)
+- Master specification: Database layer correctness requirements
+- Master specification: Intelligence storage determinism requirements
 
 ---
 
-## 1. COMPONENT IDENTITY
+## PURPOSE
+
+This validation proves that the database layer enforces correctness, separation, credential safety, and determinism for intelligence data.
+
+This file validates the storage substrate, not ingest or correlation logic. This validation focuses on:
+- Schema correctness and integrity (foreign keys, referential integrity)
+- Credential scoping and least privilege (per-service users, write restrictions)
+- Determinism at storage layer (deterministic primary keys, no time-based defaults)
+- Transactional guarantees (atomic multi-table writes, rollback behavior)
+- Replayability and rebuild capability (intelligence can be rebuilt from raw_events)
+- Fail-closed behavior (DB errors block processing)
+
+This validation does NOT validate correlation engine logic, AI/ML, UI, or agents.
+
+---
+
+## DATABASE LAYER DEFINITION
+
+**Database Layer Requirements (Master Spec):**
+
+1. **Schema Correctness & Integrity** — Tables exist as defined, foreign keys are enforced, referential integrity is guaranteed, no orphaned records possible
+2. **Credential Scoping & Least Privilege** — Per-service DB users exist, services cannot write to tables they do not own, read/write separation exists where required
+3. **Determinism at Storage Layer** — Deterministic primary keys (where required), no time-based default values that affect reproducibility, no DB-side randomness
+4. **Transactional Guarantees** — Multi-table writes are atomic, partial writes cannot persist, rollback behavior is correct
+5. **Replayability & Rebuild Capability** — Intelligence can be rebuilt from raw_events, no hidden state exists only in memory, deterministic reprocessing is possible
+6. **Fail-Closed Behavior** — DB errors block processing, no "continue on error" logic exists
+
+**Database Schema Structure:**
+- **Core Identity:** `machines`, `component_instances`, `component_identity_history`
+- **Raw Events:** `raw_events`, `event_validation_log`, `sequence_gaps`
+- **Normalized Agent:** `process_activity`, `file_activity`, `persistence`, `network_intent`, `health_heartbeat`
+- **Normalized DPI:** `dpi_flows`, `dns`, `deception`
+- **Correlation:** `incidents`, `incident_stages`, `evidence`, `evidence_correlation_patterns`
+- **AI Metadata:** `ai_model_versions`, `feature_vectors`, `clusters`, `cluster_memberships`, `novelty_scores`, `shap_explanations`
+
+---
+
+## WHAT IS VALIDATED
+
+### 1. Schema Correctness & Integrity
+- Tables exist as defined in Master Spec
+- Foreign keys are enforced
+- Referential integrity is guaranteed
+- No orphaned records possible
+
+### 2. Credential Scoping & Least Privilege
+- Per-service DB users exist
+- Services cannot write to tables they do not own
+- Read/write separation exists where required
+
+### 3. Determinism at Storage Layer
+- Deterministic primary keys (where required)
+- No time-based default values that affect reproducibility
+- No DB-side randomness
+
+### 4. Transactional Guarantees
+- Multi-table writes are atomic
+- Partial writes cannot persist
+- Rollback behavior is correct
+
+### 5. Replayability & Rebuild Capability
+- Intelligence can be rebuilt from raw_events
+- No hidden state exists only in memory
+- Deterministic reprocessing is possible
+
+### 6. Fail-Closed Behavior
+- DB errors block processing
+- No "continue on error" logic exists
+
+---
+
+## WHAT IS EXPLICITLY NOT ASSUMED
+
+- **NOT ASSUMED:** That credential scoping is implemented (schema file exists but is disabled)
+- **NOT ASSUMED:** That `created_at` timestamps are deterministic (they use `NOW()`)
+- **NOT ASSUMED:** That BIGSERIAL IDs are deterministic (auto-increment is non-deterministic)
+- **NOT ASSUMED:** That intelligence can be rebuilt deterministically (NOW() timestamps are non-deterministic)
+- **NOT ASSUMED:** That services cannot write to tables they do not own (no enforcement mechanism)
+
+---
+
+## VALIDATION METHODOLOGY
+
+### Evidence Collection Strategy
+
+1. **Schema Analysis:** Examine SQL schema files for foreign keys, constraints, defaults
+2. **Credential Analysis:** Check for role-based access control, GRANT/REVOKE statements
+3. **Determinism Analysis:** Search for `NOW()`, `random()`, `uuid_generate()`, `DEFAULT` in schemas
+4. **Transaction Analysis:** Check for transaction usage, rollback behavior
+5. **Replayability Analysis:** Check if all intelligence tables have foreign keys to `raw_events`
+6. **Error Handling Analysis:** Check for fail-closed behavior, no "continue on error" logic
+
+### Forbidden Patterns (Grep Validation)
+
+- `NOW\(\)|random\(\)|uuid_generate|gen_random_uuid` — Non-deterministic defaults (forbidden in intelligence tables)
+- `ON DELETE CASCADE|ON DELETE SET NULL` — Soft integrity (forbidden, must use RESTRICT)
+- `GRANT.*TO PUBLIC|REVOKE.*FROM PUBLIC` — Public access (forbidden)
+
+---
+
+## 1. SCHEMA CORRECTNESS & INTEGRITY
 
 ### Evidence
 
-**Database Engine & Version:**
-- ✅ PostgreSQL 14+ required: `schemas/SCHEMA_BUNDLE.md:264-266` - "PostgreSQL 14.0" minimum, "PostgreSQL 15+ recommended"
-- ✅ Version compatibility: `schemas/SCHEMA_BUNDLE.md:14` - "PostgreSQL 14+ (compatible)"
-
-**Schema Ownership Model:**
+**Tables Exist as Defined in Master Spec:**
 - ✅ Authoritative schemas exist: `schemas/` directory contains SQL files
-- ✅ Schema bundle is FROZEN: `schemas/SCHEMA_BUNDLE.md:182-186` - "FROZEN AS OF: 2026-01-12", "STATUS: FROZEN — DO NOT MODIFY"
-- ✅ Schema version: `schemas/SCHEMA_BUNDLE.md:11` - Version `1.0.0`
-- ✅ Schema integrity hash: `schemas/SCHEMA_BUNDLE.md:17` - SHA256 hash for integrity verification
-- ✅ Immutability rules: `schemas/SCHEMA_BUNDLE.md:188-197` - "NO MODIFICATIONS ALLOWED", "NO EXTENSIONS ALLOWED"
+- ✅ Schema bundle is FROZEN: `schemas/SCHEMA_BUNDLE.md:182-186` — "FROZEN AS OF: 2026-01-12"
+- ✅ Schema version: `schemas/SCHEMA_BUNDLE.md:11` — Version `1.0.0`
+- ✅ Required tables exist: `00_core_identity.sql`, `01_raw_events.sql`, `02_normalized_agent.sql`, `03_normalized_dpi.sql`, `04_correlation.sql`, `05_ai_metadata.sql`
+- ✅ Schema validation at startup: `core/runtime.py:161-208` — `_validate_schema_presence()` checks for required tables
 
-**Which Services Are Allowed to WRITE:**
-- ✅ Ingest Service: `schemas/DATA_PLANE_HARDENING.md:32` - Writes to `raw_events`, `event_validation_log`, `sequence_gaps`, `machines`, `component_instances`
-- ✅ Correlation Engine: `schemas/DATA_PLANE_HARDENING.md:34` - Writes to `incidents`, `incident_stages`, `evidence`, `evidence_correlation_patterns`
-- ✅ AI Service: `schemas/DATA_PLANE_HARDENING.md:35` - Writes to `ai_model_versions`, `feature_vectors`, `clusters`, `cluster_memberships`, `novelty_scores`, `shap_explanations`
-- ✅ Normalization Service: `schemas/DATA_PLANE_HARDENING.md:33` - Writes to normalized tables (`process_activity`, `file_activity`, etc.)
-- ✅ Policy Engine: `schemas/DATA_PLANE_HARDENING.md:36` - "NONE (Policy engine does not write to DB)"
-- ✅ UI/API: `schemas/DATA_PLANE_HARDENING.md:37` - "NONE (UI is read-only)"
+**Foreign Keys Are Enforced:**
+- ✅ Foreign keys exist: All normalized/correlation/AI tables have foreign keys to `raw_events`
+- ✅ Foreign key enforcement: `schemas/01_raw_events.sql:30` — `REFERENCES machines(machine_id) ON DELETE RESTRICT`
+- ✅ Foreign key enforcement: `schemas/04_correlation.sql:45` — `REFERENCES machines(machine_id) ON DELETE RESTRICT`
+- ✅ Foreign key enforcement: `schemas/04_correlation.sql:189` — `REFERENCES raw_events(event_id) ON DELETE RESTRICT`
+- ✅ Foreign key enforcement: `schemas/05_ai_metadata.sql:88` — `REFERENCES raw_events(event_id) ON DELETE RESTRICT`
+- ✅ All foreign keys use `ON DELETE RESTRICT`: No `CASCADE` or `SET NULL` found
 
-**Which Services Are Allowed to READ:**
-- ✅ Ingest Service: `schemas/DATA_PLANE_HARDENING.md:32` - "NONE (Ingest is write-only)"
-- ✅ Normalization Service: `schemas/DATA_PLANE_HARDENING.md:33` - Reads from `v_raw_events_normalization` view
-- ✅ Correlation Engine: `schemas/DATA_PLANE_HARDENING.md:34` - Reads from correlation views (`v_raw_events_correlation`, etc.)
-- ✅ AI Service: `schemas/DATA_PLANE_HARDENING.md:35` - Reads from AI views (`v_raw_events_ai`, etc.)
-- ✅ Policy Engine: `schemas/DATA_PLANE_HARDENING.md:36` - Reads from policy views (`v_incidents_policy`, etc.)
-- ✅ UI/API: `schemas/DATA_PLANE_HARDENING.md:37` - Reads from UI views (`v_*_ui`)
+**Referential Integrity Is Guaranteed:**
+- ✅ Referential integrity enforced: All foreign keys use `ON DELETE RESTRICT` (prevents deletion of referenced rows)
+- ✅ No orphaned records possible: `ON DELETE RESTRICT` prevents deletion of parent rows with child references
+- ✅ Foreign key constraints: All foreign keys are enforced at database level (not application-level)
 
-**Ambiguity in DB Ownership or Access Rights:**
-- ⚠️ **ISSUE:** Documentation says agents can write directly: `schemas/DATA_PLANE_HARDENING.md:29-31` - "Linux Agent: `raw_events` (INSERT only)"
-- ✅ **VERIFIED:** Agents do NOT write directly in code (use HTTP POST to ingest service)
-- ⚠️ **DISCREPANCY:** Documentation vs code mismatch
+**No Orphaned Records Possible:**
+- ✅ `ON DELETE RESTRICT` prevents orphaned records: Cannot delete parent row if child rows exist
+- ✅ All normalized tables reference `raw_events`: `schemas/02_normalized_agent.sql:53` — `REFERENCES raw_events(event_id) ON DELETE RESTRICT`
+- ✅ All correlation tables reference `raw_events`: `schemas/04_correlation.sql:189` — `REFERENCES raw_events(event_id) ON DELETE RESTRICT`
+- ✅ All AI metadata tables reference `raw_events`: `schemas/05_ai_metadata.sql:88` — `REFERENCES raw_events(event_id) ON DELETE RESTRICT`
 
-### Verdict: **PARTIAL**
+**FK Constraints Missing:**
+- ❌ **CONFIRMED:** FK constraints are NOT missing: All foreign keys are defined with `ON DELETE RESTRICT`
+- ✅ Foreign keys are present: All normalized/correlation/AI tables have foreign keys
 
-**Justification:**
-- Database engine and schema ownership are clearly defined
-- Services allowed to write/read are documented
-- **ISSUE:** Documentation says agents can write directly, but code shows they use HTTP POST (discrepancy)
-- **ISSUE:** Views are documented but not found in schema files (views may not be implemented)
-
----
-
-## 2. SCHEMA AUTHORITY & ENFORCEMENT (CRITICAL)
-
-### Evidence
-
-**Presence of Authoritative Schemas:**
-- ✅ Authoritative schemas exist: `schemas/` directory contains SQL files:
-  - `schemas/00_core_identity.sql` - Core identity tables
-  - `schemas/01_raw_events.sql` - Raw events storage
-  - `schemas/02_normalized_agent.sql` - Normalized agent tables
-  - `schemas/03_normalized_dpi.sql` - Normalized DPI tables
-  - `schemas/04_correlation.sql` - Correlation tables
-  - `schemas/05_ai_metadata.sql` - AI metadata tables
-  - `schemas/06_indexes.sql` - Index strategy
-  - `schemas/07_retention.sql` - Partitioning and retention
-- ✅ Schema bundle is authoritative: `schemas/SCHEMA_BUNDLE.md:4` - "AUTHORITATIVE: This bundle contains the immutable database schema"
-- ✅ Schema is FROZEN: `schemas/SCHEMA_BUNDLE.md:182-186` - "FROZEN AS OF: 2026-01-12"
-
-**Migration Mechanism:**
-- ⚠️ **ISSUE:** No migration mechanism found:
-  - `schemas/SCHEMA_BUNDLE.md:149-177` - Migration rules are documented but no migration scripts found
-  - `schemas/SCHEMA_BUNDLE.md:122` - "This schema bundle is **IMMUTABLE** and **FROZEN**. No changes are permitted"
-  - ⚠️ **ISSUE:** Schema is frozen, so migrations are not applicable (but rules are documented for hypothetical future)
-
-**Schema Versioning:**
-- ✅ Schema version exists: `schemas/SCHEMA_BUNDLE.md:11` - Version `1.0.0`
-- ✅ Schema integrity hash: `schemas/SCHEMA_BUNDLE.md:17` - SHA256 hash for integrity verification
-- ✅ Version format: `schemas/SCHEMA_BUNDLE.md:152` - Semantic versioning (MAJOR.MINOR.PATCH)
-
-**Startup-Time Schema Verification:**
-- ✅ Schema presence validated: `core/runtime.py:161-208` - `_validate_schema_presence()` checks for required tables
-- ✅ Required tables checked: `core/runtime.py:179-183` - Checks for `machines`, `component_instances`, `raw_events`, `event_validation_log`, `incidents`, `incident_stages`, `evidence`, `feature_vectors`, `clusters`, `cluster_memberships`, `shap_explanations`
-- ✅ Missing tables cause termination: `core/runtime.py:199-202` - `exit_startup_error()` on missing tables
-- ✅ Schema structure validated: `core/runtime.py:331-363` - `_invariant_check_schema_mismatch()` checks for `raw_events.event_id` column
-- ✅ Schema mismatch causes termination: `core/runtime.py:351-356` - `exit_fatal()` on schema mismatch
-
-**What Happens on Schema Mismatch:**
-- ✅ Schema mismatch causes termination: `core/runtime.py:331-363` - `_invariant_check_schema_mismatch()` calls `exit_fatal()` on mismatch
-- ✅ Missing columns cause termination: `core/runtime.py:351-356` - Missing `raw_events.event_id` column causes termination
-- ✅ Missing tables cause termination: `core/runtime.py:199-202` - Missing required tables cause `exit_startup_error()`
-
-**Whether Partial Schemas Are Tolerated:**
-- ✅ Partial schemas are NOT tolerated: `core/runtime.py:199-202` - Missing required tables cause termination
-- ✅ All required tables must exist: `core/runtime.py:179-183` - Checks for all required tables
-
-**Auto-Migration Without Validation:**
-- ✅ No auto-migration found: Schema is FROZEN, no migration scripts found
-- ✅ Schema is immutable: `schemas/SCHEMA_BUNDLE.md:122` - "No changes are permitted"
-
-**Best-Effort Schema Usage:**
-- ✅ Schema validation is strict: `core/runtime.py:161-208` - Validates schema presence and structure
-- ✅ No best-effort usage: Missing tables/columns cause termination
-
-**Silent Column Creation:**
-- ✅ No silent column creation: Schema is FROZEN, no dynamic schema changes
-- ✅ All columns are explicitly defined: `schemas/SCHEMA_BUNDLE.md:96` - "No dynamic columns: All columns are explicitly defined"
+**Soft Integrity Is Relied Upon:**
+- ❌ **CONFIRMED:** Soft integrity is NOT relied upon: All foreign keys use `ON DELETE RESTRICT` (hard integrity)
+- ✅ No `ON DELETE CASCADE` or `ON DELETE SET NULL` found: All foreign keys use `RESTRICT`
 
 ### Verdict: **PASS**
 
 **Justification:**
-- Authoritative schemas exist and are FROZEN
-- Schema validation occurs at startup and terminates on mismatch
-- No auto-migration, best-effort usage, or silent column creation found
-- **ISSUE:** Migration mechanism is documented but not implemented (schema is frozen, so not applicable)
+- Tables exist as defined in Master Spec (authoritative schemas, FROZEN)
+- Foreign keys are enforced (all foreign keys use `ON DELETE RESTRICT`)
+- Referential integrity is guaranteed (database-level enforcement)
+- No orphaned records possible (`ON DELETE RESTRICT` prevents deletion of parent rows)
+
+**PASS Conditions (Met):**
+- Tables exist as defined in Master Spec — **CONFIRMED** (authoritative schemas, FROZEN)
+- Foreign keys are enforced — **CONFIRMED** (all foreign keys use `ON DELETE RESTRICT`)
+- Referential integrity is guaranteed — **CONFIRMED** (database-level enforcement)
+- No orphaned records possible — **CONFIRMED** (`ON DELETE RESTRICT`)
+
+**Evidence Required:**
+- File paths: `schemas/SCHEMA_BUNDLE.md:182-186`, `schemas/01_raw_events.sql:30`, `schemas/04_correlation.sql:45,189`, `schemas/05_ai_metadata.sql:88`
+- Foreign key definitions: All foreign keys use `ON DELETE RESTRICT`
+- Schema validation: `core/runtime.py:161-208` — `_validate_schema_presence()`
 
 ---
 
-## 3. WRITE ACCESS CONTROL
+## 2. CREDENTIAL SCOPING & LEAST PRIVILEGE
 
 ### Evidence
 
-**Which Services Write to DB:**
-- ✅ Ingest Service: `services/ingest/app/main.py:392-502` - `store_event()` writes to `raw_events`, `machines`, `component_instances`, `event_validation_log`
-- ✅ Correlation Engine: `services/correlation-engine/app/db.py:124-199` - `create_incident()` writes to `incidents`, `incident_stages`, `evidence`
-- ✅ AI Service: `services/ai-core/app/db.py:199-283` - `store_feature_vector()` writes to AI metadata tables
-- ✅ Policy Engine: `schemas/DATA_PLANE_HARDENING.md:36` - "NONE (Policy engine does not write to DB)"
-- ✅ UI/API: `schemas/DATA_PLANE_HARDENING.md:37` - "NONE (UI is read-only)"
+**Per-Service DB Users Exist:**
+- ❌ **CRITICAL FAILURE:** Per-service DB users do NOT exist:
+  - `schemas/08_db_users_roles.sql:5-7` — "PHASE A2 REVERTED: v1.0 GA uses single DB user per credential constraint"
+  - `schemas/08_db_users_roles.sql:6` — "This schema is DISABLED for v1.0 GA - all services use gagan/gagan"
+  - `schemas/08_db_users_roles.sql:7` — "DO NOT EXECUTE THIS SCHEMA IN v1.0 GA"
+- ❌ **CRITICAL FAILURE:** All services use same DB user: `services/ingest/app/main.py:95` — `RANSOMEYE_DB_USER` default: `'gagan'`
+- ❌ **CRITICAL FAILURE:** All services use same password: `RANSOMEYE_DB_PASSWORD` (shared secret)
 
-**How Credentials Are Scoped:**
-- ❌ **CRITICAL:** All services use same DB user:
-  - `services/ingest/app/main.py:94` - `RANSOMEYE_DB_USER` default: `'ransomeye'`
-  - `services/correlation-engine/app/db.py:62` - `RANSOMEYE_DB_USER` default: `'ransomeye'`
-  - `services/ai-core/app/db.py:56` - `RANSOMEYE_DB_USER` default: `'ransomeye'`
-  - `services/policy-engine/app/db.py:59` - `RANSOMEYE_DB_USER` default: `'ransomeye'`
-  - `services/ui/backend/main.py:88` - `RANSOMEYE_DB_USER` default: `'ransomeye'`
-- ❌ **CRITICAL:** All services use same password: `RANSOMEYE_DB_PASSWORD` (shared secret)
-- ⚠️ **ISSUE:** No credential scoping (all services use same credentials)
+**Services Cannot Write to Tables They Do Not Own:**
+- ❌ **CRITICAL FAILURE:** No enforcement mechanism exists:
+  - `schemas/08_db_users_roles.sql` is disabled (not executed)
+  - No GRANT/REVOKE statements executed
+  - All services use same user `gagan` with full access
+- ⚠️ **ISSUE:** Services write to correct tables (by convention), but no enforcement mechanism exists
 
-**Whether DB Users Are Role-Separated:**
-- ❌ **CRITICAL:** DB users are NOT role-separated:
-  - `schemas/DATA_PLANE_HARDENING.md:69-78` - Documentation says roles should exist (`ransomeye_agent_linux`, `ransomeye_ingest`, `ransomeye_correlation`, etc.)
-  - ❌ **CRITICAL:** No role creation found in schema files
-  - ❌ **CRITICAL:** No GRANT/REVOKE statements found in schema files
-  - ❌ **CRITICAL:** All services use same user `ransomeye` (no role separation)
-- ⚠️ **ISSUE:** Documentation says roles should exist, but they are not implemented
+**Read/Write Separation Exists Where Required:**
+- ❌ **CRITICAL FAILURE:** Read/write separation does NOT exist:
+  - `schemas/08_db_users_roles.sql` is disabled (not executed)
+  - No role-based access control implemented
+  - All services use same user `gagan` with full access
+- ⚠️ **ISSUE:** Policy Engine uses read-only connection in code: `services/policy-engine/app/db.py:36-64` — `create_readonly_connection()`
+- ⚠️ **ISSUE:** UI backend uses write connection: `services/ui/backend/main.py:114-176` — `_init_db_pool()` creates write connection pool
 
-**Whether Least-Privilege Is Enforced:**
-- ❌ **CRITICAL:** Least-privilege is NOT enforced:
-  - All services use same user `ransomeye` with full access
-  - No role-based access control found
-  - No GRANT/REVOKE statements found
-  - ⚠️ **ISSUE:** Services can write to any table (no enforcement of write boundaries)
+**Shared Superuser Logic Exists:**
+- ❌ **CRITICAL FAILURE:** Shared superuser logic exists:
+  - All services use same user `gagan` (not superuser, but shared)
+  - No role separation implemented
+  - No GRANT/REVOKE statements executed
 
-**Shared Superuser Credentials:**
-- ⚠️ **ISSUE:** All services use same credentials (not superuser, but shared):
-  - `release/ransomeye-v1.0/README.md:143-144` - Default credentials: `gagan`/`gagan` (weak default)
-  - `installer/core/install.sh:290,301` - Hardcoded weak credentials in installer
-  - ⚠️ **ISSUE:** Shared credentials across all services (no separation)
+**Any Service Has Unnecessary Privileges:**
+- ❌ **CRITICAL FAILURE:** All services have unnecessary privileges:
+  - All services use same user `gagan` with full access
+  - No role-based access control implemented
+  - Services can write to any table (no enforcement)
 
-**Agents or DPI Writing Directly:**
-- ✅ Agents do NOT write directly: `services/linux-agent/src/main.rs:293-332` - Uses HTTP POST to ingest service
-- ✅ DPI does NOT write directly: `dpi/probe/main.py` - DPI probe is stubbed, would use HTTP POST if implemented
-- ⚠️ **ISSUE:** Documentation says agents can write directly, but code shows they use HTTP POST
-
-**Any Service Writing Outside Its Domain:**
-- ⚠️ **PARTIAL:** Services write to their designated tables:
-  - Ingest writes to `raw_events`, `machines`, `component_instances`, `event_validation_log` (correct)
-  - Correlation writes to `incidents`, `incident_stages`, `evidence` (correct)
-  - AI writes to AI metadata tables (correct)
-- ⚠️ **ISSUE:** No enforcement mechanism found (services could write to any table if they wanted)
-- ⚠️ **ISSUE:** No database-level access control (no roles, no GRANT/REVOKE)
+**Role-Based Access Control:**
+- ❌ **CRITICAL FAILURE:** Role-based access control is NOT implemented:
+  - `schemas/08_db_users_roles.sql` defines roles but is disabled
+  - No GRANT/REVOKE statements executed
+  - All services use same user `gagan`
 
 ### Verdict: **FAIL**
 
 **Justification:**
-- **CRITICAL FAILURE:** All services use same DB user `ransomeye` (no role separation)
-- **CRITICAL FAILURE:** No role-based access control implemented (documented but not implemented)
-- **CRITICAL FAILURE:** No GRANT/REVOKE statements found (no database-level access control)
-- **CRITICAL FAILURE:** Least-privilege is NOT enforced (services can write to any table)
-- **ISSUE:** Shared credentials across all services (no separation)
-- **ISSUE:** Services write to correct tables, but no enforcement mechanism exists
+- **CRITICAL FAILURE:** Per-service DB users do NOT exist (all services use same user `gagan`)
+- **CRITICAL FAILURE:** Services cannot write to tables they do not own (no enforcement mechanism)
+- **CRITICAL FAILURE:** Read/write separation does NOT exist (no role-based access control)
+- **CRITICAL FAILURE:** Shared superuser logic exists (all services use same user `gagan`)
+- **CRITICAL FAILURE:** All services have unnecessary privileges (full access to all tables)
+
+**FAIL Conditions (Met):**
+- Shared superuser logic exists — **CONFIRMED** (all services use same user `gagan`)
+- Any service has unnecessary privileges — **CONFIRMED** (all services have full access)
+
+**Evidence Required:**
+- File paths: `schemas/08_db_users_roles.sql:5-7`, `services/ingest/app/main.py:95`, `services/ui/backend/main.py:114-176`
+- Disabled schema: `schemas/08_db_users_roles.sql` is disabled for v1.0 GA
+- Shared credentials: All services use same user `gagan` with full access
 
 ---
 
-## 4. READ ACCESS CONTROL
+## 3. DETERMINISM AT STORAGE LAYER
 
 ### Evidence
 
-**Which Services Read from DB:**
-- ✅ Normalization Service: `schemas/DATA_PLANE_HARDENING.md:33` - Reads from `v_raw_events_normalization` view
-- ✅ Correlation Engine: `schemas/DATA_PLANE_HARDENING.md:34` - Reads from correlation views
-- ✅ AI Service: `schemas/DATA_PLANE_HARDENING.md:35` - Reads from AI views
-- ✅ Policy Engine: `schemas/DATA_PLANE_HARDENING.md:36` - Reads from policy views
-- ✅ UI/API: `schemas/DATA_PLANE_HARDENING.md:37` - Reads from UI views
+**Deterministic Primary Keys (Where Required):**
+- ✅ Primary keys are deterministic: Most primary keys are UUIDs from application (deterministic if provided)
+- ✅ Primary keys are deterministic: `schemas/01_raw_events.sql:26` — `event_id UUID NOT NULL PRIMARY KEY` (from envelope)
+- ✅ Primary keys are deterministic: `schemas/04_correlation.sql:42` — `incident_id UUID NOT NULL PRIMARY KEY` (from application)
+- ⚠️ **ISSUE:** Some primary keys use BIGSERIAL: `schemas/04_correlation.sql:128` — `id BIGSERIAL NOT NULL PRIMARY KEY` (auto-increment, non-deterministic)
+- ⚠️ **ISSUE:** BIGSERIAL is non-deterministic: Auto-increment depends on insertion order (not deterministic)
 
-**Whether Sensitive Tables Are Restricted:**
-- ❌ **CRITICAL:** Views are documented but NOT implemented:
-  - `schemas/DATA_PLANE_HARDENING.md:39-65` - View definitions are documented
-  - ❌ **CRITICAL:** No `CREATE VIEW` statements found in schema files
-  - ❌ **CRITICAL:** Services read from tables directly (not using views)
-  - `services/correlation-engine/app/db.py:72` - "Get events from raw_events" (direct table access)
-  - `services/ai-core/app/db.py:125` - "FROM incidents" (direct table access)
-  - `services/policy-engine/app/main.py:210` - "Read from incidents table" (direct table access)
-- ❌ **CRITICAL:** No view-based access control found
+**No Time-Based Default Values That Affect Reproducibility:**
+- ❌ **CRITICAL FAILURE:** Time-based defaults exist: `schemas/01_raw_events.sql:89` — `created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`
+- ❌ **CRITICAL FAILURE:** Time-based defaults exist: `schemas/04_correlation.sql:98` — `created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`
+- ❌ **CRITICAL FAILURE:** Time-based defaults exist: `schemas/05_ai_metadata.sql:64` — `created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`
+- ⚠️ **ISSUE:** `created_at` timestamps are non-deterministic (use `NOW()` which is database server time)
 
-**Whether Reporting / AI / UI Have Read-Only Access:**
-- ⚠️ **PARTIAL:** Read-only enforcement exists in code:
-  - `services/policy-engine/app/db.py:36-64` - `get_db_connection()` uses `create_readonly_connection()`
-  - `common/db/safety.py:187-202` - `create_readonly_connection()` enforces read-only mode
-  - `common/db/safety.py:336-337` - `execute_read_operation()` can enforce read-only
-- ⚠️ **ISSUE:** UI backend uses write connection: `services/ui/backend/main.py:114-176` - `_init_db_pool()` creates write connection pool
-- ⚠️ **ISSUE:** No database-level read-only enforcement (no roles, no GRANT/REVOKE)
+**No DB-Side Randomness:**
+- ✅ No `random()` found: No `random()` function calls in schemas
+- ✅ No `uuid_generate()` found: No `uuid_generate()` function calls in schemas
+- ✅ No `gen_random_uuid()` found: No `gen_random_uuid()` function calls in schemas
+- ✅ Primary keys are from application: Most primary keys are UUIDs from application (not generated by database)
 
-**UI Has Write Access:**
-- ⚠️ **ISSUE:** UI backend has write access:
-  - `services/ui/backend/main.py:114-176` - `_init_db_pool()` creates write connection pool
-  - `schemas/DATA_PLANE_HARDENING.md:37` - Documentation says "NONE (UI is read-only)" but code shows write access
-- ⚠️ **ISSUE:** Documentation vs code mismatch
-
-**AI Core Can Mutate State:**
-- ✅ AI core can mutate state: `schemas/DATA_PLANE_HARDENING.md:35` - AI writes to `clusters` (INSERT/UPDATE)
-- ✅ AI core writes to AI metadata tables: `services/ai-core/app/db.py:199-283` - Writes to `feature_vectors`, `clusters`, etc.
-- ⚠️ **ISSUE:** AI core can UPDATE `clusters` table (mutates state, but this is expected behavior)
-
-**Ad-Hoc SQL from UI/API Layers:**
-- ⚠️ **ISSUE:** Services use parameterized queries (good), but no view-based access control:
-  - `services/correlation-engine/app/db.py:72` - Direct SQL queries to `raw_events` table
-  - `services/ai-core/app/db.py:125` - Direct SQL queries to `incidents` table
-  - ⚠️ **ISSUE:** No view-based access control (services query tables directly)
+**NOW(), random(), or Implicit Defaults Are Used in Intelligence Tables:**
+- ❌ **CONFIRMED:** `NOW()` is used in intelligence tables: `schemas/04_correlation.sql:98` — `created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`
+- ❌ **CONFIRMED:** `NOW()` is used in intelligence tables: `schemas/05_ai_metadata.sql:64` — `created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`
+- ❌ **CONFIRMED:** `NOW()` is used in intelligence tables: `schemas/04_correlation.sql:141` — `transitioned_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`
+- ✅ No `random()` or `uuid_generate()` found: No randomness in schemas
 
 ### Verdict: **FAIL**
 
 **Justification:**
-- **CRITICAL FAILURE:** Views are documented but NOT implemented (services read from tables directly)
-- **CRITICAL FAILURE:** No view-based access control found
-- **CRITICAL FAILURE:** UI backend has write access (documentation says read-only)
-- **ISSUE:** Read-only enforcement exists in code for Policy Engine, but not for UI
-- **ISSUE:** No database-level read-only enforcement (no roles, no GRANT/REVOKE)
+- **CRITICAL FAILURE:** Time-based defaults exist (`NOW()` used in `created_at` columns)
+- **CRITICAL FAILURE:** `NOW()` is used in intelligence tables (non-deterministic)
+- **ISSUE:** BIGSERIAL is non-deterministic (auto-increment depends on insertion order)
+- Primary keys are mostly deterministic (UUIDs from application), but `created_at` timestamps are non-deterministic
+
+**FAIL Conditions (Met):**
+- NOW(), random(), or implicit defaults are used in intelligence tables — **CONFIRMED** (`NOW()` used in `created_at` columns)
+
+**Evidence Required:**
+- File paths: `schemas/01_raw_events.sql:89`, `schemas/04_correlation.sql:98,141`, `schemas/05_ai_metadata.sql:64`
+- Non-deterministic defaults: `NOW()` used in `created_at` columns
+- BIGSERIAL usage: Auto-increment IDs are non-deterministic
 
 ---
 
-## 5. TRANSACTION & CONSISTENCY SAFETY
+## 4. TRANSACTIONAL GUARANTEES
 
 ### Evidence
 
-**Use of Transactions:**
-- ✅ Transactions are used: `common/db/safety.py:280-318` - `execute_write_operation()` uses explicit transactions
-- ✅ Explicit transaction begin: `common/db/safety.py:301` - `begin_transaction()` called
-- ✅ Explicit transaction commit: `common/db/safety.py:308` - `commit_transaction()` called
-- ✅ Explicit transaction rollback: `common/db/safety.py:316` - `rollback_transaction()` called on failure
-- ✅ Transaction management: `services/ingest/app/main.py:489-502` - Uses `execute_write_operation()` for transaction management
+**Multi-Table Writes Are Atomic:**
+- ✅ Transactions are used: `common/db/safety.py:280-318` — `execute_write_operation()` uses explicit transactions
+- ✅ Explicit transaction begin: `common/db/safety.py:301` — `begin_transaction()` called
+- ✅ Explicit transaction commit: `common/db/safety.py:308` — `commit_transaction()` called
+- ✅ Explicit transaction rollback: `common/db/safety.py:316` — `rollback_transaction()` called on failure
+- ✅ Multi-table writes are atomic: `services/ingest/app/main.py:464-508` — All INSERT statements within single transaction
 
-**Handling of Partial Failures:**
-- ✅ Partial failures cause rollback: `common/db/safety.py:311-318` - Exception causes rollback
-- ✅ No partial commits: Transactions ensure atomicity
-- ✅ Rollback on failure: `common/db/safety.py:316` - `rollback_transaction()` called on exception
+**Partial Writes Cannot Persist:**
+- ✅ Partial writes cannot persist: Transactions ensure atomicity (all writes succeed or all fail)
+- ✅ Rollback on failure: `common/db/safety.py:316` — `rollback_transaction()` called on exception
+- ✅ No partial commits: Transaction ensures atomicity
 
-**Isolation Level Assumptions:**
-- ✅ Isolation level is explicit: `common/db/safety.py:22-26` - `IsolationLevel` enum defines levels
-- ✅ Default isolation level: `common/db/safety.py:147` - `IsolationLevel.READ_COMMITTED` (default)
-- ✅ Isolation level is set: `common/db/safety.py:161` - `conn.set_isolation_level(isolation_level)`
-- ✅ Isolation level is validated: `common/db/safety.py:165-171` - Validates isolation level was set
+**Rollback Behavior Is Correct:**
+- ✅ Rollback on exception: `common/db/safety.py:311-318` — Exception causes rollback
+- ✅ Rollback in error handler: `services/ingest/app/main.py:733-734` — `conn.rollback()` in exception handler
+- ✅ No commit on failure: Transaction rollback prevents partial state
 
-**What Happens During Crashes:**
-- ✅ WAL ensures atomicity: `schemas/DATA_PLANE_HARDENING.md:98` - "WAL enabled (data integrity critical)"
-- ✅ All tables are LOGGED: `schemas/DATA_PLANE_HARDENING.md:213` - "UNLOGGED Tables: **NONE** (all tables are LOGGED)"
-- ✅ Crash recovery: WAL ensures atomic writes and crash recovery
-- ⚠️ **ISSUE:** No explicit crash recovery testing found (but WAL is enabled)
+**Isolation Level:**
+- ✅ Isolation level is explicit: `common/db/safety.py:22-26` — `IsolationLevel` enum defines levels
+- ✅ Default isolation level: `common/db/safety.py:147` — `IsolationLevel.READ_COMMITTED` (default)
+- ✅ Isolation level is set: `common/db/safety.py:161` — `conn.set_isolation_level(isolation_level)`
 
-**What Happens During Concurrent Writes:**
-- ✅ Row-level locks: `schemas/DATA_PLANE_HARDENING.md:298` - "Partition Lock: Row-level locks (no table-level locks on partitioned tables)"
-- ✅ Deadlock detection: `common/db/safety.py:38-44` - `_is_deadlock_error()` detects deadlocks
-- ✅ Deadlock termination: `common/db/safety.py:80-84` - `exit_fatal()` on deadlock
-- ✅ Serialization failure detection: `common/db/safety.py:47-53` - `_is_serialization_error()` detects serialization failures
-- ✅ Serialization failure termination: `common/db/safety.py:86-90` - `exit_fatal()` on serialization failure
+**Deadlock/Serialization Failure Detection:**
+- ✅ Deadlock detection: `common/db/safety.py:38-44` — `_is_deadlock_error()` detects deadlocks
+- ✅ Deadlock termination: `common/db/safety.py:80-84` — `exit_fatal()` on deadlock
+- ✅ Serialization failure detection: `common/db/safety.py:47-53` — `_is_serialization_error()` detects serialization failures
+- ✅ Serialization failure termination: `common/db/safety.py:86-90` — `exit_fatal()` on serialization failure
 
-**Partial Commits:**
-- ✅ No partial commits: Transactions ensure atomicity
-- ✅ Rollback on failure: `common/db/safety.py:316` - `rollback_transaction()` called on exception
-
-**Inconsistent Incident State Possible:**
-- ⚠️ **PARTIAL:** Incident state is managed in transactions:
-  - `services/correlation-engine/app/db.py:124-199` - `create_incident()` writes to `incidents`, `incident_stages`, `evidence` in transactions
-  - ⚠️ **ISSUE:** No explicit check for inconsistent state (but transactions ensure atomicity)
-
-**Race Conditions Without Protection:**
-- ✅ Deadlock detection exists: `common/db/safety.py:38-44` - `_is_deadlock_error()` detects deadlocks
-- ✅ Serialization failure detection exists: `common/db/safety.py:47-53` - `_is_serialization_error()` detects serialization failures
-- ✅ Row-level locks: `schemas/DATA_PLANE_HARDENING.md:298` - Row-level locks prevent table-level contention
-- ⚠️ **ISSUE:** No explicit race condition protection (but deadlock/serialization detection exists)
-
-### Verdict: **PARTIAL**
+### Verdict: **PASS**
 
 **Justification:**
-- Transactions are properly used with explicit begin/commit/rollback
+- Multi-table writes are atomic (transactions ensure atomicity)
+- Partial writes cannot persist (rollback on failure)
+- Rollback behavior is correct (explicit rollback on exception)
 - Isolation level is explicit (READ_COMMITTED)
-- Deadlock and serialization failure detection exists
-- **ISSUE:** No explicit crash recovery testing found (but WAL is enabled)
-- **ISSUE:** No explicit race condition protection (but deadlock/serialization detection exists)
+- Deadlock/serialization failure detection and termination
+
+**PASS Conditions (Met):**
+- Multi-table writes are atomic — **CONFIRMED** (transactions ensure atomicity)
+- Partial writes cannot persist — **CONFIRMED** (rollback on failure)
+- Rollback behavior is correct — **CONFIRMED** (explicit rollback on exception)
+
+**Evidence Required:**
+- File paths: `common/db/safety.py:280-318,38-44,47-53`, `services/ingest/app/main.py:464-508,733-734`
+- Transaction code: `execute_write_operation()`, `begin_transaction()`, `commit_transaction()`, `rollback_transaction()`
+- Error handling: Rollback on exception, deadlock/serialization failure detection
 
 ---
 
-## 6. FAILURE BEHAVIOR (FAIL-CLOSED)
+## 5. REPLAYABILITY & REBUILD CAPABILITY
 
 ### Evidence
 
-**Behavior on DB Unavailability:**
-- ✅ DB unavailability causes termination: `core/runtime.py:136-159` - `_validate_db_connectivity()` calls `exit_startup_error()` on connection failure
-- ✅ Connection failure causes error: `services/ingest/app/main.py:198-209` - `get_db_connection()` raises `RuntimeError` on failure
-- ✅ Error causes HTTP 500: `services/ingest/app/main.py:681-695` - Exception handler returns HTTP 500 INTERNAL ERROR
-- ✅ No retries: `services/ingest/README.md:40` - "NO retry logic: Does not retry failed database operations"
-- ⚠️ **ISSUE:** No graceful degradation (returns HTTP 500, terminates on startup failure)
+**Intelligence Can Be Rebuilt from raw_events:**
+- ✅ All normalized tables reference `raw_events`: `schemas/02_normalized_agent.sql:53` — `REFERENCES raw_events(event_id) ON DELETE RESTRICT`
+- ✅ All correlation tables reference `raw_events`: `schemas/04_correlation.sql:189` — `REFERENCES raw_events(event_id) ON DELETE RESTRICT`
+- ✅ All AI metadata tables reference `raw_events`: `schemas/05_ai_metadata.sql:88` — `REFERENCES raw_events(event_id) ON DELETE RESTRICT`
+- ✅ Foreign keys enable rebuild: All intelligence tables have foreign keys to `raw_events` (can be rebuilt from `raw_events`)
 
-**Behavior on Slow DB:**
-- ⚠️ **ISSUE:** No timeout handling found:
-  - `services/ingest/app/main.py:192-213` - `get_db_connection()` gets connection from pool (no timeout)
-  - `common/db/safety.py:348-382` - Connection pool creation (no timeout on slow queries)
-  - ⚠️ **ISSUE:** Slow queries can hang indefinitely (no timeout)
+**No Hidden State Exists Only in Memory:**
+- ✅ All state is in database: No in-memory state found (all state persisted to database)
+- ✅ No hidden state: All intelligence state is stored in database tables
+- ✅ State is queryable: All state can be queried from database
 
-**Retry Strategies (if any):**
-- ✅ No retries: `services/ingest/README.md:40` - "NO retry logic"
-- ✅ No retry loops found: `services/ingest/app/main.py:504-698` - No retry code found
-- ✅ Failures cause immediate rejection: `services/ingest/app/main.py:554-557` - Returns HTTP error codes
-- ⚠️ **ISSUE:** Documentation says retries should exist: `schemas/DATA_PLANE_HARDENING.md:324-328` - "Retry Strategy: Exponential backoff" (but not implemented)
+**Deterministic Reprocessing Is Possible:**
+- ⚠️ **PARTIAL:** Deterministic reprocessing is possible, but:
+  - `created_at` timestamps use `NOW()` (non-deterministic)
+  - BIGSERIAL IDs are non-deterministic (auto-increment)
+  - Reprocessing will produce different `created_at` timestamps and BIGSERIAL IDs
+- ✅ Event data is deterministic: Event data from `raw_events` is deterministic (can be reprocessed)
+- ⚠️ **ISSUE:** Reprocessing will produce different metadata timestamps (non-deterministic)
 
-**Backpressure Propagation:**
-- ⚠️ **ISSUE:** No backpressure propagation found:
-  - `services/ingest/app/main.py:212-213` - Pool exhaustion raises `RuntimeError` (no backpressure)
-  - `schemas/DATA_PLANE_HARDENING.md:319-322` - Documentation says backpressure should exist (but not implemented)
-  - ⚠️ **ISSUE:** No queue-based ingestion found (documentation says it should exist)
-
-**Silent Data Loss:**
-- ✅ No silent data loss: All failures are logged
-- ✅ All validation failures are logged: `services/ingest/app/main.py:532-543` - Logs to `event_validation_log`
-- ✅ All DB errors are logged: `services/ingest/app/main.py:501` - `logger.db_error()` on exception
-
-**Infinite Retries:**
-- ✅ No infinite retries: No retry logic found
-- ✅ Failures cause immediate rejection: `services/ingest/app/main.py:554-557` - Returns HTTP error codes
-
-**Services Continuing Without Persistence:**
-- ✅ Services terminate on DB unavailability: `core/runtime.py:136-159` - `_validate_db_connectivity()` calls `exit_startup_error()` on connection failure
-- ✅ Services fail-fast: No services continue without persistence
+**Any Intelligence State Cannot Be Reconstructed:**
+- ❌ **CONFIRMED:** Intelligence state CAN be reconstructed: All intelligence tables have foreign keys to `raw_events`
+- ✅ Rebuild capability exists: All normalized/correlation/AI tables reference `raw_events` (can be rebuilt)
 
 ### Verdict: **PARTIAL**
 
 **Justification:**
-- DB unavailability causes termination (fail-closed)
-- No retries (fail-fast)
-- **ISSUE:** No timeout handling on slow queries (can hang indefinitely)
-- **ISSUE:** No backpressure propagation (pool exhaustion causes HTTP 500)
-- **ISSUE:** Documentation says retries/backpressure should exist, but not implemented
+- Intelligence can be rebuilt from `raw_events` (all intelligence tables have foreign keys to `raw_events`)
+- No hidden state exists only in memory (all state is in database)
+- **ISSUE:** Deterministic reprocessing is partially possible (event data is deterministic, but `created_at` timestamps and BIGSERIAL IDs are non-deterministic)
+
+**PASS Conditions (Met):**
+- Intelligence can be rebuilt from raw_events — **CONFIRMED** (all intelligence tables have foreign keys to `raw_events`)
+- No hidden state exists only in memory — **CONFIRMED** (all state is in database)
+
+**Evidence Required:**
+- File paths: `schemas/02_normalized_agent.sql:53`, `schemas/04_correlation.sql:189`, `schemas/05_ai_metadata.sql:88`
+- Foreign key definitions: All intelligence tables have foreign keys to `raw_events`
+- Rebuild capability: All normalized/correlation/AI tables reference `raw_events`
 
 ---
 
-## 7. NEGATIVE VALIDATION (MANDATORY)
+## 6. FAIL-CLOSED BEHAVIOR
 
 ### Evidence
 
-**Agent Writes to DB:**
-- ✅ **PROVEN IMPOSSIBLE (in production code):** Agents do NOT write directly:
-  - `services/linux-agent/src/main.rs:293-332` - `transmit_event()` uses HTTP POST to ingest service
-  - No database connection code found in agents
-  - ✅ **VERIFIED:** Production agents cannot write directly (use HTTP POST)
+**DB Errors Block Processing:**
+- ✅ DB unavailability causes termination: `core/runtime.py:136-159` — `_validate_db_connectivity()` calls `exit_startup_error()` on connection failure
+- ✅ Connection failure causes error: `services/ingest/app/main.py:198-209` — `get_db_connection()` raises `RuntimeError` on failure
+- ✅ Error causes HTTP 500: `services/ingest/app/main.py:732-746` — Exception handler returns HTTP 500 INTERNAL ERROR
+- ✅ No retries: `services/ingest/README.md:40` — "NO retry logic: Does not retry failed database operations"
 
-**DPI Writes to DB:**
-- ✅ **PROVEN IMPOSSIBLE (in production code):** DPI does NOT write directly:
-  - `dpi/probe/main.py` - DPI probe is stubbed, would use HTTP POST if implemented
-  - No database connection code found in DPI
-  - ✅ **VERIFIED:** Production DPI cannot write directly (would use HTTP POST)
+**No "Continue on Error" Logic Exists:**
+- ✅ No continue-on-error logic: All DB errors cause immediate termination or HTTP exception
+- ✅ Failures cause immediate rejection: `services/ingest/app/main.py:554-557` — Returns HTTP error codes
+- ✅ No fallback processing: No fallback paths found in database operations
 
-**Schema-Less Writes Occur:**
-- ✅ **PROVEN IMPOSSIBLE:** Schema-less writes are NOT possible:
-  - `core/runtime.py:161-208` - `_validate_schema_presence()` validates schema at startup
-  - `core/runtime.py:331-363` - `_invariant_check_schema_mismatch()` validates schema structure
-  - `schemas/SCHEMA_BUNDLE.md:96` - "No dynamic columns: All columns are explicitly defined"
-  - ✅ **VERIFIED:** Schema validation occurs at startup (terminates on mismatch)
+**Deadlock/Integrity Violation Detection:**
+- ✅ Deadlock detection: `common/db/safety.py:38-44` — `_is_deadlock_error()` detects deadlocks
+- ✅ Deadlock termination: `common/db/safety.py:80-84` — `exit_fatal()` on deadlock
+- ✅ Integrity violation detection: `common/db/safety.py:56-72` — `_is_integrity_violation()` detects violations
+- ✅ Integrity violation termination: `common/db/safety.py:92-96` — `exit_fatal()` on integrity violation
 
-**AI Mutates Historical Data:**
-- ⚠️ **PARTIAL:** AI can mutate state, but:
-  - `schemas/DATA_PLANE_HARDENING.md:35` - AI writes to `clusters` (INSERT/UPDATE)
-  - `services/ai-core/app/db.py:199-283` - AI writes to AI metadata tables
-  - ⚠️ **ISSUE:** AI can UPDATE `clusters` table (mutates state, but this is expected behavior for AI metadata)
-  - ⚠️ **VERIFIED:** AI can mutate AI metadata (but not historical event data)
+**Silent Data Corruption:**
+- ❌ **CONFIRMED:** No silent data corruption: All DB errors are logged and cause termination/HTTP exception
+- ✅ All failures are logged: `services/ingest/app/main.py:501` — `logger.db_error()` on exception
+- ✅ All failures cause HTTP exception: HTTP 500 INTERNAL ERROR on DB errors
 
-**UI Mutates Operational Data:**
-- ⚠️ **PARTIAL:** UI backend has write access:
-  - `services/ui/backend/main.py:114-176` - `_init_db_pool()` creates write connection pool
-  - `schemas/DATA_PLANE_HARDENING.md:37` - Documentation says "NONE (UI is read-only)" but code shows write access
-  - ⚠️ **ISSUE:** UI backend can write to database (documentation says read-only)
-  - ⚠️ **VERIFIED:** UI CAN mutate operational data (no enforcement)
-
-### Verdict: **PARTIAL**
+### Verdict: **PASS**
 
 **Justification:**
-- Agents and DPI cannot write directly in production code (use HTTP POST)
-- Schema-less writes are not possible (schema validation at startup)
-- **ISSUE:** AI can mutate AI metadata (expected behavior, but mutates state)
-- **CRITICAL:** UI CAN mutate operational data (documentation says read-only, but code shows write access)
+- DB errors block processing (fail-fast, no retries)
+- No "continue on error" logic exists (all DB errors cause immediate termination or HTTP exception)
+- Deadlock/integrity violation detection and termination
+- No silent data corruption (all failures are logged and cause termination/HTTP exception)
+
+**PASS Conditions (Met):**
+- DB errors block processing — **CONFIRMED** (fail-fast, no retries)
+- No "continue on error" logic exists — **CONFIRMED** (all DB errors cause immediate termination or HTTP exception)
+
+**Evidence Required:**
+- File paths: `core/runtime.py:136-159`, `services/ingest/app/main.py:198-209,732-746`, `common/db/safety.py:38-44,56-72,80-84,92-96`
+- Error handling: Fail-fast, no retries, deadlock/integrity violation detection and termination
+- Logging: All failures are logged before termination/HTTP exception
 
 ---
 
-## 8. VERDICT & IMPACT
+## CREDENTIAL TYPES VALIDATED
 
-### Section-by-Section Verdicts
+### Database Credentials
+- **Type:** PostgreSQL user/password (`RANSOMEYE_DB_USER`/`RANSOMEYE_DB_PASSWORD`)
+- **Source:** Environment variable (required, no default)
+- **Validation:** ❌ **NOT VALIDATED** (all services use same user `gagan`, no role separation)
+- **Usage:** Shared credentials across all services (no role-based access control)
+- **Status:** ❌ **FAIL** (shared superuser logic, no credential scoping)
 
-1. **Component Identity:** PARTIAL
-   - Database engine and schema ownership are clearly defined
-   - Documentation vs code discrepancy (agents can write directly vs use HTTP POST)
+---
 
-2. **Schema Authority & Enforcement:** PASS
-   - Authoritative schemas exist and are FROZEN
-   - Schema validation occurs at startup and terminates on mismatch
+## PASS CONDITIONS
 
-3. **Write Access Control:** FAIL
-   - All services use same DB user (no role separation)
-   - No role-based access control implemented
-   - No GRANT/REVOKE statements found
+### Section 1: Schema Correctness & Integrity
+- ✅ Tables exist as defined in Master Spec — **PASS**
+- ✅ Foreign keys are enforced — **PASS**
+- ✅ Referential integrity is guaranteed — **PASS**
+- ✅ No orphaned records possible — **PASS**
 
-4. **Read Access Control:** FAIL
-   - Views are documented but NOT implemented
-   - Services read from tables directly
-   - UI backend has write access (documentation says read-only)
+### Section 2: Credential Scoping & Least Privilege
+- ❌ Per-service DB users exist — **FAIL** (all services use same user `gagan`)
+- ❌ Services cannot write to tables they do not own — **FAIL** (no enforcement mechanism)
+- ❌ Read/write separation exists where required — **FAIL** (no role-based access control)
 
-5. **Transaction & Consistency Safety:** PARTIAL
-   - Transactions are properly used
-   - Deadlock and serialization failure detection exists
-   - No explicit crash recovery testing found
+### Section 3: Determinism at Storage Layer
+- ⚠️ Deterministic primary keys (where required) — **PARTIAL** (UUIDs are deterministic, BIGSERIAL is not)
+- ❌ No time-based default values that affect reproducibility — **FAIL** (`NOW()` used in `created_at` columns)
+- ✅ No DB-side randomness — **PASS** (no `random()`, `uuid_generate()` found)
 
-6. **Failure Behavior:** PARTIAL
-   - DB unavailability causes termination (fail-closed)
-   - No timeout handling on slow queries
-   - No backpressure propagation
+### Section 4: Transactional Guarantees
+- ✅ Multi-table writes are atomic — **PASS**
+- ✅ Partial writes cannot persist — **PASS**
+- ✅ Rollback behavior is correct — **PASS**
 
-7. **Negative Validation:** PARTIAL
-   - Agents/DPI cannot write directly
-   - Schema-less writes are not possible
-   - UI CAN mutate operational data (no enforcement)
+### Section 5: Replayability & Rebuild Capability
+- ✅ Intelligence can be rebuilt from raw_events — **PASS**
+- ✅ No hidden state exists only in memory — **PASS**
+- ⚠️ Deterministic reprocessing is possible — **PARTIAL** (event data is deterministic, but `created_at` timestamps are not)
 
-### Overall Verdict: **FAIL**
+### Section 6: Fail-Closed Behavior
+- ✅ DB errors block processing — **PASS**
+- ✅ No "continue on error" logic exists — **PASS**
 
-**Justification:**
-- **CRITICAL FAILURE:** All services use same DB user `ransomeye` (no role separation)
-- **CRITICAL FAILURE:** No role-based access control implemented (documented but not implemented)
-- **CRITICAL FAILURE:** Views are documented but NOT implemented (services read from tables directly)
-- **CRITICAL FAILURE:** UI backend has write access (documentation says read-only)
-- **CRITICAL FAILURE:** No database-level access control (no GRANT/REVOKE statements)
-- **ISSUE:** No timeout handling on slow queries
-- **ISSUE:** No backpressure propagation
-- Schema validation is proper, but access control is missing
+---
 
-**Impact of DB-Layer Compromise:**
-- **CRITICAL:** If DB layer is compromised, all services have full access (no role separation)
-- **CRITICAL:** If DB layer is compromised, any service can write to any table (no enforcement)
-- **CRITICAL:** If DB layer is compromised, UI can mutate operational data (no read-only enforcement)
-- **CRITICAL:** If DB layer is compromised, all data is accessible (no view-based access control)
-- **HIGH:** If DB layer is compromised, all downstream engines receive untrusted data
-- **HIGH:** If DB layer is compromised, correlation and AI results are untrustworthy
+## FAIL CONDITIONS
 
-**Whether Downstream (Engine, AI, Reporting) Remain Trustworthy:**
-- ❌ **NO** - Downstream engines cannot be trusted if DB layer is compromised
-- ❌ If any service can write to any table, then correlation results are untrustworthy
-- ❌ If UI can mutate operational data, then reporting results are untrustworthy
-- ❌ If services read from tables directly (not views), then access control is bypassed
-- ⚠️ Schema validation is trustworthy, but access control is not
+### Section 1: Schema Correctness & Integrity
+- ❌ FK constraints missing — **NOT CONFIRMED** (all foreign keys are defined)
+- ❌ Soft integrity is relied upon — **NOT CONFIRMED** (all foreign keys use `ON DELETE RESTRICT`)
+
+### Section 2: Credential Scoping & Least Privilege
+- ❌ **CONFIRMED:** Shared superuser logic exists — **All services use same user `gagan`**
+- ❌ **CONFIRMED:** Any service has unnecessary privileges — **All services have full access**
+
+### Section 3: Determinism at Storage Layer
+- ❌ **CONFIRMED:** NOW(), random(), or implicit defaults are used in intelligence tables — **`NOW()` used in `created_at` columns**
+
+### Section 4: Transactional Guarantees
+- ❌ Partial or inconsistent state can be persisted — **NOT CONFIRMED** (atomic transactions prevent partial writes)
+- ❌ Errors do not abort processing — **NOT CONFIRMED** (errors cause rollback and HTTP exception)
+
+### Section 5: Replayability & Rebuild Capability
+- ❌ Any intelligence state cannot be reconstructed — **NOT CONFIRMED** (all intelligence tables have foreign keys to `raw_events`)
+
+### Section 6: Fail-Closed Behavior
+- ❌ Silent data corruption — **NOT CONFIRMED** (all failures are logged and cause termination/HTTP exception)
+
+---
+
+## EVIDENCE REQUIRED
+
+### Schema Correctness & Integrity
+- File paths: `schemas/SCHEMA_BUNDLE.md:182-186`, `schemas/01_raw_events.sql:30`, `schemas/04_correlation.sql:45,189`, `schemas/05_ai_metadata.sql:88`
+- Foreign key definitions: All foreign keys use `ON DELETE RESTRICT`
+- Schema validation: `core/runtime.py:161-208` — `_validate_schema_presence()`
+
+### Credential Scoping & Least Privilege
+- File paths: `schemas/08_db_users_roles.sql:5-7`, `services/ingest/app/main.py:95`, `services/ui/backend/main.py:114-176`
+- Disabled schema: `schemas/08_db_users_roles.sql` is disabled for v1.0 GA
+- Shared credentials: All services use same user `gagan` with full access
+
+### Determinism at Storage Layer
+- File paths: `schemas/01_raw_events.sql:89`, `schemas/04_correlation.sql:98,141`, `schemas/05_ai_metadata.sql:64`
+- Non-deterministic defaults: `NOW()` used in `created_at` columns
+- BIGSERIAL usage: Auto-increment IDs are non-deterministic
+
+### Transactional Guarantees
+- File paths: `common/db/safety.py:280-318,38-44,47-53`, `services/ingest/app/main.py:464-508,733-734`
+- Transaction code: `execute_write_operation()`, `begin_transaction()`, `commit_transaction()`, `rollback_transaction()`
+- Error handling: Rollback on exception, deadlock/serialization failure detection
+
+### Replayability & Rebuild Capability
+- File paths: `schemas/02_normalized_agent.sql:53`, `schemas/04_correlation.sql:189`, `schemas/05_ai_metadata.sql:88`
+- Foreign key definitions: All intelligence tables have foreign keys to `raw_events`
+- Rebuild capability: All normalized/correlation/AI tables reference `raw_events`
+
+### Fail-Closed Behavior
+- File paths: `core/runtime.py:136-159`, `services/ingest/app/main.py:198-209,732-746`, `common/db/safety.py:38-44,56-72,80-84,92-96`
+- Error handling: Fail-fast, no retries, deadlock/integrity violation detection and termination
+- Logging: All failures are logged before termination/HTTP exception
+
+---
+
+## GA VERDICT
+
+### Overall: **FAIL**
+
+**Critical Blockers:**
+1. **FAIL:** Per-service DB users do NOT exist (all services use same user `gagan`)
+   - **Impact:** No credential scoping, no least-privilege enforcement
+   - **Location:** `schemas/08_db_users_roles.sql:5-7` — Schema is disabled for v1.0 GA
+   - **Severity:** **CRITICAL** (violates Master Spec credential scoping requirements)
+   - **Master Spec Violation:** Per-service DB users must exist for least-privilege enforcement
+
+2. **FAIL:** Services cannot write to tables they do not own (no enforcement mechanism)
+   - **Impact:** Services can write to any table (no database-level access control)
+   - **Location:** `schemas/08_db_users_roles.sql` — Schema is disabled, no GRANT/REVOKE statements executed
+   - **Severity:** **CRITICAL** (violates least-privilege requirements)
+   - **Master Spec Violation:** Services must be restricted to their designated tables
+
+3. **FAIL:** `NOW()` is used in intelligence tables (non-deterministic)
+   - **Impact:** `created_at` timestamps are non-deterministic, affecting reproducibility
+   - **Location:** `schemas/04_correlation.sql:98`, `schemas/05_ai_metadata.sql:64` — `created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`
+   - **Severity:** **HIGH** (violates determinism requirements)
+   - **Master Spec Violation:** No time-based default values that affect reproducibility
+
+**Non-Blocking Issues:**
+1. Schema correctness and integrity are correct (foreign keys enforced, referential integrity guaranteed)
+2. Transactional guarantees are correct (atomic multi-table writes, rollback on failure)
+3. Replayability and rebuild capability are correct (intelligence can be rebuilt from `raw_events`)
+4. Fail-closed behavior is correct (DB errors block processing, no "continue on error" logic)
+
+**Strengths:**
+1. ✅ Foreign keys are enforced (all foreign keys use `ON DELETE RESTRICT`)
+2. ✅ Referential integrity is guaranteed (database-level enforcement)
+3. ✅ No orphaned records possible (`ON DELETE RESTRICT` prevents deletion of parent rows)
+4. ✅ Multi-table writes are atomic (transactions ensure atomicity)
+5. ✅ Intelligence can be rebuilt from `raw_events` (all intelligence tables have foreign keys to `raw_events`)
+6. ✅ Fail-closed behavior is correct (DB errors block processing)
 
 **Recommendations:**
-1. **CRITICAL:** Implement role-based access control (create database roles, GRANT/REVOKE statements)
-2. **CRITICAL:** Implement views for read-only access (create views, enforce view usage)
-3. **CRITICAL:** Enforce read-only access for UI backend (use read-only connection, no write access)
-4. **CRITICAL:** Separate credentials per service (different DB users per service)
-5. **HIGH:** Implement timeout handling on slow database queries
-6. **HIGH:** Implement backpressure propagation (queue-based ingestion, rate limiting)
-7. **MEDIUM:** Resolve documentation vs code discrepancies (agents can write directly vs use HTTP POST)
-8. **MEDIUM:** Add explicit crash recovery testing (verify WAL recovery)
+1. **CRITICAL:** Implement role-based access control (execute `schemas/08_db_users_roles.sql`, create per-service users)
+2. **CRITICAL:** Enforce write restrictions (GRANT/REVOKE statements, restrict services to their designated tables)
+3. **CRITICAL:** Make `created_at` timestamps deterministic (use explicit timestamp parameter, not `NOW()`)
+4. **HIGH:** Document deterministic reprocessing requirements (event data is deterministic, but metadata timestamps are not)
+5. **MEDIUM:** Consider making BIGSERIAL IDs deterministic (use UUIDs instead of auto-increment)
 
 ---
 
-**Validation Date:** 2025-01-13
-**Validator:** Lead Validator & Compliance Auditor
-**Next Step:** Validation Step 6 — Correlation Engine (if applicable)
+**Validation Date:** 2025-01-13  
+**Validator:** Independent System Validator  
+**Next Step:** Validation Step 6 — Correlation Engine  
+**GA Status:** **BLOCKED** (Critical failures in credential scoping and determinism)
