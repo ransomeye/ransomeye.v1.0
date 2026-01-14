@@ -286,10 +286,19 @@ def run_policy_engine():
                 # Phase 7 requirement: Generate signed command if action is recommended
                 if should_recommend and action:
                     # Phase 7 requirement: Create signed command (NOT execute it)
+                    # PHASE 4: Create signed command with policy authority binding
+                    # Policy ID and version from policy decision
+                    policy_id = f"policy-suspicious-incident-{incident_id[:8]}"  # PHASE 4: Policy identifier
+                    policy_version = "1.0.0"  # PHASE 4: Policy version
+                    issuing_authority = "policy-engine"  # PHASE 4: Issuing authority
+                    
                     signed_command = create_signed_command(
                         command_type=action,
                         target_machine_id=incident['machine_id'],
-                        incident_id=incident_id
+                        incident_id=incident_id,
+                        policy_id=policy_id,
+                        policy_version=policy_version,
+                        issuing_authority=issuing_authority
                     )
                     
                     # Phase 7 requirement: Store signed command (for audit trail)
