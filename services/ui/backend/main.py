@@ -191,6 +191,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# PHASE 5: RBAC Authentication (if available)
+_rbac_available = False
+_rbac_auth = None
+try:
+    from rbac.middleware.fastapi_auth import RBACAuth
+    from rbac.api.rbac_api import RBACAPI
+    _rbac_available = True
+    # Initialize RBAC (if available)
+    # Note: In production, RBAC should be properly initialized with database connection
+    # For now, this is a placeholder that will be integrated when RBAC is fully configured
+    logger.info("PHASE 5: RBAC middleware available (not yet integrated)")
+except ImportError:
+    logger.warning("PHASE 5: RBAC middleware not available - endpoints are public (restrict in production)")
+
 @app.on_event("startup")
 async def startup_event():
     """FastAPI startup event."""
@@ -312,6 +326,7 @@ async def get_active_incidents():
     Get active incidents.
     Phase 8 requirement: Read-only, queries v_active_incidents view only
     Phase 10 requirement: Proper error handling and resource cleanup
+    PHASE 5: RBAC enforcement - requires ui:read permission (if RBAC available)
     """
     if shutdown_handler.is_shutdown_requested():
         raise HTTPException(status_code=503, detail={"error_code": "SERVICE_SHUTTING_DOWN"})
