@@ -38,9 +38,9 @@ jobs:
         id: generate-keys
         run: |
           mkdir -p /tmp/ci-signing-keys
-          cd /tmp/ci-signing-keys
           python3 << 'EOF'
           import sys
+          import os
           sys.path.insert(0, '${{ github.workspace }}/supply-chain')
           from crypto.vendor_key_manager import VendorKeyManager
           from pathlib import Path
@@ -48,6 +48,9 @@ jobs:
           key_manager = VendorKeyManager(key_dir)
           private_key, public_key, key_id = key_manager.get_or_create_keypair('${{ env.SIGNING_KEY_ID }}')
           print(f"key_id={key_id}")
+          # Export public key path for later steps
+          public_key_path = key_dir / f"vendor-signing-key-${{ env.SIGNING_KEY_ID }}.pub"
+          print(f"public_key_path={public_key_path}")
           EOF
         # PHASE 6: Fail-closed - key generation must succeed
         continue-on-error: false
@@ -157,14 +160,14 @@ jobs:
           SIGNING_KEY_DIR: /tmp/ci-signing-keys
           SIGNING_KEY_ID: ${{ env.SIGNING_KEY_ID }}
         run: |
-          mkdir -p build/sbom
+          mkdir -p build/artifacts/sbom
           python3 ${{ github.workspace }}/release/generate_sbom.py \
             --release-root build/artifacts \
             --version "${{ github.ref_name }}" \
             --build-id "${{ github.run_id }}" \
             --signing-key-id "${{ env.SIGNING_KEY_ID }}" \
             --key-dir "$SIGNING_KEY_DIR" \
-            --output build/sbom/manifest.json
+            --output build/artifacts/sbom/manifest.json
         # PHASE 6: Fail-closed - SBOM generation must succeed
         continue-on-error: false
       
@@ -174,8 +177,8 @@ jobs:
         run: |
           python3 ${{ github.workspace }}/release/verify_sbom.py \
             --release-root build/artifacts \
-            --manifest build/sbom/manifest.json \
-            --signature build/sbom/manifest.json.sig \
+            --manifest build/artifacts/sbom/manifest.json \
+            --signature build/artifacts/sbom/manifest.json.sig \
             --key-dir "$SIGNING_KEY_DIR"
         # PHASE 6: Fail-closed - SBOM signature must be valid
         continue-on-error: false
@@ -187,7 +190,7 @@ jobs:
           name: signed-artifacts
           path: |
             build/artifacts/signed/
-            build/sbom/
+            build/artifacts/sbom/
           retention-days: 90
       
       - name: Upload signing public key
@@ -195,5 +198,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: signing-public-key
-          path: /tmp/ci-signing-keys/*.pub
+          path: /tmp/ci-signing-keys/vendor-signing-key-*.pub
           retention-days: 90

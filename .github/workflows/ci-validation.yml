@@ -132,13 +132,20 @@ jobs:
           # Install project dependencies
           Get-ChildItem -Recurse -Filter "requirements.txt" | ForEach-Object { pip install -r $_.FullName }
       
+      - name: Configure deterministic test harness
+        shell: pwsh
+        run: |
+          bash ci/deterministic_test_harness.sh
+        # PHASE 6: Fail-closed - deterministic test harness must be configured
+        continue-on-error: false
+      
       - name: Run Phase C-W validation
         env:
           RANSOMEYE_TEST_NETWORK_ENABLED: ${{ env.RANSOMEYE_TEST_NETWORK_ENABLED }}
           RANSOMEYE_TEST_DETERMINISTIC: ${{ env.RANSOMEYE_TEST_DETERMINISTIC }}
           RANSOMEYE_TEST_SEED: ${{ env.RANSOMEYE_TEST_SEED }}
+        working-directory: validation/harness
         run: |
-          cd validation/harness
           python phase_c_executor.py --mode windows --output-dir ..\..\validation\reports\phase_c
         # PHASE 6: Fail-closed - any validation failure blocks build
         continue-on-error: false
@@ -178,8 +185,8 @@ jobs:
           path: validation/reports/phase_c
       
       - name: Aggregate GA verdict
+        working-directory: validation/harness
         run: |
-          cd validation/harness
           python3 aggregate_ga_verdict.py \
             ../../validation/reports/phase_c/phase_c_linux_results.json \
             ../../validation/reports/phase_c/phase_c_windows_results.json
