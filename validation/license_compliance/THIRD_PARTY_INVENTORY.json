@@ -4,12 +4,12 @@
     "version": ">=2.0.0",
     "component": "mishka",
     "language": "python",
-    "license": "BSD-3-Clause",
+    "license": "BSD-3-Clause (with Apache-2.0 components)",
     "license_type": "permissive",
     "static_or_dynamic": "dynamic",
     "distribution_scope": "core",
     "risk_level": "low",
-    "notes": "PyTorch - Core ML framework for training"
+    "notes": "PyTorch - Core ML framework. Primary license BSD-3-Clause, but includes bundled components under Apache-2.0 (e.g., torch/_vendor/packaging). Both licenses are permissive and compatible."
   },
   {
     "name": "transformers",
