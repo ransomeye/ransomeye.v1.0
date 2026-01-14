@@ -42,21 +42,28 @@ class ArtifactSigner:
         """
         Sign artifact manifest.
         
+        GA-BLOCKING: Signs manifest WITHOUT signature field (for consistency with verification).
+        
         Process:
-        1. Build canonical manifest (sorted JSON)
-        2. Hash manifest
-        3. Sign manifest hash
+        1. Remove signature field from manifest (if present)
+        2. Build canonical manifest (sorted JSON)
+        3. Hash manifest
+        4. Sign manifest hash
         
         Args:
-            manifest: Artifact manifest dictionary
+            manifest: Artifact manifest dictionary (signature field will be removed before signing)
         
         Returns:
             Base64-encoded signature
         """
         try:
+            # GA-BLOCKING: Create manifest copy without signature field (for signing)
+            manifest_copy = manifest.copy()
+            manifest_copy.pop('signature', None)
+            
             # Build canonical manifest (sorted JSON, no whitespace)
             canonical_json = json.dumps(
-                manifest,
+                manifest_copy,
                 sort_keys=True,
                 separators=(',', ':'),
                 ensure_ascii=False
