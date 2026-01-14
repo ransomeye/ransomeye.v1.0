@@ -6,6 +6,15 @@ on:
   pull_request:
     branches: [ main, develop ]
   workflow_dispatch:
+  workflow_call:
+
+outputs:
+  ga_verdict:
+    description: "Final GA verdict"
+    value: ${{ jobs.aggregate-ga-verdict.outputs.ga_verdict }}
+  ga_ready:
+    description: "GA readiness flag"
+    value: ${{ jobs.aggregate-ga-verdict.outputs.ga_ready }}
 
 # PHASE 6: CI Fail-Closed Enforcement
 # This workflow blocks CI on any failed validation phase (01-40)
@@ -163,6 +172,13 @@ jobs:
     name: Aggregate GA Verdict
     runs-on: ubuntu-latest
     needs: [validation-phase-c-linux, validation-phase-c-windows]
+    outputs:
+      ga_verdict:
+        description: "Final GA verdict"
+        value: ${{ steps.set-outputs.outputs.ga_verdict }}
+      ga_ready:
+        description: "GA readiness flag"
+        value: ${{ steps.set-outputs.outputs.ga_ready }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -194,21 +210,26 @@ jobs:
         continue-on-error: false
       
       - name: Check GA verdict
+        id: set-outputs
         run: |
           cd validation/reports/phase_c
           if [ ! -f "phase_c_aggregate_verdict.json" ]; then
             echo "❌ GA verdict file not found"
             exit 1
           fi
-          VERDICT=$(python3 -c "import json; print(json.load(open('phase_c_aggregate_verdict.json'))['ga_verdict'])")
+          VERDICT=$(python3 -c "import json; print(json.load(open('phase_c_aggregate_verdict.json'))['verdict'])")
           GA_READY=$(python3 -c "import json; print(json.load(open('phase_c_aggregate_verdict.json'))['ga_ready'])")
-          if [ "$GA_READY" != "True" ] || [ "$VERDICT" != "PASS" ]; then
+          # Set outputs for workflow and job
+          echo "ga_verdict=$VERDICT" >> $GITHUB_OUTPUT
+          echo "ga_ready=$GA_READY" >> $GITHUB_OUTPUT
+          # PHASE 6: Fail-closed validation - GA verdict must be GA-READY and ga_ready must be True
+          if [ "$GA_READY" != "True" ] || [ "$VERDICT" != "GA-READY" ]; then
             echo "❌ GA Verdict: $VERDICT (ga_ready: $GA_READY)"
-            echo "Build blocked: GA verdict must be PASS and ga_ready must be True"
+            echo "Build blocked: GA verdict must be GA-READY and ga_ready must be True"
             exit 1
           fi
           echo "✅ GA Verdict: $VERDICT (ga_ready: $GA_READY)"
-        # PHASE 6: Fail-closed - GA verdict must be PASS
+        # PHASE 6: Fail-closed - GA verdict must be GA-READY
         continue-on-error: false
       
       - name: Upload GA verdict
