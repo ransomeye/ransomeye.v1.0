@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """
 RansomEye v1.0 Validation Harness - Database Bootstrap Validator
-AUTHORITATIVE: Verifies PostgreSQL is correctly bootstrapped for Phase C
+AUTHORITATIVE: Diagnostic-only preflight validation for PostgreSQL authentication
 
-This module verifies that PostgreSQL is pre-provisioned with:
-- Role: gagan (with LOGIN privilege)
-- Database: ransomeye (owned by gagan)
-- Authentication works with credentials: gagan / gagan
+PHASE A1 REQUIREMENT: This module is diagnostic-only. It detects PostgreSQL
+authentication failure reasons and provides explicit instructions. It does NOT:
+- Auto-edit files
+- Downgrade security
+- Continue execution on failure
 
 This is NOT an application logic change — this is infrastructure correctness enforcement.
 """

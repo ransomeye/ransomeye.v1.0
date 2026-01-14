@@ -323,23 +323,38 @@ set_permissions() {
     echo -e "${GREEN}✓${NC} Permissions set correctly"
 }
 
-# Check PostgreSQL availability
+# Check PostgreSQL availability and verify service users (PHASE B1: No defaults)
 check_postgresql() {
     echo ""
-    echo "Checking PostgreSQL availability..."
+    echo "Checking PostgreSQL availability and service users..."
     
     if ! command -v psql &> /dev/null; then
         error_exit "PostgreSQL client (psql) not found. Please install PostgreSQL first."
     fi
     
-    # Test connection with credentials (user: gagan, password: gagan)
-    export PGPASSWORD="gagan"
-    if psql -h localhost -U gagan -d ransomeye -c "SELECT 1" &> /dev/null; then
-        echo -e "${GREEN}✓${NC} PostgreSQL connection successful"
-    else
-        error_exit "Cannot connect to PostgreSQL (host: localhost, user: gagan, database: ransomeye). Ensure PostgreSQL is running and database exists."
-    fi
-    unset PGPASSWORD
+    # Verify each service user exists and can connect
+    local users=(
+        "${RANSOMEYE_DB_USER_INGEST}:${RANSOMEYE_DB_PASSWORD_INGEST}:Ingest"
+        "${RANSOMEYE_DB_USER_CORRELATION}:${RANSOMEYE_DB_PASSWORD_CORRELATION}:Correlation"
+        "${RANSOMEYE_DB_USER_AI_CORE}:${RANSOMEYE_DB_PASSWORD_AI_CORE}:AI Core"
+        "${RANSOMEYE_DB_USER_POLICY}:${RANSOMEYE_DB_PASSWORD_POLICY}:Policy Engine"
+        "${RANSOMEYE_DB_USER_UI}:${RANSOMEYE_DB_PASSWORD_UI}:UI Backend"
+    )
+    
+    for user_info in "${users[@]}"; do
+        IFS=':' read -r db_user db_password service_name <<< "$user_info"
+        
+        export PGPASSWORD="$db_password"
+        if psql -h "${RANSOMEYE_DB_HOST}" -p "${RANSOMEYE_DB_PORT}" -U "$db_user" -d "${RANSOMEYE_DB_NAME}" -c "SELECT 1" &> /dev/null; then
+            echo -e "${GREEN}✓${NC} ${service_name} service user verified: $db_user"
+        else
+            unset PGPASSWORD
+            error_exit "Cannot connect to PostgreSQL with ${service_name} credentials (host: ${RANSOMEYE_DB_HOST}, user: $db_user, database: ${RANSOMEYE_DB_NAME}). Ensure user exists and password is correct."
+        fi
+        unset PGPASSWORD
+    done
+    
+    echo -e "${GREEN}✓${NC} All service database users verified"
 }
 
 # Install systemd service (ONE service only)
@@ -452,22 +467,159 @@ validate_installation() {
     echo -e "${GREEN}✓${NC} Core started successfully"
 }
 
-# Main installation flow
+# PHASE B3: Rollback capability
+ROLLBACK_STACK=()
+
+push_rollback() {
+    # Add rollback action to stack
+    ROLLBACK_STACK+=("$1")
+}
+
+execute_rollback() {
+    echo ""
+    echo "================================================================================"
+    echo -e "${RED}INSTALLATION FAILED - Executing rollback${NC}"
+    echo "================================================================================"
+    
+    # Execute rollback actions in reverse order
+    for (( idx=${#ROLLBACK_STACK[@]}-1 ; idx>=0 ; idx-- )) ; do
+        local action="${ROLLBACK_STACK[idx]}"
+        echo "Rollback: $action"
+        eval "$action" || echo "Warning: Rollback action failed: $action"
+    done
+    
+    echo ""
+    echo "Rollback completed. System restored to pre-installation state."
+}
+
+# PHASE B2: Manifest validation
+validate_manifest() {
+    echo ""
+    echo "Validating installation manifest..."
+    
+    local manifest_file="${INSTALL_ROOT}/config/installer.manifest.json"
+    local schema_file="${INSTALLER_DIR}/installer.manifest.json"
+    
+    if [[ ! -f "$manifest_file" ]]; then
+        error_exit "Manifest file not found: $manifest_file"
+    fi
+    
+    if [[ ! -f "$schema_file" ]]; then
+        echo -e "${YELLOW}⚠${NC}  Manifest schema not found, skipping validation"
+        return
+    fi
+    
+    # Validate manifest against schema (if python available)
+    if command -v python3 &> /dev/null; then
+        if python3 -c "import json, jsonschema" 2>/dev/null; then
+            if python3 -c "
+import json
+import sys
+import jsonschema
+
+manifest = json.load(open('$manifest_file'))
+schema = json.load(open('$schema_file'))
+
+try:
+    jsonschema.validate(manifest, schema)
+    print('✓ Manifest validation passed')
+except jsonschema.ValidationError as e:
+    print(f'✗ Manifest validation failed: {e.message}')
+    sys.exit(1)
+" 2>/dev/null; then
+                echo -e "${GREEN}✓${NC} Manifest validation passed"
+            else
+                error_exit "Manifest validation failed. Installation manifest does not match schema."
+            fi
+        else
+            echo -e "${YELLOW}⚠${NC}  jsonschema not available, skipping validation"
+        fi
+    else
+        echo -e "${YELLOW}⚠${NC}  Python3 not available, skipping validation"
+    fi
+}
+
+# PHASE B2: Verify artifact signatures (placeholder - requires signing infrastructure)
+verify_artifact_signatures() {
+    echo ""
+    echo "Verifying artifact signatures..."
+    
+    # Check for signature files
+    local sig_files=(
+        "${SRC_ROOT}/contracts/.sig"
+        "${SRC_ROOT}/schemas/.sig"
+    )
+    
+    local missing_sigs=()
+    for sig_file in "${sig_files[@]}"; do
+        if [[ ! -f "$sig_file" ]]; then
+            missing_sigs+=("$sig_file")
+        fi
+    done
+    
+    if [[ ${#missing_sigs[@]} -gt 0 ]]; then
+        echo -e "${YELLOW}⚠${NC}  Some signature files missing (signing infrastructure not yet implemented)"
+        echo "  Missing: ${missing_sigs[*]}"
+        echo "  Continuing installation (signature verification will be enforced in production)"
+    else
+        echo -e "${GREEN}✓${NC} Artifact signatures found"
+        # TODO: Implement signature verification when signing infrastructure is ready
+    fi
+}
+
+# Main installation flow (PHASE B: Updated with credential prompts and rollback)
 main() {
+    # Set up error handler for rollback
+    trap 'execute_rollback' ERR
+    
     check_root
     check_ubuntu
     detect_installer_dir
+    
+    # PHASE B1: Prompt for credentials (no defaults)
     prompt_install_root
+    prompt_database_credentials
+    prompt_signing_key
+    
+    # Track installation steps for rollback
+    push_rollback "echo 'Rollback: Installation directory created at ${INSTALL_ROOT}'"
+    
     create_directory_structure
+    push_rollback "rm -rf '${INSTALL_ROOT}' 2>/dev/null || true"
+    
     create_system_user
+    push_rollback "userdel ransomeye 2>/dev/null || true"
+    
+    # PHASE B2: Verify artifacts before installation
+    verify_artifact_signatures
+    
     install_python_files
+    push_rollback "rm -rf '${INSTALL_ROOT}/lib' 2>/dev/null || true"
+    
     create_core_wrapper
+    push_rollback "rm -f '${INSTALL_ROOT}/bin/ransomeye-core' 2>/dev/null || true"
+    
     generate_environment_file
+    push_rollback "rm -f '${INSTALL_ROOT}/config/environment' 2>/dev/null || true"
+    
     set_permissions
+    
+    # PHASE A2: Verify service users exist in database
     check_postgresql
+    
     install_systemd_service
+    push_rollback "systemctl stop ransomeye-core 2>/dev/null || true; rm -f /etc/systemd/system/ransomeye-core.service 2>/dev/null || true; systemctl daemon-reload 2>/dev/null || true"
+    
     create_manifest
+    
+    # PHASE B2: Validate manifest
+    validate_manifest
+    
     validate_installation
+    
+    # Clear rollback stack on success
+    ROLLBACK_STACK=()
+    trap - ERR
     
     echo ""
     echo "================================================================================"

@@ -13536,5 +13536,336 @@ Implement now.
 Promt End
 
 
+****promot start****
+
+You are **Cursor**, acting as a **senior implementation engine** for the RansomEye program.
+You are **not** an architect, **not** a decision-maker, and **not** allowed to reinterpret intent.
+Your task is **strict execution** of the following **locked master plan**.
+
+Everything below is **authoritative**, **non-negotiable**, and derived from completed validation phases (01–21).
+
+---
+
+# RANSOMEYE v1.0 — FIX MASTER PLAN (EXECUTION DIRECTIVE)
+
+## GLOBAL EXECUTION RULES (ABSOLUTE)
+
+1. **No defaults anywhere**
+
+   * No hardcoded credentials
+   * No fallback secrets
+   * No “dev mode” shortcuts
+
+2. **Fail-Closed Everywhere**
+
+   * Installer
+   * Runtime
+   * Agents
+   * DPI
+   * Correlation
+   * Sentinel
+
+3. **No degraded mode**
+
+   * If security posture cannot be guaranteed → terminate loudly
+
+4. **Correlation > Isolation**
+
+   * No single sensor may ever create or confirm an incident
+   * Cross-domain evidence is mandatory
+
+5. **Installer is part of TCB**
+
+   * Installer must enforce the same trust rules as runtime
+   * Unsigned artifacts → refuse install
+
+6. **AI is advisory-only**
+
+   * Read-only
+   * Non-blocking
+   * Cannot modify incidents
+   * Cannot trigger actions
+
+---
+
+# PHASE A — TRUST & CREDENTIAL HARDENING (FOUNDATION)
+
+### A1. Implement `db_bootstrap_validator.py`
+
+**Purpose:** Diagnostic-only preflight validation
+**Scope:** PostgreSQL auth, schema reachability
+
+**Required Behavior**
+
+* Detect PostgreSQL auth failure reason
+* If PEER auth detected:
+
+  * Print **explicit instruction**
+  * Example:
+
+    > “FATAL: PostgreSQL is using PEER authentication.
+    > Please edit pg_hba.conf and change peer → md5 for the configured DB user.”
+* Do **NOT** auto-edit files
+* Do **NOT** downgrade security
+* Do **NOT** continue execution
+
+**This file is diagnostic only. No mutation allowed.**
+
+---
+
+### A2. Credential Scoping (MANDATORY)
+
+* Separate DB users per service:
+
+  * ingest
+  * correlation-engine
+  * ai-core
+  * policy-engine
+  * ui (read-only)
+* Implement explicit GRANT / REVOKE
+* Remove shared `ransomeye` super-user pattern
+* UI backend must be read-only at DB level
+
+---
+
+# PHASE B — INSTALLER & BOOTSTRAP CORRECTION
+
+### B1. Installer Trust Model Rewrite
+
+* Remove **all** hardcoded defaults (passwords, keys, tokens)
+* Require credentials at install time or **fail**
+* Installer must:
+
+  * Verify artifact signatures
+  * Verify SBOM manifest
+  * Validate secrets with same rules as runtime
+
+### B2. Manifest Enforcement
+
+* Implement `manifest.json` validation
+* Refuse install if:
+
+  * Any artifact missing
+  * Any hash mismatch
+  * Any signature invalid
+
+### B3. Rollback
+
+* If install fails at any step:
+
+  * Revert filesystem
+  * Revert systemd
+  * Revert DB changes
+
+---
+
+# PHASE C — CORRELATION ENGINE v2 (CORE REBUILD)
+
+⚠️ **THIS IS A REDESIGN, NOT A PATCH**
+
+### C1. State Machine (MANDATORY)
+
+Implement strict incident lifecycle:
+
+* CLEAN
+* SUSPICIOUS
+* PROBABLE
+* CONFIRMED
+
+Rules:
+
+* Explicit transition guards
+* Explicit downgrade paths
+* No skipping stages
+
+---
+
+### C2. Confidence Accumulation
+
+* Confidence must:
+
+  * Increase with corroborating evidence
+  * Decrease with contradiction
+  * Decay with time
+* No constants
+* No static scores
+* Implement saturation ceiling
+
+---
+
+### C3. Contradiction Engine
+
+Mandatory contradiction classes:
+
+* Host execution vs network silence
+* Network beaconing vs no process
+* Persistence claimed vs reboot cleanup
+* DPI evidence vs agent denial
+
+**No contradiction → no CONFIRMED incident**
+
+---
+
+### C4. Cross-Domain Correlation
+
+* Agent ↔ DPI binding
+* Identity binding
+* Time-window enforcement
+
+**Single-sensor escalation is forbidden**
+
+---
+
+# PHASE D — SECURE BUS & SERVICE AUTHENTICATION
+
+### D1. Telemetry Signing
+
+* Agents and DPI must sign telemetry (ed25519)
+* Ingest must reject unsigned telemetry
+
+### D2. Service-to-Service Authentication
+
+* No implicit trust
+* No “localhost means trusted”
+* Authenticated HTTP or secure bus required
+
+---
+
+# PHASE E — HORIZONTAL SCALING
+
+### E1. Remove Global State
+
+* No global db_pool
+* No global signing keys
+* Instance-local state only
+
+### E2. Multi-Instance Safe
+
+* Correlation engine must support parallel instances
+* No race conditions
+* No duplicate incident creation
+
+---
+
+# PHASE F — OPERATIONAL & MILITARY-GRADE HARDENING
+
+### F1. Dedicated Sentinel Component
+
+* Centralized health
+* Integrity monitoring
+* Visibility degradation detection
+* Explicit signaling of reduced trust
+
+---
+
+### F2. OS-Aware Validation Harness
+
+Update `executor.py`:
+
+* Detect OS at startup
+* Hard block incompatible tracks
+* Example:
+
+  * ETW on Linux → refuse
+  * eBPF on Windows → refuse
+
+No warnings. Hard stop.
+
+---
+
+### F3. Internal Health & Metrics Endpoint
+
+Expose `/health/metrics` (internal-only):
+
+Allowed metrics:
+
+* ingest_rate_eps
+* db_write_latency_ms
+* queue_depth
+* agent_heartbeat_lag_sec
+
+Constraints:
+
+* No payloads
+* No incident data
+* Disabled by default
+
+---
+
+### F4. Forensic Determinism (LEGAL REQUIREMENT)
+
+* Report timestamps must anchor to:
+
+  * Incident closure time
+  * OR snapshot time
+* Renderer must not use system time
+* CI test:
+
+  * Same incident → same PDF hash forever
+
+---
+
+### F5. SBOM & Artifact Signing
+
+* Generate SBOM at build time
+* Produce:
+
+  * manifest.json
+  * .sha256
+  * .sig (ed25519)
+* Installer must verify offline
+
+---
+
+### F6. Headless Agent Survivability Test (GA GATE)
+
+Test:
+
+* Kill Core server
+* Attempt prohibited action on agent
+
+Required outcome:
+
+* Agent fails closed
+* Cached policy enforced
+* Never allow due to disconnection
+
+If this fails → ❌ NOT GA-ELIGIBLE
+
+---
+
+# CI / QA ENFORCEMENT (MANDATORY)
+
+CI must block release if:
+
+* Any single-sensor incident possible
+* Any unsigned artifact exists
+* Any degraded mode detected
+* Any agent fails headless survivability test
+* Any report hash is non-deterministic
+
+---
+
+# FINAL NOTE TO CURSOR
+
+You are executing a **locked remediation plan**.
+You are **not** to:
+
+* Simplify
+* Reinterpret
+* Optimize away security
+* Introduce shortcuts
+
+If implementation conflicts with constraints:
+→ STOP and report.
+
+---
+
+**Begin implementation strictly in Phase order.**
+**Phase A must be complete before Phase B, etc.**
+
+****prompot end****
+
+
 
 
