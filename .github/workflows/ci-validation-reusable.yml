@@ -44,9 +44,9 @@ permissions:
 env:
   PYTHON_VERSION: '3.10'
   POSTGRES_VERSION: '14'
-  RANSOMEYE_DB_NAME: 'ransomeye_test'
-  RANSOMEYE_DB_USER: 'ransomeye_test'
-  RANSOMEYE_DB_PASSWORD: 'test_password_change_in_production'
+  RANSOMEYE_DB_NAME: ${{ secrets.RANSOMEYE_TEST_DB_NAME || 'ransomeye_test' }}
+  RANSOMEYE_DB_USER: ${{ secrets.RANSOMEYE_TEST_DB_USER || 'ransomeye_test' }}
+  RANSOMEYE_DB_PASSWORD: ${{ secrets.RANSOMEYE_TEST_DB_PASSWORD }}
   RANSOMEYE_DB_HOST: 'localhost'
   RANSOMEYE_DB_PORT: '5432'
   # PHASE 6: Deterministic test harness - no network access unless explicitly enabled

@@ -310,11 +310,17 @@ class ReportingAPI:
             from dateutil import parser
             
             # Get DB connection parameters from environment
+            # PHASE-9: No default credentials - fail-fast if not provided
             db_host = os.getenv('RANSOMEYE_DB_HOST', 'localhost')
             db_port = int(os.getenv('RANSOMEYE_DB_PORT', '5432'))
             db_name = os.getenv('RANSOMEYE_DB_NAME', 'ransomeye')
-            db_user = os.getenv('RANSOMEYE_DB_USER', 'gagan')
-            db_password = os.getenv('RANSOMEYE_DB_PASSWORD', 'gagan')
+            db_user = os.getenv('RANSOMEYE_DB_USER')
+            db_password = os.getenv('RANSOMEYE_DB_PASSWORD')
+            
+            if not db_user:
+                raise ValueError("RANSOMEYE_DB_USER environment variable is required (no defaults allowed)")
+            if not db_password:
+                raise ValueError("RANSOMEYE_DB_PASSWORD environment variable is required (no defaults allowed)")
             
             # Query incident snapshot time
             conn = psycopg2.connect(
