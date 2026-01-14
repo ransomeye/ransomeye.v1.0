@@ -10,8 +10,9 @@ import sys
 import json
 import uuid
 import requests
+import hashlib
 from typing import Dict, Any, Optional
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 # Add common utilities to path
