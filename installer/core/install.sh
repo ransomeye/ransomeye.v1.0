@@ -118,17 +118,16 @@ verify_sbom() {
     fi
     
     # GA-BLOCKING: Verify using Python verification utility (offline, no network)
-    # Check if verify_sbom.py is available
+    # Check if verify_sbom.py is available (must be in release bundle for air-gapped scenarios)
     local verify_script=""
-    if [[ -f "${SRC_ROOT}/release/verify_sbom.py" ]]; then
+    if [[ -f "${RELEASE_ROOT}/verify_sbom.py" ]]; then
+        verify_script="${RELEASE_ROOT}/verify_sbom.py"
+    elif [[ -f "${SRC_ROOT}/release/verify_sbom.py" ]]; then
         verify_script="${SRC_ROOT}/release/verify_sbom.py"
     elif [[ -f "${RELEASE_ROOT}/../verify_sbom.py" ]]; then
         verify_script="${RELEASE_ROOT}/../verify_sbom.py"
     else
-        # Fallback: Use inline verification (basic hash checking)
-        echo -e "${YELLOW}WARNING: verify_sbom.py not found, using basic hash verification${NC}"
-        verify_sbom_basic
-        return
+        error_exit "SBOM verification script (verify_sbom.py) not found. Cannot verify release bundle integrity. Installation aborted (fail-closed)."
     fi
     
     # Use Python verification utility
