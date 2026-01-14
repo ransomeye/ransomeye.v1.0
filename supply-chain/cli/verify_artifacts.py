@@ -46,13 +46,23 @@ def main():
         help='Path to public key file (optional, for external trust root)'
     )
     parser.add_argument(
-        '--key-dir',
+        '--vault-dir',
         type=Path,
-        help='Directory containing vendor signing keys (optional, if public-key not provided)'
+        help='Directory containing encrypted key vault (optional, if public-key not provided)'
+    )
+    parser.add_argument(
+        '--registry-path',
+        type=Path,
+        help='Path to key registry JSON file (required if vault-dir provided)'
     )
     parser.add_argument(
         '--signing-key-id',
-        help='Signing key identifier (optional, if public-key not provided)'
+        help='Signing key identifier (required if vault-dir provided)'
+    )
+    parser.add_argument(
+        '--check-revocation',
+        action='store_true',
+        help='Check key revocation list (requires registry-path)'
     )
     
     args = parser.parse_args()
