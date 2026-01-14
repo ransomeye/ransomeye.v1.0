@@ -217,3 +217,195 @@ def check_event_processed(conn, event_id: str) -> bool:
         return cur.fetchone() is not None
     finally:
         cur.close()
+
+
+def find_existing_incident(conn, machine_id: str, dedup_key: Optional[str], event_time: datetime) -> Optional[str]:
+    """
+    GA-BLOCKING: Find existing incident for deduplication.
+    
+    Looks for unresolved incidents for the same machine_id within deduplication time window.
+    
+    Args:
+        conn: Database connection
+        machine_id: Machine identifier
+        dedup_key: Deduplication key (machine_id:process_id or machine_id)
+        event_time: Event observed_at timestamp
+        
+    Returns:
+        Incident ID if found, None otherwise
+    """
+    cur = conn.cursor()
+    try:
+        # GA-BLOCKING: Find unresolved incidents for same machine within time window
+        time_window_start = event_time - timedelta(seconds=3600)  # 1 hour window
+        time_window_end = event_time + timedelta(seconds=3600)
+        
+        cur.execute("""
+            SELECT incident_id, first_observed_at
+            FROM incidents
+            WHERE machine_id = %s
+            AND resolved = FALSE
+            AND first_observed_at >= %s
+            AND first_observed_at <= %s
+            ORDER BY first_observed_at ASC
+            LIMIT 1
+        """, (machine_id, time_window_start, time_window_end))
+        
+        result = cur.fetchone()
+        if result:
+            return result[0]
+        return None
+    finally:
+        cur.close()
+
+
+def add_evidence_to_incident(conn, incident_id: str, event: Dict[str, Any], 
+                            event_id: str, evidence_type: str, confidence_score: float):
+    """
+    GA-BLOCKING: Add evidence to existing incident and update confidence.
+    
+    Args:
+        conn: Database connection
+        incident_id: Incident identifier
+        event: Event dictionary
+        event_id: Event identifier
+        evidence_type: Type of evidence
+        confidence_score: Confidence contribution from this evidence
+    """
+    def _do_add_evidence():
+        """Inner function for write operation."""
+        cur = conn.cursor()
+        try:
+            # Check if event already linked to this incident
+            cur.execute("""
+                SELECT 1 FROM evidence WHERE incident_id = %s AND event_id = %s
+            """, (incident_id, event_id))
+            if cur.fetchone():
+                return False  # Already linked
+            
+            # Extract observed_at
+            observed_at = event['observed_at']
+            if isinstance(observed_at, str):
+                from dateutil import parser
+                observed_at = parser.isoparse(observed_at)
+            
+            # Get current incident state
+            cur.execute("""
+                SELECT current_stage, confidence_score, total_evidence_count, last_observed_at
+                FROM incidents WHERE incident_id = %s
+            """, (incident_id,))
+            result = cur.fetchone()
+            if not result:
+                return False
+            
+            current_stage, current_confidence, evidence_count, last_observed = result
+            
+            # GA-BLOCKING: Accumulate confidence
+            from state_machine import accumulate_confidence, determine_stage, should_transition_stage
+            new_confidence = accumulate_confidence(float(current_confidence), confidence_score)
+            new_stage = determine_stage(new_confidence)
+            
+            # Update last_observed_at if event is newer
+            if isinstance(last_observed, datetime):
+                if observed_at > last_observed:
+                    last_observed = observed_at
+                else:
+                    last_observed = last_observed
+            else:
+                last_observed = observed_at
+            
+            # Determine confidence level
+            if confidence_score >= 50.0:
+                confidence_level = 'HIGH'
+            elif confidence_score >= 25.0:
+                confidence_level = 'MEDIUM'
+            else:
+                confidence_level = 'LOW'
+            
+            # Add evidence
+            cur.execute("""
+                INSERT INTO evidence (
+                    incident_id, event_id, evidence_type, confidence_level, confidence_score,
+                    observed_at
+                )
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """, (incident_id, event_id, evidence_type, confidence_level, confidence_score, observed_at))
+            
+            # Update incident
+            stage_changed = False
+            if should_transition_stage(current_stage, new_stage):
+                # GA-BLOCKING: State transition
+                cur.execute("""
+                    INSERT INTO incident_stages (
+                        incident_id, from_stage, to_stage, transitioned_at,
+                        evidence_count_at_transition, confidence_score_at_transition
+                    )
+                    VALUES (%s, %s, %s, NOW(), %s, %s)
+                """, (incident_id, current_stage, new_stage, evidence_count + 1, new_confidence))
+                stage_changed = True
+            
+            # Update incident record
+            cur.execute("""
+                UPDATE incidents
+                SET current_stage = %s,
+                    confidence_score = %s,
+                    total_evidence_count = %s,
+                    last_observed_at = %s,
+                    stage_changed_at = CASE WHEN %s THEN NOW() ELSE stage_changed_at END
+                WHERE incident_id = %s
+            """, (new_stage, new_confidence, evidence_count + 1, last_observed, stage_changed, incident_id))
+            
+            return True
+        finally:
+            cur.close()
+    
+    return execute_write_operation(conn, "add_evidence_to_incident", _do_add_evidence, _logger)
+
+
+def apply_contradiction_to_incident(conn, incident_id: str):
+    """
+    GA-BLOCKING: Apply contradiction decay to incident confidence.
+    
+    Args:
+        conn: Database connection
+        incident_id: Incident identifier
+    """
+    def _do_apply_contradiction():
+        """Inner function for write operation."""
+        cur = conn.cursor()
+        try:
+            # Get current confidence
+            cur.execute("""
+                SELECT confidence_score, current_stage
+                FROM incidents WHERE incident_id = %s
+            """, (incident_id,))
+            result = cur.fetchone()
+            if not result:
+                return False
+            
+            current_confidence, current_stage = result
+            
+            # GA-BLOCKING: Apply contradiction decay
+            from state_machine import apply_contradiction_decay, determine_stage
+            decayed_confidence = apply_contradiction_decay(float(current_confidence))
+            new_stage = determine_stage(decayed_confidence)
+            
+            # GA-BLOCKING: State does not escalate on contradiction (only decay)
+            # If new_stage would be lower, keep current stage (no backward transition)
+            if new_stage != current_stage:
+                # Only update if stage would remain same or if confidence decayed enough
+                # But we don't allow backward transitions, so keep current stage
+                new_stage = current_stage
+            
+            # Update incident confidence (but not stage)
+            cur.execute("""
+                UPDATE incidents
+                SET confidence_score = %s
+                WHERE incident_id = %s
+            """, (decayed_confidence, incident_id))
+            
+            return True
+        finally:
+            cur.close()
+    
+    return execute_write_operation(conn, "apply_contradiction_to_incident", _do_apply_contradiction, _logger)
