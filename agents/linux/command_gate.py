@@ -336,11 +336,13 @@ class CommandGate:
         except Exception as e:
             raise CommandRejectionError(f"Invalid signature encoding: {e}")
         
-        # Create message to verify (canonical JSON of command without signature)
+        # PHASE 4: Create message to verify (canonical JSON of command without signature fields)
         command_copy = command.copy()
         command_copy.pop('signature', None)
         command_copy.pop('signing_key_id', None)
-        message = json.dumps(command_copy, sort_keys=True).encode('utf-8')
+        command_copy.pop('signing_algorithm', None)
+        command_copy.pop('signed_at', None)
+        message = json.dumps(command_copy, sort_keys=True, separators=(',', ':'), ensure_ascii=False).encode('utf-8')
         
         # Verify signature
         try:
