@@ -106,13 +106,15 @@ def apply_contradiction_decay(current_confidence: float) -> float:
 
 def determine_stage(confidence: float) -> str:
     """
-    PHASE 3: Determine incident stage based on confidence score.
+    PHASE 3: Determine incident stage based on confidence score (deterministic).
     
-    State transitions (deterministic):
-    - confidence == 0.0 → CLEAN (no signals, incident should not exist)
-    - 0.0 < confidence < PROBABLE_THRESHOLD → SUSPICIOUS
+    State transitions (deterministic, no time-based escalation):
+    - confidence < PROBABLE_THRESHOLD → SUSPICIOUS (incidents start here)
     - PROBABLE_THRESHOLD <= confidence < CONFIRMED_THRESHOLD → PROBABLE
     - confidence >= CONFIRMED_THRESHOLD → CONFIRMED
+    
+    Note: CLEAN is implicit (no incident exists). Incidents are only created when
+    signals are present, so they always start at SUSPICIOUS.
     
     Args:
         confidence: Current confidence score
@@ -120,14 +122,12 @@ def determine_stage(confidence: float) -> str:
     Returns:
         Incident stage string
     """
-    if confidence == 0.0:
-        return 'CLEAN'  # PHASE 3: CLEAN state (no signals)
-    elif confidence >= CONFIDENCE_THRESHOLD_CONFIRMED:
+    if confidence >= CONFIDENCE_THRESHOLD_CONFIRMED:
         return 'CONFIRMED'
     elif confidence >= CONFIDENCE_THRESHOLD_PROBABLE:
         return 'PROBABLE'
     else:
-        return 'SUSPICIOUS'
+        return 'SUSPICIOUS'  # PHASE 3: Incidents start at SUSPICIOUS (single signal)
 
 
 def should_transition_stage(current_stage: str, new_stage: str) -> bool:
