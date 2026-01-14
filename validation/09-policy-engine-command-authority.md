@@ -1,4 +1,4 @@
-# Validation Step 9 — Policy Engine & Command Authority (Decision, Simulation, Signing)
+# Validation Step 9 — Policy Engine & Command Authority (In-Depth)
 
 **Component Identity:**
 - **Name:** Policy Engine (Decision & Response Authority)
@@ -7,504 +7,590 @@
   - `/home/ransomeye/rebuild/services/policy-engine/app/rules.py` - Policy rule evaluation
   - `/home/ransomeye/rebuild/services/policy-engine/app/signer.py` - Command signing
   - `/home/ransomeye/rebuild/services/policy-engine/app/db.py` - Database operations
+  - `/home/ransomeye/rebuild/threat-response-engine/` - TRE (execution subsystem)
 - **Entry Point:** Batch processing loop - `services/policy-engine/app/main.py:200` - `run_policy_engine()`
 
-**Spec Reference:**
+**Master Spec References:**
 - Phase 7 — Simulation-First Policy Engine
 - Policy Engine README (`services/policy-engine/README.md`)
+- Validation File 06 (Ingest Pipeline) — **TREATED AS FAILED AND LOCKED**
+- Validation File 07 (Correlation Engine) — **TREATED AS FAILED AND LOCKED**
+- Validation File 08 (AI Core) — **TREATED AS FAILED AND LOCKED**
 
 ---
 
-## 1. COMPONENT IDENTITY & AUTHORITY
+## PURPOSE
+
+This validation proves that the Policy Engine enforces explicit authority, cryptographically verifies command origin, prevents unauthorized or replayed commands, and cannot be bypassed by agents or services.
+
+This validation does NOT assume ingest determinism, correlation determinism, or AI determinism. Validation Files 06, 07, and 08 are treated as FAILED and LOCKED. This validation must account for non-deterministic inputs affecting policy decisions.
+
+This file validates:
+- Command signing & verification
+- Authority chain (who is allowed to issue which commands)
+- Replay protection (nonces / sequence)
+- Fail-closed behavior on invalid commands
+- Dependency on Core trust root
+- Credential handling (signing keys, rotation, scope)
+
+This validation does NOT validate UI, reporting, installer, or provide fixes/recommendations.
+
+---
+
+## POLICY ENGINE DEFINITION
+
+**Policy Engine Requirements (Master Spec):**
+
+1. **Command Signing & Verification** — All commands are cryptographically signed, signature verification is mandatory
+2. **Authority Chain** — Explicit authority validation (who is allowed to issue which commands)
+3. **Replay Protection** — Nonces or sequence numbers prevent command replay
+4. **Fail-Closed Behavior** — Invalid commands are rejected, no fail-open behavior
+5. **Dependency on Core Trust Root** — Policy Engine depends on Core trust root for key management
+6. **Credential Handling** — Signing keys are properly managed, rotated, and scoped
+
+**Policy Engine Structure:**
+- **Entry Point:** Batch processing loop (`run_policy_engine()`)
+- **Processing Chain:** Read incidents → Evaluate policy rules → Create signed commands → Store commands
+- **Command Flow:** Policy Engine → TRE → Agents (TRE signs with ed25519, agents verify)
+
+---
+
+## WHAT IS VALIDATED
+
+### 1. Command Signing & Verification
+- All commands are cryptographically signed
+- Signature verification is mandatory
+- Signing algorithm is appropriate
+
+### 2. Authority Chain
+- Explicit authority validation
+- Who is allowed to issue which commands
+- Authority cannot be bypassed
+
+### 3. Replay Protection
+- Nonces or sequence numbers prevent replay
+- Command idempotency is enforced
+
+### 4. Fail-Closed Behavior
+- Invalid commands are rejected
+- No fail-open behavior exists
+
+### 5. Dependency on Core Trust Root
+- Policy Engine depends on Core trust root
+- Key management is correct
+
+### 6. Credential Handling
+- Signing keys are properly managed
+- Key rotation is supported
+- Key scope is correct
+
+---
+
+## WHAT IS EXPLICITLY NOT ASSUMED
+
+- **NOT ASSUMED:** That ingest_time (ingested_at) is deterministic (Validation File 06 is FAILED)
+- **NOT ASSUMED:** That correlation engine produces deterministic incidents (Validation File 07 is FAILED)
+- **NOT ASSUMED:** That AI Core produces deterministic outputs (Validation File 08 is FAILED)
+- **NOT ASSUMED:** That Policy Engine receives deterministic inputs (incidents may differ on replay)
+
+---
+
+## VALIDATION METHODOLOGY
+
+### Evidence Collection Strategy
+
+1. **Code Path Analysis:** Trace command signing, signature verification, authority validation, replay protection
+2. **Database Query Analysis:** Examine SQL queries for command storage, authority tracking
+3. **Cryptographic Analysis:** Verify signing algorithms, key management, signature verification
+4. **Authority Analysis:** Check authority chain, RBAC enforcement, issuer verification
+5. **Replay Analysis:** Check nonce/sequence handling, idempotency enforcement
+6. **Error Handling Analysis:** Check fail-closed behavior, error blocking, silent degradation
+
+### Forbidden Patterns (Grep Validation)
+
+- `continue.*except|pass.*except` — Silent error handling (forbidden, must fail-closed)
+- `default.*allow|allow.*default` — Fail-open behavior (forbidden, must fail-closed)
+- `unsigned|no.*signature|skip.*verification` — Missing signature verification (forbidden)
+
+---
+
+## 1. COMMAND SIGNING & VERIFICATION
 
 ### Evidence
 
-**Policy Engine Entry Points:**
-- ✅ Batch processing loop: `services/policy-engine/app/main.py:200` - `run_policy_engine()`
-- ✅ Policy evaluation: `services/policy-engine/app/rules.py:59` - `evaluate_policy()` evaluates incident against rules
-- ✅ Command signing: `services/policy-engine/app/signer.py:139` - `create_signed_command()` creates and signs commands
-- ✅ Main entry: `services/policy-engine/app/main.py:334` - `if __name__ == "__main__":` runs `run_policy_engine()`
+**All Commands Are Cryptographically Signed:**
+- ✅ Policy Engine signs commands: `services/policy-engine/app/signer.py:110-136` - `sign_command()` signs commands with HMAC-SHA256
+- ✅ Policy Engine creates signed commands: `services/policy-engine/app/signer.py:139-169` - `create_signed_command()` creates signed command structure
+- ✅ TRE signs commands: `threat-response-engine/crypto/signer.py:60-80` - `sign_command()` signs commands with ed25519
+- ✅ TRE signs before dispatch: `threat-response-engine/api/tre_api.py:195` - `self.signer.sign_command(command_payload)` signs commands before dispatch
+- ⚠️ **ISSUE:** Policy Engine uses HMAC-SHA256, TRE uses ed25519 (different signing algorithms)
 
-**Sub-Components (Rules, Simulation, Signer, Dispatcher):**
-- ✅ Rules: `services/policy-engine/app/rules.py:22` - `evaluate_suspicious_incident_rule()` evaluates policy rules
-- ✅ Simulation: `services/policy-engine/app/main.py:279-280` - Policy decisions marked with `simulation_mode: True` and `enforcement_disabled: True`
-- ✅ Signer: `services/policy-engine/app/signer.py:110` - `sign_command()` signs commands with HMAC-SHA256
-- ❌ **CRITICAL:** No dispatcher found:
-  - `services/policy-engine/app/main.py:297` - `store_signed_command()` stores commands (does not dispatch)
-  - `services/policy-engine/README.md:58` - "NO command transmission: Signed commands are NOT sent to agents"
-  - ❌ **CRITICAL:** No dispatcher exists (commands are stored, not dispatched)
+**Signature Verification Is Mandatory:**
+- ✅ Agents verify signatures: `agents/linux/command_gate.py:314-346` - `_verify_signature()` verifies ed25519 signature before execution
+- ✅ Signature verification is required: `agents/linux/command_gate.py:324-325` - If verifier not available, command is rejected
+- ✅ Signature verification is step 3: `agents/linux/command_gate.py:175` - Signature verification is step 3 of 9-step pipeline
+- ⚠️ **ISSUE:** Windows agent has placeholder: `agents/windows/command_gate.ps1:122-129` - `Test-CommandSignature` has placeholder (not implemented)
 
-**Whether Any Other Component Can Issue Commands:**
-- ⚠️ **ISSUE:** TRE can issue commands:
-  - `threat-response-engine/api/tre_api.py:118` - `execute_action()` executes policy decisions
-  - `threat-response-engine/api/tre_api.py:195` - `self.signer.sign_command(command_payload)` signs commands with ed25519
-  - `threat-response-engine/README.md:7` - "TRE is execution-only subsystem that executes final Policy Engine decisions"
-  - ⚠️ **ISSUE:** TRE can issue commands (but consumes policy decisions from Policy Engine)
-- ✅ **VERIFIED:** AI Core does NOT issue commands:
-  - `services/ai-core/README.md:75` - "No action triggers: AI output does not trigger any actions or decisions"
-  - ✅ **VERIFIED:** AI Core cannot issue commands
-- ✅ **VERIFIED:** Correlation Engine does NOT issue commands:
-  - `services/correlation-engine/README.md` - No command issuance found
-  - ✅ **VERIFIED:** Correlation Engine cannot issue commands
-- ⚠️ **ISSUE:** UI backend may issue commands:
-  - `threat-response-engine/api/tre_api.py:118` - `execute_action()` can be called by UI backend
-  - ⚠️ **ISSUE:** UI backend can trigger TRE to execute actions (but requires policy decision)
+**Signing Algorithm Is Appropriate:**
+- ✅ Policy Engine uses HMAC-SHA256: `services/policy-engine/app/signer.py:134` - `hmac.new(signing_key, command_json.encode('utf-8'), hashlib.sha256).hexdigest()`
+- ✅ TRE uses ed25519: `threat-response-engine/crypto/signer.py:50-53` - `self.private_key.sign(payload_json.encode('utf-8'), backend=default_backend())`
+- ✅ Agents verify ed25519: `agents/linux/command_gate.py:342` - `self.verifier.verify(message, signature)` (ed25519 verification)
+- ⚠️ **ISSUE:** Policy Engine and TRE use different signing algorithms (HMAC-SHA256 vs ed25519)
 
-**Whether Any Other Component Can Sign Commands:**
-- ⚠️ **ISSUE:** TRE can sign commands:
-  - `threat-response-engine/crypto/signer.py:60` - `sign_command()` signs commands with ed25519
-  - `threat-response-engine/api/tre_api.py:195` - `self.signer.sign_command(command_payload)` signs commands
-  - ⚠️ **ISSUE:** TRE can sign commands (but uses ed25519, separate from Policy Engine's HMAC-SHA256)
-- ✅ **VERIFIED:** Policy Engine signs commands:
-  - `services/policy-engine/app/signer.py:110` - `sign_command()` signs commands with HMAC-SHA256
-  - ✅ **VERIFIED:** Policy Engine signs commands
-
-**Whether Any Other Component Can Enforce Actions:**
-- ⚠️ **ISSUE:** TRE can enforce actions:
-  - `threat-response-engine/api/tre_api.py:118` - `execute_action()` executes policy decisions
-  - `threat-response-engine/engine/command_dispatcher.py:57` - `dispatch_command()` dispatches commands to agents
-  - ⚠️ **ISSUE:** TRE can enforce actions (but consumes policy decisions from Policy Engine)
-
-**Any Module Outside Policy Engine Can Sign or Dispatch Commands:**
-- ⚠️ **ISSUE:** TRE can sign and dispatch commands:
-  - `threat-response-engine/crypto/signer.py:60` - `sign_command()` signs commands
-  - `threat-response-engine/engine/command_dispatcher.py:57` - `dispatch_command()` dispatches commands
-  - ⚠️ **ISSUE:** TRE can sign and dispatch commands (but consumes policy decisions from Policy Engine)
+**Any Command Is Accepted Without Cryptographic Verification:**
+- ✅ **VERIFIED:** Agents do NOT accept unsigned commands: `agents/linux/command_gate.py:314-346` - Signature verification is mandatory (step 3)
+- ✅ **VERIFIED:** If signature verification fails, command is rejected: `agents/linux/command_gate.py:343-344` - Raises `CommandRejectionError` on signature verification failure
+- ⚠️ **ISSUE:** Windows agent has placeholder for signature verification (not implemented)
 
 ### Verdict: **PARTIAL**
 
 **Justification:**
-- Policy Engine is clearly identified as decision authority
-- **CRITICAL ISSUE:** No dispatcher exists (commands are stored, not dispatched)
-- **ISSUE:** TRE can sign and dispatch commands (but consumes policy decisions from Policy Engine)
-- **ISSUE:** UI backend can trigger TRE to execute actions (but requires policy decision)
+- Policy Engine signs commands (HMAC-SHA256)
+- TRE signs commands (ed25519)
+- Agents verify signatures (ed25519 verification is mandatory)
+- **ISSUE:** Policy Engine and TRE use different signing algorithms (HMAC-SHA256 vs ed25519)
+- **ISSUE:** Windows agent has placeholder for signature verification (not implemented)
+
+**PASS Conditions (Met):**
+- All commands are cryptographically signed — **CONFIRMED** (Policy Engine and TRE sign commands)
+- Signature verification is mandatory — **CONFIRMED** (agents verify signatures)
+
+**FAIL Conditions (Met):**
+- Any command is accepted without cryptographic verification — **PARTIAL** (Linux agent verifies, Windows agent has placeholder)
+
+**Evidence Required:**
+- File paths: `services/policy-engine/app/signer.py:110-136,139-169`, `threat-response-engine/crypto/signer.py:60-80`, `threat-response-engine/api/tre_api.py:195`, `agents/linux/command_gate.py:314-346,175`, `agents/windows/command_gate.ps1:122-129`
+- Command signing: HMAC-SHA256 (Policy Engine), ed25519 (TRE)
+- Signature verification: ed25519 verification (agents)
 
 ---
 
-## 2. INPUT TRUST & GATING
+## 2. AUTHORITY CHAIN
 
 ### Evidence
 
-**Inputs Come Only from Correlation Engine:**
-- ✅ Inputs come from correlation engine: `services/policy-engine/app/db.py:67-115` - `get_unresolved_incidents()` reads from `incidents` table (incidents created by correlation engine)
-- ✅ Inputs from incidents only: `services/policy-engine/app/db.py:77-89` - Reads from `incidents` table only
-- ✅ No direct AI input: `services/policy-engine/app/db.py:77-89` - Reads from `incidents` table only (not from AI Core)
-- ✅ No direct agent/DPI input: `services/policy-engine/app/db.py:77-89` - Reads from `incidents` table only (not from agents/DPI)
+**Explicit Authority Validation:**
+- ✅ RBAC validation: `agents/linux/command_gate.py:364-387` - `_validate_rbac()` validates `issued_by_role` and `issued_by_user_id`
+- ✅ Role validation: `agents/linux/command_gate.py:385-387` - Valid roles are `{'SUPER_ADMIN', 'SECURITY_ANALYST', 'POLICY_MANAGER', 'IT_ADMIN', 'AUDITOR'}`
+- ✅ Issuer verification: `agents/linux/command_gate.py:348-362` - `_verify_issuer()` verifies `signing_key_id` matches TRE key ID
+- ✅ HAF approval validation: `agents/linux/command_gate.py:389-413` - `_validate_haf_approval()` validates HAF approval for destructive actions
+- ⚠️ **ISSUE:** Policy Engine does not validate authority: `services/policy-engine/app/rules.py:22-56` - Policy rules do not validate authority (only evaluate incident stage)
 
-**Required Incident State for Action Eligibility:**
-- ✅ Incident state required: `services/policy-engine/app/rules.py:45` - `current_stage = incident.get('current_stage')`
-- ✅ Only SUSPICIOUS triggers action: `services/policy-engine/app/rules.py:49` - `if current_stage == 'SUSPICIOUS':` recommends action
-- ⚠️ **ISSUE:** No CONFIRMED requirement:
-  - `services/policy-engine/app/rules.py:49` - Only `SUSPICIOUS` stage triggers action (not `CONFIRMED`)
-  - ⚠️ **ISSUE:** Actions allowed without CONFIRMED stage (only SUSPICIOUS required)
+**Who Is Allowed to Issue Which Commands:**
+- ✅ Agents validate role: `agents/linux/command_gate.py:385-387` - Valid roles are defined (SUPER_ADMIN, SECURITY_ANALYST, etc.)
+- ✅ Agents validate user_id: `agents/linux/command_gate.py:380-382` - `issued_by_user_id` must be present
+- ⚠️ **ISSUE:** Policy Engine does not track who issues commands: `services/policy-engine/app/signer.py:71-107` - Command payload does not include `issued_by_user_id` or `issued_by_role`
+- ⚠️ **ISSUE:** TRE adds user_id and role: `threat-response-engine/api/tre_api.py:189-190` - TRE adds `issued_by_user_id` and `issued_by_role` to command payload
 
-**Explicit Gating (e.g., Only Confirmed Incidents):**
-- ⚠️ **ISSUE:** No explicit gating for CONFIRMED:
-  - `services/policy-engine/app/rules.py:49` - Only `SUSPICIOUS` stage triggers action
-  - No gating for `CONFIRMED` stage found
-  - ⚠️ **ISSUE:** Actions allowed for SUSPICIOUS incidents (not only CONFIRMED)
+**Authority Cannot Be Bypassed:**
+- ✅ Agents validate authority: `agents/linux/command_gate.py:364-413` - RBAC, issuer, and HAF approval validation are mandatory (steps 4, 5, 6)
+- ✅ Authority validation is in pipeline: `agents/linux/command_gate.py:177-184` - Authority validation is steps 4, 5, 6 of 9-step pipeline
+- ⚠️ **ISSUE:** Policy Engine does not validate authority (authority validation happens at TRE/agent level)
 
-**Policy Accepts Direct AI Input:**
-- ✅ **VERIFIED:** Policy does NOT accept direct AI input:
-  - `services/policy-engine/app/db.py:77-89` - Reads from `incidents` table only (not from AI Core)
-  - ✅ **VERIFIED:** Policy does NOT accept direct AI input (reads from incidents table only)
-
-**Policy Accepts Agent/DPI Input:**
-- ✅ **VERIFIED:** Policy does NOT accept agent/DPI input:
-  - `services/policy-engine/app/db.py:77-89` - Reads from `incidents` table only (not from agents/DPI)
-  - ✅ **VERIFIED:** Policy does NOT accept agent/DPI input (reads from incidents table only)
-
-**Actions Allowed Without Correlation Confirmation:**
-- ⚠️ **ISSUE:** Actions allowed without correlation confirmation:
-  - `services/policy-engine/app/rules.py:49` - Only `SUSPICIOUS` stage triggers action (not `CONFIRMED`)
-  - No requirement for correlation confirmation found
-  - ⚠️ **ISSUE:** Actions allowed for SUSPICIOUS incidents (not requiring CONFIRMED stage)
+**Any Command Executes Without Explicit Authority Validation:**
+- ✅ **VERIFIED:** Agents do NOT execute without authority validation: `agents/linux/command_gate.py:177-184` - Authority validation is mandatory (steps 4, 5, 6)
+- ⚠️ **ISSUE:** Policy Engine does not validate authority (authority validation deferred to TRE/agents)
 
 ### Verdict: **PARTIAL**
 
 **Justification:**
-- Inputs come only from correlation engine (via incidents table)
-- Policy does NOT accept direct AI or agent/DPI input
-- **ISSUE:** Actions allowed without CONFIRMED stage (only SUSPICIOUS required)
-- **ISSUE:** No explicit gating for CONFIRMED incidents
+- Agents validate authority (RBAC, issuer, HAF approval)
+- Authority validation is mandatory (steps 4, 5, 6 of 9-step pipeline)
+- **ISSUE:** Policy Engine does not validate authority (authority validation deferred to TRE/agents)
+- **ISSUE:** Policy Engine does not track who issues commands (command payload does not include user_id/role)
+
+**PASS Conditions (Met):**
+- Explicit authority validation exists — **CONFIRMED** (agents validate authority)
+- Authority cannot be bypassed — **CONFIRMED** (authority validation is mandatory)
+
+**FAIL Conditions (Met):**
+- Any command executes without explicit authority validation — **PARTIAL** (agents validate, but Policy Engine does not)
+
+**Evidence Required:**
+- File paths: `agents/linux/command_gate.py:364-387,348-362,389-413,177-184`, `services/policy-engine/app/rules.py:22-56`, `services/policy-engine/app/signer.py:71-107`, `threat-response-engine/api/tre_api.py:189-190`
+- Authority validation: RBAC, issuer verification, HAF approval
+- Authority tracking: user_id, role in command payload
 
 ---
 
-## 3. SIMULATION-FIRST GUARANTEE (CRITICAL)
+## 3. REPLAY PROTECTION
 
 ### Evidence
 
-**Simulation Path Exists:**
-- ✅ Simulation path exists: `services/policy-engine/app/main.py:279-280` - Policy decisions marked with `simulation_mode: True` and `enforcement_disabled: True`
-- ✅ Simulation mode by default: `services/policy-engine/app/main.py:225` - `simulation_mode = config.get('RANSOMEYE_POLICY_ENFORCEMENT_ENABLED', 'false').lower() == "true"` (defaults to `false`)
-- ✅ Simulation mode: `services/policy-engine/README.md:42` - "Simulation by default: Policy engine runs in simulation mode unless explicitly enabled"
+**Nonces or Sequence Numbers Prevent Replay:**
+- ✅ Command ID idempotency: `agents/linux/command_gate.py:415-436` - `_check_idempotency()` checks if `command_id` already seen (replay protection)
+- ✅ Nonce cache: `agents/linux/command_gate.py:91-92` - `self.nonce_cache = set()` (nonce cache for replay protection)
+- ✅ Command ID is UUID: `services/policy-engine/app/signer.py:93` - `command_id = str(uuid.uuid4())` (UUID v4, unique)
+- ⚠️ **ISSUE:** No sequence numbers: No sequence number field found in command payload
+- ⚠️ **ISSUE:** No nonce field: No explicit nonce field found in command payload (only command_id used for idempotency)
 
-**Simulation Occurs Before Enforcement:**
-- ⚠️ **ISSUE:** No enforcement occurs:
-  - `services/policy-engine/app/main.py:297` - `store_signed_command()` stores commands (does not enforce)
-  - `services/policy-engine/README.md:58` - "NO command transmission: Signed commands are NOT sent to agents"
-  - ⚠️ **ISSUE:** No enforcement occurs (simulation is the only mode, no enforcement path exists)
+**Command Idempotency Is Enforced:**
+- ✅ Idempotency check: `agents/linux/command_gate.py:415-436` - `_check_idempotency()` prevents duplicate command execution
+- ✅ Idempotency is step 7: `agents/linux/command_gate.py:187` - Idempotency check is step 7 of 9-step pipeline
+- ✅ Replay detection: `agents/linux/command_gate.py:425-426` - If `command_id` already in cache, raises `CommandRejectionError` (replay attack)
+- ⚠️ **ISSUE:** Nonce cache has size limit: `agents/linux/command_gate.py:432-436` - Nonce cache evicts oldest entries when full (may allow replay after eviction)
 
-**Simulation Results Are Logged & Reviewable:**
-- ✅ Simulation results logged: `services/policy-engine/app/main.py:300` - `print(f"Policy decision for incident {incident_id}: {action} (SIMULATION - NOT EXECUTED)")`
-- ✅ Simulation results stored: `services/policy-engine/app/main.py:283` - `store_policy_decision(incident_id, policy_decision)` stores policy decisions
-- ✅ Simulation results reviewable: `services/policy-engine/app/main.py:137` - Policy decisions stored in files (reviewable)
-
-**Direct Enforcement Without Simulation:**
-- ✅ **VERIFIED:** No direct enforcement exists:
-  - `services/policy-engine/app/main.py:297` - `store_signed_command()` stores commands (does not enforce)
-  - `services/policy-engine/README.md:58` - "NO command transmission: Signed commands are NOT sent to agents"
-  - ✅ **VERIFIED:** No direct enforcement exists (simulation is the only mode)
-
-**Simulation Optional or Bypassable:**
-- ⚠️ **ISSUE:** Simulation is the only mode (not optional):
-  - `services/policy-engine/app/main.py:279-280` - Policy decisions always marked with `simulation_mode: True` and `enforcement_disabled: True`
-  - `services/policy-engine/app/main.py:297` - Commands are stored, not dispatched
-  - ⚠️ **ISSUE:** Simulation is the only mode (no enforcement path exists, so simulation cannot be bypassed)
-
-**Enforcement Occurs on Speculative Data:**
-- ✅ **VERIFIED:** No enforcement occurs:
-  - `services/policy-engine/app/main.py:297` - Commands are stored, not dispatched
-  - ✅ **VERIFIED:** No enforcement occurs (simulation is the only mode)
+**Replay Protection Depends on Non-Deterministic Inputs:**
+- ⚠️ **ISSUE:** Command ID is UUID (non-deterministic): `services/policy-engine/app/signer.py:93` - `command_id = str(uuid.uuid4())` (UUID v4, non-deterministic)
+- ✅ Idempotency check is deterministic: `agents/linux/command_gate.py:425` - Idempotency check is deterministic (checks if command_id in cache)
+- ⚠️ **ISSUE:** If same command is replayed with different command_id, idempotency check will not detect replay (command_id is non-deterministic)
 
 ### Verdict: **PARTIAL**
 
 **Justification:**
-- Simulation path exists (simulation mode by default)
-- Simulation results are logged and reviewable
-- **ISSUE:** No enforcement occurs (simulation is the only mode, no enforcement path exists)
-- **ISSUE:** Simulation is the only mode (not optional, but also no enforcement path exists)
+- Command ID idempotency prevents replay (command_id is checked)
+- Idempotency check is mandatory (step 7 of 9-step pipeline)
+- **ISSUE:** No sequence numbers or explicit nonce field (only command_id used)
+- **ISSUE:** Nonce cache has size limit (may allow replay after eviction)
+- **ISSUE:** Command ID is UUID (non-deterministic), so same command replayed with different command_id will not be detected
+
+**PASS Conditions (Met):**
+- Replay protection exists — **CONFIRMED** (command ID idempotency)
+- Command idempotency is enforced — **CONFIRMED** (idempotency check is mandatory)
+
+**FAIL Conditions (Met):**
+- Replay protection depends on non-deterministic inputs — **PARTIAL** (command_id is UUID, non-deterministic)
+
+**Evidence Required:**
+- File paths: `agents/linux/command_gate.py:415-436,91-92,187`, `services/policy-engine/app/signer.py:93`
+- Replay protection: Command ID idempotency, nonce cache
+- Idempotency: Command ID uniqueness, cache management
 
 ---
 
-## 4. COMMAND CONSTRUCTION
+## 4. FAIL-CLOSED BEHAVIOR
 
 ### Evidence
 
-**Command Schema Enforcement:**
-- ✅ Command schema enforced: `services/policy-engine/app/signer.py:71-107` - `create_command_payload()` creates structured command payload:
-  - `command_id`: UUID v4
-  - `command_type`: String (e.g., 'ISOLATE_HOST')
-  - `target_machine_id`: String
-  - `incident_id`: String
-  - `issued_at`: RFC3339 UTC timestamp
-- ✅ Command types defined: `services/policy-engine/app/rules.py:16-19` - `PolicyAction` enum: `ISOLATE_HOST`, `QUARANTINE_HOST`, `NO_ACTION`
-- ✅ Command structure enforced: `services/policy-engine/app/signer.py:99-105` - Command payload structure is fixed (no free-form fields)
+**Invalid Commands Are Rejected:**
+- ✅ Schema validation rejects invalid commands: `agents/linux/command_gate.py:207-282` - `_validate_schema()` validates command schema (required fields, UUIDs, enums, timestamps)
+- ✅ Freshness check rejects expired commands: `agents/linux/command_gate.py:284-312` - `_validate_freshness()` rejects expired commands and commands with clock skew
+- ✅ Signature verification rejects invalid signatures: `agents/linux/command_gate.py:314-346` - `_verify_signature()` rejects commands with invalid signatures
+- ✅ Authority validation rejects unauthorized commands: `agents/linux/command_gate.py:364-413` - RBAC, issuer, and HAF approval validation reject unauthorized commands
+- ✅ All validation steps must pass: `agents/linux/command_gate.py:167-194` - If any step fails, command is rejected
 
-**Explicit Command Types:**
-- ✅ Explicit command types: `services/policy-engine/app/rules.py:16-19` - `PolicyAction` enum: `ISOLATE_HOST`, `QUARANTINE_HOST`, `NO_ACTION`
-- ✅ Command types used: `services/policy-engine/app/rules.py:52` - `action = PolicyAction.ISOLATE_HOST` (explicit enum value)
-- ✅ Command types enforced: `services/policy-engine/app/signer.py:101` - `command_type` is passed as parameter (not free-form)
+**No Fail-Open Behavior Exists:**
+- ✅ **VERIFIED:** No fail-open behavior: `agents/linux/command_gate.py:200-205` - All exceptions raise `CommandRejectionError` (no fail-open)
+- ✅ **VERIFIED:** Default deny: `agents/linux/command_gate.py:471-492` - Default deny policy when no cached policy exists (fail-closed)
+- ✅ **VERIFIED:** Offline enforcement is fail-closed: `agents/linux/command_gate.py:614-678` - When Core is offline, cached policy enforces fail-closed (default deny)
 
-**No Free-Form Shell Commands:**
-- ✅ **VERIFIED:** No free-form shell commands:
-  - `services/policy-engine/app/signer.py:99-105` - Command payload structure is fixed (no shell commands)
-  - `services/policy-engine/app/rules.py:16-19` - Command types are enum values (not shell commands)
-  - ✅ **VERIFIED:** No free-form shell commands (command types are enum values)
+**Behavior on Invalid Commands:**
+- ✅ Invalid commands are rejected: `agents/linux/command_gate.py:200-205` - All validation failures raise `CommandRejectionError`
+- ✅ Rejection is logged: `agents/linux/command_gate.py:201-202` - Rejection is logged to audit log
+- ✅ No silent acceptance: `agents/linux/command_gate.py:200-205` - No silent acceptance of invalid commands
 
-**Arbitrary Command Execution:**
-- ✅ **VERIFIED:** No arbitrary command execution:
-  - `services/policy-engine/app/rules.py:16-19` - Command types are enum values (not arbitrary)
-  - `services/policy-engine/app/signer.py:99-105` - Command payload structure is fixed (not arbitrary)
-  - ✅ **VERIFIED:** No arbitrary command execution (command types are enum values)
-
-**Ad-Hoc Payloads:**
-- ✅ **VERIFIED:** No ad-hoc payloads:
-  - `services/policy-engine/app/signer.py:99-105` - Command payload structure is fixed (not ad-hoc)
-  - ✅ **VERIFIED:** No ad-hoc payloads (command payload structure is fixed)
-
-**Agent-Side Interpretation of Intent:**
-- ✅ **VERIFIED:** No agent-side interpretation:
-  - `services/policy-engine/app/signer.py:99-105` - Command payload contains explicit `command_type` (not intent)
-  - ✅ **VERIFIED:** No agent-side interpretation (command types are explicit enum values)
+**Any Fail-Open Behavior Exists:**
+- ✅ **VERIFIED:** No fail-open behavior found: All validation failures cause rejection (no fail-open)
 
 ### Verdict: **PASS**
 
 **Justification:**
-- Command schema is enforced (structured command payload)
-- Explicit command types (enum values: ISOLATE_HOST, QUARANTINE_HOST, NO_ACTION)
-- No free-form shell commands, arbitrary command execution, ad-hoc payloads, or agent-side interpretation
+- Invalid commands are rejected (all validation steps must pass)
+- No fail-open behavior exists (default deny, offline enforcement is fail-closed)
+- Rejection is logged (audit trail exists)
+
+**PASS Conditions (Met):**
+- Invalid commands are rejected — **CONFIRMED** (all validation steps must pass)
+- No fail-open behavior exists — **CONFIRMED** (default deny, fail-closed)
+
+**Evidence Required:**
+- File paths: `agents/linux/command_gate.py:207-282,284-312,314-346,364-413,167-194,200-205,471-492,614-678`
+- Fail-closed behavior: Default deny, offline enforcement, rejection logging
 
 ---
 
-## 5. COMMAND SIGNING & CRYPTOGRAPHY
+## 5. DEPENDENCY ON CORE TRUST ROOT
 
 ### Evidence
 
-**Signing Algorithm Used:**
-- ✅ Signing algorithm: `services/policy-engine/app/signer.py:134` - `hmac.new(signing_key, command_json.encode('utf-8'), hashlib.sha256).hexdigest()` (HMAC-SHA256)
-- ✅ Signing algorithm documented: `services/policy-engine/app/signer.py:165` - `'signing_algorithm': 'HMAC-SHA256'`
-- ✅ Signing algorithm: `services/policy-engine/README.md:97` - "Cryptographic signing: Commands are signed using HMAC-SHA256"
+**Policy Engine Depends on Core Trust Root:**
+- ✅ Signing key from environment: `services/policy-engine/app/signer.py:45-68` - `get_signing_key()` reads `RANSOMEYE_COMMAND_SIGNING_KEY` from environment
+- ✅ Signing key validation: `services/policy-engine/app/signer.py:45-50` - `validate_signing_key()` validates key strength (min 32 characters)
+- ✅ Signing key initialization: `services/policy-engine/app/main.py:97-114` - Signing key is initialized at startup (fail-fast on invalid key)
+- ⚠️ **ISSUE:** Policy Engine does not use Core trust root directly (signing key is from environment, not from Core trust root)
 
-**Key Source & Protection:**
-- ✅ Key from environment: `services/policy-engine/app/signer.py:46` - `validate_signing_key(env_var="RANSOMEYE_COMMAND_SIGNING_KEY", ...)`
-- ✅ Key loaded once: `services/policy-engine/app/signer.py:40-41` - `if _SIGNING_KEY is not None: return _SIGNING_KEY` (cached, never reloaded)
-- ✅ Key validated: `services/policy-engine/app/signer.py:46-50` - `validate_signing_key()` validates key strength (minimum 32 characters, entropy, not default)
-- ✅ Key never logged: `services/policy-engine/README.md:489` - "Key Never Logged: Signing key never logged"
-- ⚠️ **ISSUE:** Default key exists: `services/policy-engine/README.md:283` - "RANSOMEYE_COMMAND_SIGNING_KEY: Command signing key (default: phase7_minimal_default_key, NOT SECURE FOR PRODUCTION)"
-- ⚠️ **ISSUE:** Default key allowed: `services/policy-engine/app/signer.py:49` - `fail_on_default=True` (but default key exists in README)
+**Key Management Is Correct:**
+- ✅ Signing key is loaded once: `services/policy-engine/app/signer.py:24-41` - Signing key is cached (loaded once, never reloaded)
+- ✅ Signing key is never logged: `services/policy-engine/app/signer.py:24-41` - Signing key is never logged (security)
+- ⚠️ **ISSUE:** No key rotation found: No key rotation logic found in Policy Engine
+- ⚠️ **ISSUE:** No key versioning found: No key versioning logic found in Policy Engine
 
-**Mandatory Signature on Every Command:**
-- ✅ Signature mandatory: `services/policy-engine/app/signer.py:159` - `signature = sign_command(command_payload)` (always called)
-- ✅ Signature stored: `services/policy-engine/app/signer.py:164` - `'signature': signature` (always included)
-- ✅ Signature mandatory: `services/policy-engine/app/main.py:289-293` - `create_signed_command()` always called before storage
-
-**Unsigned Commands:**
-- ✅ **VERIFIED:** No unsigned commands:
-  - `services/policy-engine/app/signer.py:159` - `signature = sign_command(command_payload)` (always called)
-  - `services/policy-engine/app/signer.py:164` - `'signature': signature` (always included)
-  - ✅ **VERIFIED:** No unsigned commands (signature always generated and included)
-
-**Test Keys in Production Paths:**
-- ⚠️ **ISSUE:** Default key exists: `services/policy-engine/README.md:283` - "RANSOMEYE_COMMAND_SIGNING_KEY: Command signing key (default: phase7_minimal_default_key, NOT SECURE FOR PRODUCTION)"
-- ⚠️ **ISSUE:** Default key allowed: `services/policy-engine/app/signer.py:54-59` - Fallback allows default key if security utilities not available
-- ⚠️ **ISSUE:** Default key in production paths: Default key exists in README (not secure for production)
-
-**Signing Bypass Paths:**
-- ✅ **VERIFIED:** No signing bypass paths:
-  - `services/policy-engine/app/signer.py:159` - `signature = sign_command(command_payload)` (always called)
-  - `services/policy-engine/app/main.py:289-293` - `create_signed_command()` always called (no bypass)
-  - ✅ **VERIFIED:** No signing bypass paths (signature always generated)
+**Dependency on Core Trust Root Is Explicit:**
+- ⚠️ **ISSUE:** Policy Engine does not explicitly depend on Core trust root (signing key is from environment, not from Core trust root)
+- ⚠️ **ISSUE:** TRE uses separate key management: `threat-response-engine/crypto/key_manager.py` - TRE uses separate key management (not from Core trust root)
 
 ### Verdict: **PARTIAL**
 
 **Justification:**
-- Signing algorithm is HMAC-SHA256 (correctly implemented)
-- Key source is environment variable (correctly implemented)
-- Key protection exists (loaded once, validated, never logged)
-- **ISSUE:** Default key exists (phase7_minimal_default_key, not secure for production)
-- **ISSUE:** Default key allowed in fallback path (if security utilities not available)
-- Signature is mandatory on every command (correctly implemented)
+- Signing key is properly managed (loaded once, never logged, validated)
+- **ISSUE:** Policy Engine does not explicitly depend on Core trust root (signing key is from environment)
+- **ISSUE:** No key rotation or versioning found
+- **ISSUE:** TRE uses separate key management (not from Core trust root)
+
+**PASS Conditions (Met):**
+- Key management is correct — **CONFIRMED** (signing key is properly managed)
+
+**FAIL Conditions (Met):**
+- Dependency on Core trust root is explicit — **NOT CONFIRMED** (signing key is from environment, not from Core trust root)
+
+**Evidence Required:**
+- File paths: `services/policy-engine/app/signer.py:45-68,24-41`, `services/policy-engine/app/main.py:97-114`, `threat-response-engine/crypto/key_manager.py`
+- Key management: Signing key loading, validation, caching
+- Core trust root: Dependency on Core trust root
 
 ---
 
-## 6. DISPATCH & AUDITABILITY
+## 6. CREDENTIAL HANDLING
 
 ### Evidence
 
-**Dispatch Occurs Only via Secure Bus:**
-- ❌ **CRITICAL:** No dispatch occurs:
-  - `services/policy-engine/app/main.py:297` - `store_signed_command()` stores commands (does not dispatch)
-  - `services/policy-engine/README.md:58` - "NO command transmission: Signed commands are NOT sent to agents"
-  - ❌ **CRITICAL:** No dispatch occurs (commands are stored, not dispatched)
+**Signing Keys Are Properly Managed:**
+- ✅ Signing key is loaded once: `services/policy-engine/app/signer.py:24-41` - Signing key is cached (loaded once, never reloaded)
+- ✅ Signing key is never logged: `services/policy-engine/app/signer.py:24-41` - Signing key is never logged (security)
+- ✅ Signing key validation: `services/policy-engine/app/signer.py:45-50` - `validate_signing_key()` validates key strength (min 32 characters)
+- ✅ Signing key fail-fast: `services/policy-engine/app/signer.py:55-59` - Missing or weak signing key causes termination (fail-fast)
 
-**Commands Are Logged Immutably:**
-- ✅ Commands logged: `services/policy-engine/app/main.py:300` - `print(f"Policy decision for incident {incident_id}: {action} (SIMULATION - NOT EXECUTED)")`
-- ✅ Commands stored: `services/policy-engine/app/main.py:297` - `store_signed_command(incident_id, signed_command)` stores commands in files
-- ✅ Commands immutable: `services/policy-engine/README.md:105` - "All policy decisions and commands are immutable (never updated, never deleted)"
-- ⚠️ **ISSUE:** File-based storage: `services/policy-engine/app/main.py:179` - Commands stored in files (not database, not immutable at database level)
+**Key Rotation Is Supported:**
+- ⚠️ **ISSUE:** No key rotation found: No key rotation logic found in Policy Engine
+- ⚠️ **ISSUE:** No key versioning found: No key versioning logic found in Policy Engine
+- ⚠️ **ISSUE:** Signing key is static: Signing key is loaded once and never rotated
 
-**Dispatch Failures Handled Explicitly:**
-- ⚠️ **ISSUE:** No dispatch occurs (no dispatch failures to handle):
-  - `services/policy-engine/app/main.py:297` - Commands are stored, not dispatched
-  - ⚠️ **ISSUE:** No dispatch failures to handle (no dispatch exists)
+**Key Scope Is Correct:**
+- ✅ Policy Engine signing key scope: `services/policy-engine/app/signer.py:45-68` - Policy Engine uses `RANSOMEYE_COMMAND_SIGNING_KEY` (HMAC-SHA256)
+- ✅ TRE signing key scope: `threat-response-engine/crypto/key_manager.py` - TRE uses separate ed25519 key (different scope)
+- ⚠️ **ISSUE:** Two different signing keys (Policy Engine uses HMAC-SHA256, TRE uses ed25519)
 
-**Direct Agent RPC:**
-- ✅ **VERIFIED:** No direct agent RPC:
-  - `services/policy-engine/app/main.py:297` - Commands are stored, not sent to agents
-  - `services/policy-engine/README.md:58` - "NO command transmission: Signed commands are NOT sent to agents"
-  - ✅ **VERIFIED:** No direct agent RPC (commands are stored, not dispatched)
-
-**Silent Dispatch Failure:**
-- ⚠️ **ISSUE:** No dispatch occurs (no dispatch failures to handle):
-  - `services/policy-engine/app/main.py:297` - Commands are stored, not dispatched
-  - ⚠️ **ISSUE:** No dispatch failures to handle (no dispatch exists)
-
-**No Audit Trail:**
-- ✅ Audit trail exists: `services/policy-engine/app/main.py:283` - `store_policy_decision(incident_id, policy_decision)` stores policy decisions
-- ✅ Audit trail exists: `services/policy-engine/app/main.py:297` - `store_signed_command(incident_id, signed_command)` stores signed commands
-- ✅ Audit trail reviewable: `services/policy-engine/app/main.py:137` - Policy decisions and commands stored in files (reviewable)
-- ⚠️ **ISSUE:** File-based storage: `services/policy-engine/app/main.py:179` - Commands stored in files (not database, not immutable at database level)
+**Signing Keys Are Not Properly Managed:**
+- ✅ **VERIFIED:** Signing keys are properly managed: Signing key is loaded once, never logged, validated, fail-fast on invalid key
 
 ### Verdict: **PARTIAL**
 
 **Justification:**
-- Commands are logged and stored (audit trail exists)
-- No direct agent RPC (commands are stored, not dispatched)
-- **CRITICAL ISSUE:** No dispatch occurs (commands are stored, not dispatched)
-- **ISSUE:** File-based storage (not database, not immutable at database level)
-- **ISSUE:** No dispatch failures to handle (no dispatch exists)
+- Signing keys are properly managed (loaded once, never logged, validated, fail-fast)
+- **ISSUE:** No key rotation or versioning found
+- **ISSUE:** Two different signing keys (Policy Engine uses HMAC-SHA256, TRE uses ed25519)
+
+**PASS Conditions (Met):**
+- Signing keys are properly managed — **CONFIRMED** (loaded once, never logged, validated)
+
+**FAIL Conditions (Met):**
+- Key rotation is supported — **NOT CONFIRMED** (no key rotation found)
+- Key scope is correct — **PARTIAL** (two different signing keys)
+
+**Evidence Required:**
+- File paths: `services/policy-engine/app/signer.py:24-41,45-68,55-59`, `threat-response-engine/crypto/key_manager.py`
+- Credential handling: Signing key loading, validation, caching, rotation
 
 ---
 
-## 7. FAIL-CLOSED BEHAVIOR
+## CREDENTIAL TYPES VALIDATED
 
-### Evidence
-
-**Behavior on Missing Signing Key:**
-- ✅ Missing key causes termination: `services/policy-engine/app/signer.py:55-59` - `sys.exit(1)` if signing key is missing
-- ✅ Missing key causes termination: `services/policy-engine/app/main.py:102` - `get_signing_key()` validates key at startup (terminates on invalid key)
-- ✅ Missing key causes termination: `services/policy-engine/README.md:491` - "Fail-Fast on Invalid Key: Missing, weak, or default signing keys terminate Core immediately at startup"
-
-**Behavior on Invalid Command Schema:**
-- ⚠️ **ISSUE:** No command schema validation found:
-  - `services/policy-engine/app/signer.py:99-105` - Command payload structure is fixed (no explicit schema validation)
-  - No schema validation function found
-  - ⚠️ **ISSUE:** No explicit command schema validation (command payload structure is fixed, but no validation function)
-
-**Behavior on Bus Failure:**
-- ⚠️ **ISSUE:** No bus exists (no bus failures to handle):
-  - `services/policy-engine/app/main.py:297` - Commands are stored, not dispatched
-  - ⚠️ **ISSUE:** No bus failures to handle (no bus exists)
-
-**Behavior on Agent Rejection:**
-- ⚠️ **ISSUE:** No agent contact (no agent rejections to handle):
-  - `services/policy-engine/app/main.py:297` - Commands are stored, not sent to agents
-  - ⚠️ **ISSUE:** No agent rejections to handle (no agent contact exists)
-
-**Unsigned Commands Sent:**
-- ✅ **VERIFIED:** No unsigned commands sent:
-  - `services/policy-engine/app/main.py:297` - Commands are stored, not sent
-  - `services/policy-engine/app/signer.py:159` - Signature always generated
-  - ✅ **VERIFIED:** No unsigned commands sent (commands are stored, not sent, and always signed)
-
-**Policy Continues After Crypto Failure:**
-- ✅ Crypto failure causes termination: `services/policy-engine/app/signer.py:55-59` - `sys.exit(1)` if signing key is missing
-- ✅ Crypto failure causes termination: `services/policy-engine/app/main.py:102` - `get_signing_key()` terminates on invalid key
-- ✅ Crypto failure causes termination: `services/policy-engine/README.md:491` - "Fail-Fast on Invalid Key: Missing, weak, or default signing keys terminate Core immediately at startup"
-- ⚠️ **ISSUE:** Policy continues after other failures: `services/policy-engine/app/main.py:304-313` - Exception handling logs error and continues (not fail-closed)
-
-**Best-Effort Enforcement:**
-- ✅ **VERIFIED:** No best-effort enforcement:
-  - `services/policy-engine/app/main.py:297` - Commands are stored, not enforced
-  - `services/policy-engine/README.md:58` - "NO enforcement: Policy recommendations are NOT enforced automatically"
-  - ✅ **VERIFIED:** No best-effort enforcement (no enforcement exists)
-
-### Verdict: **PARTIAL**
-
-**Justification:**
-- Missing signing key causes termination (fail-closed)
-- Crypto failure causes termination (fail-closed)
-- No unsigned commands sent (commands are stored, not sent, and always signed)
-- **ISSUE:** No explicit command schema validation (command payload structure is fixed, but no validation function)
-- **ISSUE:** Policy continues after other failures (exception handling logs error and continues, not fail-closed)
-- **ISSUE:** No bus or agent contact (no bus/agent failures to handle)
+### Command Signing Keys
+- **Type:** HMAC-SHA256 key (`RANSOMEYE_COMMAND_SIGNING_KEY`) for Policy Engine, ed25519 key for TRE
+- **Source:** Environment variable (required, no default)
+- **Validation:** ✅ **VALIDATED** (signing key is validated, fail-fast on invalid key)
+- **Usage:** Command signing (Policy Engine: HMAC-SHA256, TRE: ed25519)
+- **Status:** ✅ **VALIDATED** (signing keys are properly managed)
 
 ---
 
-## 8. NEGATIVE VALIDATION (MANDATORY)
+## PASS CONDITIONS
 
-### Evidence
+### Section 1: Command Signing & Verification
+- ✅ All commands are cryptographically signed — **PASS**
+- ✅ Signature verification is mandatory — **PASS**
+- ⚠️ Signing algorithm is appropriate — **PARTIAL**
 
-**AI Issues Commands:**
-- ✅ **PROVEN IMPOSSIBLE:** AI cannot issue commands:
-  - `services/ai-core/README.md:75` - "No action triggers: AI output does not trigger any actions or decisions"
-  - `services/ai-core/README.md:81` - "AI Core does not trigger alerts or actions"
-  - ✅ **VERIFIED:** AI cannot issue commands (AI output is advisory only)
+### Section 2: Authority Chain
+- ✅ Explicit authority validation exists — **PASS**
+- ⚠️ Who is allowed to issue which commands is explicit — **PARTIAL**
+- ✅ Authority cannot be bypassed — **PASS**
 
-**Correlation Engine Issues Commands:**
-- ✅ **PROVEN IMPOSSIBLE:** Correlation engine cannot issue commands:
-  - `services/correlation-engine/README.md` - No command issuance found
-  - `services/correlation-engine/app/main.py` - No command issuance found
-  - ✅ **VERIFIED:** Correlation engine cannot issue commands (correlation engine only creates incidents)
+### Section 3: Replay Protection
+- ⚠️ Nonces or sequence numbers prevent replay — **PARTIAL**
+- ✅ Command idempotency is enforced — **PASS**
 
-**UI Issues Commands Directly:**
-- ⚠️ **ISSUE:** UI backend can trigger TRE to execute actions:
-  - `threat-response-engine/api/tre_api.py:118` - `execute_action()` can be called by UI backend
-  - `threat-response-engine/README.md:7` - "TRE is execution-only subsystem that executes final Policy Engine decisions"
-  - ⚠️ **ISSUE:** UI backend can trigger TRE to execute actions (but requires policy decision from Policy Engine)
+### Section 4: Fail-Closed Behavior
+- ✅ Invalid commands are rejected — **PASS**
+- ✅ No fail-open behavior exists — **PASS**
 
-**Agent Executes Unsigned Commands:**
-- ✅ **PROVEN IMPOSSIBLE:** Agents cannot execute unsigned commands:
-  - `agents/linux/command_gate.py:177-178` - `_verify_signature()` verifies ed25519 signature before execution
-  - `agents/linux/command_gate.py:272-298` - `_validate_freshness()` and `_check_idempotency()` validate commands
-  - ✅ **VERIFIED:** Agents cannot execute unsigned commands (signature verification required)
+### Section 5: Dependency on Core Trust Root
+- ⚠️ Policy Engine depends on Core trust root — **PARTIAL**
+- ✅ Key management is correct — **PASS**
 
-### Verdict: **PARTIAL**
-
-**Justification:**
-- AI cannot issue commands (AI output is advisory only)
-- Correlation engine cannot issue commands (correlation engine only creates incidents)
-- Agents cannot execute unsigned commands (signature verification required)
-- **ISSUE:** UI backend can trigger TRE to execute actions (but requires policy decision from Policy Engine)
+### Section 6: Credential Handling
+- ✅ Signing keys are properly managed — **PASS**
+- ❌ Key rotation is supported — **FAIL**
+- ⚠️ Key scope is correct — **PARTIAL**
 
 ---
 
-## 9. VERDICT & IMPACT
+## FAIL CONDITIONS
 
-### Section-by-Section Verdicts
+### Section 1: Command Signing & Verification
+- ⚠️ Any command is accepted without cryptographic verification — **PARTIAL** (Linux agent verifies, Windows agent has placeholder)
 
-1. **Component Identity & Authority:** PARTIAL
-   - Policy Engine is clearly identified as decision authority
-   - **CRITICAL ISSUE:** No dispatcher exists (commands are stored, not dispatched)
-   - **ISSUE:** TRE can sign and dispatch commands (but consumes policy decisions from Policy Engine)
+### Section 2: Authority Chain
+- ⚠️ Any command executes without explicit authority validation — **PARTIAL** (agents validate, but Policy Engine does not)
 
-2. **Input Trust & Gating:** PARTIAL
-   - Inputs come only from correlation engine (via incidents table)
-   - Policy does NOT accept direct AI or agent/DPI input
-   - **ISSUE:** Actions allowed without CONFIRMED stage (only SUSPICIOUS required)
+### Section 3: Replay Protection
+- ⚠️ Replay protection depends on non-deterministic inputs — **PARTIAL** (command_id is UUID, non-deterministic)
 
-3. **Simulation-First Guarantee:** PARTIAL
-   - Simulation path exists (simulation mode by default)
-   - Simulation results are logged and reviewable
-   - **ISSUE:** No enforcement occurs (simulation is the only mode, no enforcement path exists)
+### Section 4: Fail-Closed Behavior
+- ❌ Any fail-open behavior exists — **NOT CONFIRMED** (no fail-open behavior found)
 
-4. **Command Construction:** PASS
-   - Command schema is enforced (structured command payload)
-   - Explicit command types (enum values)
-   - No free-form shell commands, arbitrary command execution, ad-hoc payloads, or agent-side interpretation
+### Section 5: Dependency on Core Trust Root
+- ❌ Dependency on Core trust root is explicit — **NOT CONFIRMED** (signing key is from environment, not from Core trust root)
 
-5. **Command Signing & Cryptography:** PARTIAL
-   - Signing algorithm is HMAC-SHA256 (correctly implemented)
-   - Key source is environment variable (correctly implemented)
-   - **ISSUE:** Default key exists (phase7_minimal_default_key, not secure for production)
-
-6. **Dispatch & Auditability:** PARTIAL
-   - Commands are logged and stored (audit trail exists)
-   - No direct agent RPC (commands are stored, not dispatched)
-   - **CRITICAL ISSUE:** No dispatch occurs (commands are stored, not dispatched)
-
-7. **Fail-Closed Behavior:** PARTIAL
-   - Missing signing key causes termination (fail-closed)
-   - Crypto failure causes termination (fail-closed)
-   - **ISSUE:** Policy continues after other failures (exception handling logs error and continues)
-
-8. **Negative Validation:** PARTIAL
-   - AI, correlation engine cannot issue commands
-   - Agents cannot execute unsigned commands
-   - **ISSUE:** UI backend can trigger TRE to execute actions (but requires policy decision)
-
-### Overall Verdict: **PARTIAL**
-
-**Justification:**
-- **CRITICAL ISSUE:** No dispatcher exists (commands are stored, not dispatched)
-- **CRITICAL ISSUE:** No enforcement occurs (simulation is the only mode, no enforcement path exists)
-- **ISSUE:** Actions allowed without CONFIRMED stage (only SUSPICIOUS required)
-- **ISSUE:** Default key exists (phase7_minimal_default_key, not secure for production)
-- **ISSUE:** Policy continues after other failures (exception handling logs error and continues, not fail-closed)
-- **ISSUE:** UI backend can trigger TRE to execute actions (but requires policy decision from Policy Engine)
-- Policy Engine is clearly identified as decision authority
-- Command construction is correct (structured command payload, explicit command types)
-- Command signing is correct (HMAC-SHA256, key from environment, signature mandatory)
-- Commands are logged and stored (audit trail exists)
-
-**Impact if Policy Engine is Compromised:**
-- **CRITICAL:** If policy engine is compromised, commands can be generated and signed (but not dispatched in Phase 7)
-- **CRITICAL:** If policy engine is compromised, policy decisions can be manipulated (but not enforced in Phase 7)
-- **HIGH:** If policy engine is compromised, default signing key can be used (not secure for production)
-- **HIGH:** If policy engine is compromised, actions can be recommended for SUSPICIOUS incidents (not requiring CONFIRMED)
-- **MEDIUM:** If policy engine is compromised, policy decisions may be incorrect (but not enforced in Phase 7)
-- **LOW:** If policy engine is compromised, system correctness is unaffected (policy is advisory only, simulation mode)
-
-**Whether Detection-Only Mode Remains Safe:**
-- ✅ **YES:** Detection-only mode remains safe:
-  - `services/policy-engine/README.md:126-144` - "System Correctness Does Not Depend on Policy Engine"
-  - `services/policy-engine/README.md:142-144` - "If policy engine is disabled: Incidents are still created by correlation engine (Phase 5); Events are still validated and stored (Phase 4); System correctness is unaffected (policy is advisory only)"
-  - `services/policy-engine/app/main.py:297` - Commands are stored, not dispatched (no enforcement)
-  - ✅ **VERIFIED:** Detection-only mode remains safe (policy is advisory only, simulation mode, no enforcement)
-
-**Recommendations:**
-1. **CRITICAL:** Implement command dispatcher (dispatch signed commands to agents via secure bus)
-2. **CRITICAL:** Implement enforcement path (enforcement after simulation, with explicit authorization)
-3. **CRITICAL:** Require CONFIRMED stage for action eligibility (not only SUSPICIOUS)
-4. **HIGH:** Remove default signing key (fail-fast on default keys, no fallback)
-5. **HIGH:** Implement explicit command schema validation (validate command payload against schema)
-6. **HIGH:** Implement fail-closed behavior (terminate on all critical failures, not continue)
-7. **MEDIUM:** Implement database storage for policy decisions and commands (not file-based)
-8. **MEDIUM:** Implement explicit gating for CONFIRMED incidents (require CONFIRMED stage for actions)
+### Section 6: Credential Handling
+- ❌ Key rotation is supported — **NOT CONFIRMED** (no key rotation found)
+- ⚠️ Key scope is correct — **PARTIAL** (two different signing keys)
 
 ---
 
-**Validation Date:** 2025-01-13
-**Validator:** Lead Validator & Compliance Auditor
-**Next Step:** Validation Step 10 — Threat Response Engine (if applicable)
+## EVIDENCE REQUIRED
+
+### Command Signing & Verification
+- File paths: `services/policy-engine/app/signer.py:110-136,139-169`, `threat-response-engine/crypto/signer.py:60-80`, `threat-response-engine/api/tre_api.py:195`, `agents/linux/command_gate.py:314-346,175`, `agents/windows/command_gate.ps1:122-129`
+- Command signing: HMAC-SHA256 (Policy Engine), ed25519 (TRE)
+- Signature verification: ed25519 verification (agents)
+
+### Authority Chain
+- File paths: `agents/linux/command_gate.py:364-387,348-362,389-413,177-184`, `services/policy-engine/app/rules.py:22-56`, `services/policy-engine/app/signer.py:71-107`, `threat-response-engine/api/tre_api.py:189-190`
+- Authority validation: RBAC, issuer verification, HAF approval
+- Authority tracking: user_id, role in command payload
+
+### Replay Protection
+- File paths: `agents/linux/command_gate.py:415-436,91-92,187`, `services/policy-engine/app/signer.py:93`
+- Replay protection: Command ID idempotency, nonce cache
+- Idempotency: Command ID uniqueness, cache management
+
+### Fail-Closed Behavior
+- File paths: `agents/linux/command_gate.py:207-282,284-312,314-346,364-413,167-194,200-205,471-492,614-678`
+- Fail-closed behavior: Default deny, offline enforcement, rejection logging
+
+### Dependency on Core Trust Root
+- File paths: `services/policy-engine/app/signer.py:45-68,24-41`, `services/policy-engine/app/main.py:97-114`, `threat-response-engine/crypto/key_manager.py`
+- Key management: Signing key loading, validation, caching
+- Core trust root: Dependency on Core trust root
+
+### Credential Handling
+- File paths: `services/policy-engine/app/signer.py:24-41,45-68,55-59`, `threat-response-engine/crypto/key_manager.py`
+- Credential handling: Signing key loading, validation, caching, rotation
+
+---
+
+## GA VERDICT
+
+### Overall: **PARTIAL**
+
+**Critical Blockers:**
+
+1. **PARTIAL:** Policy Engine and TRE use different signing algorithms (HMAC-SHA256 vs ed25519)
+   - **Impact:** Policy Engine signs with HMAC-SHA256, TRE signs with ed25519, agents verify ed25519 (inconsistent)
+   - **Location:** `services/policy-engine/app/signer.py:134` — HMAC-SHA256, `threat-response-engine/crypto/signer.py:50-53` — ed25519
+   - **Severity:** **HIGH** (inconsistent signing algorithms)
+   - **Master Spec Violation:** Command signing should be consistent
+
+2. **PARTIAL:** Windows agent has placeholder for signature verification (not implemented)
+   - **Impact:** Windows agent cannot verify command signatures (placeholder only)
+   - **Location:** `agents/windows/command_gate.ps1:122-129` — `Test-CommandSignature` has placeholder
+   - **Severity:** **CRITICAL** (Windows agent cannot verify signatures)
+   - **Master Spec Violation:** All agents must verify command signatures
+
+3. **PARTIAL:** Policy Engine does not validate authority (authority validation deferred to TRE/agents)
+   - **Impact:** Policy Engine does not track who issues commands (authority validation happens at TRE/agent level)
+   - **Location:** `services/policy-engine/app/signer.py:71-107` — Command payload does not include user_id/role
+   - **Severity:** **MEDIUM** (authority validation deferred, not missing)
+   - **Master Spec Violation:** Policy Engine should validate authority
+
+4. **PARTIAL:** No key rotation or versioning found
+   - **Impact:** Signing keys cannot be rotated or versioned
+   - **Location:** `services/policy-engine/app/signer.py:24-41` — Signing key is static (no rotation)
+   - **Severity:** **MEDIUM** (key rotation not supported)
+   - **Master Spec Violation:** Key rotation should be supported
+
+5. **PARTIAL:** Replay protection depends on non-deterministic command_id (UUID)
+   - **Impact:** Same command replayed with different command_id will not be detected (command_id is UUID, non-deterministic)
+   - **Location:** `services/policy-engine/app/signer.py:93` — `command_id = str(uuid.uuid4())` (UUID v4, non-deterministic)
+   - **Severity:** **MEDIUM** (replay protection may not detect replay if command_id differs)
+   - **Master Spec Violation:** Replay protection should not depend on non-deterministic inputs
+
+**Non-Blocking Issues:**
+
+1. Agents validate authority (RBAC, issuer, HAF approval)
+2. Invalid commands are rejected (all validation steps must pass)
+3. No fail-open behavior exists (default deny, fail-closed)
+4. Signing keys are properly managed (loaded once, never logged, validated)
+
+**Strengths:**
+
+1. ✅ Agents verify signatures (ed25519 verification is mandatory)
+2. ✅ Authority validation is mandatory (steps 4, 5, 6 of 9-step pipeline)
+3. ✅ Command idempotency prevents replay (command_id is checked)
+4. ✅ Invalid commands are rejected (all validation steps must pass)
+5. ✅ No fail-open behavior exists (default deny, offline enforcement is fail-closed)
+6. ✅ Signing keys are properly managed (loaded once, never logged, validated, fail-fast)
+
+**Summary of Critical Blockers:**
+
+1. **CRITICAL:** Windows agent has placeholder for signature verification (not implemented) — Windows agent cannot verify signatures
+2. **HIGH:** Policy Engine and TRE use different signing algorithms (HMAC-SHA256 vs ed25519) — Inconsistent signing
+3. **MEDIUM:** Policy Engine does not validate authority (authority validation deferred to TRE/agents) — Authority validation deferred
+4. **MEDIUM:** No key rotation or versioning found — Key rotation not supported
+5. **MEDIUM:** Replay protection depends on non-deterministic command_id (UUID) — Replay protection may not detect replay
+
+---
+
+**Validation Date:** 2025-01-13  
+**Validator:** Independent System Validator  
+**Next Step:** Validation Step 10 — Endpoint Agents Execution Trust  
+**GA Status:** **BLOCKED** (Critical failures in Windows agent signature verification and signing algorithm consistency)
+
+---
+
+## UPSTREAM IMPACT STATEMENT
+
+**Documentation Only:** This section documents upstream impact of Policy Engine non-determinism and authority validation failures on downstream validations.
+
+**Upstream Validations Impacted by Policy Engine Failures:**
+
+1. **Correlation Engine (Validation Step 7):**
+   - Policy Engine reads incidents created by correlation engine
+   - Incidents may differ on replay (if correlation is non-deterministic)
+   - Policy Engine validation must NOT assume deterministic incident inputs
+
+2. **AI Core (Validation Step 8):**
+   - Policy Engine may read AI metadata (if policy rules use AI metadata)
+   - AI metadata may differ on replay (if AI is non-deterministic)
+   - Policy Engine validation must NOT assume deterministic AI metadata
+
+**Requirements for Upstream Validations:**
+
+- Upstream validations must NOT assume Policy Engine receives deterministic inputs (incidents may differ on replay)
+- Upstream validations must NOT assume Policy Engine produces deterministic outputs (policy decisions may differ on replay)
+- Upstream validations must validate their components based on actual behavior, not assumptions about Policy Engine determinism
+
+---
+
+## DOWNSTREAM IMPACT STATEMENT
+
+**Documentation Only:** This section documents downstream impact of Policy Engine failures on downstream validations.
+
+**Downstream Validations Impacted by Policy Engine Failures:**
+
+1. **Endpoint Agents (Validation Step 10):**
+   - Agents receive commands from Policy Engine (via TRE)
+   - Commands may differ on replay (if Policy Engine is non-deterministic)
+   - Agent validation must NOT assume deterministic command inputs
+
+2. **Sentinel / Survivability (Validation Step 12):**
+   - Agents enforce policy when Core is offline (cached policy)
+   - Policy cache may differ on replay (if Policy Engine is non-deterministic)
+   - Survivability validation must NOT assume deterministic policy cache
+
+**Requirements for Downstream Validations:**
+
+- Downstream validations must NOT assume deterministic command inputs (commands may differ on replay)
+- Downstream validations must NOT assume deterministic policy cache (policy cache may differ on replay)
+- Downstream validations must validate their components based on actual behavior, not assumptions about Policy Engine determinism
