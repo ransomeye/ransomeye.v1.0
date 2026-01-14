@@ -1,0 +1,133 @@
+Prompt Start
+
+You are fixing PHASE 3 — CORRELATION LOGIC & AI PROVENANCE for RansomEye.
+
+This phase is SEQUENTIAL and depends on Phase 2 being PASS (now satisfied).
+
+OBJECTIVE
+
+Make detection, escalation, and AI outputs provable, replayable, and explainable.
+
+After this phase:
+
+Incidents MUST progress through a formal state machine
+
+Confidence MUST accumulate deterministically
+
+Contradictions MUST be detected and handled
+
+AI outputs MUST be reproducible from stored artifacts
+
+MANDATORY FIXES (ALL REQUIRED)
+1. Correlation State Machine
+
+You MUST implement a deterministic state machine:
+
+CLEAN → SUSPICIOUS → PROBABLE → CONFIRMED
+
+
+Rules:
+
+Transitions MUST be explicit
+
+Guards MUST be deterministic
+
+No time-based escalation
+
+No single-signal CONFIRMED
+
+2. Confidence Accumulation Model
+
+You MUST:
+
+Define signal weights
+
+Accumulate confidence deterministically
+
+Implement saturation & decay rules
+
+Prevent single-signal escalation
+
+3. Contradiction Detection
+
+You MUST detect and act on contradictions:
+
+Host vs Network
+
+Execution vs Timing
+
+Persistence vs Silence
+
+Deception vs Absence
+
+Contradictions MUST:
+
+Block escalation OR
+
+Downgrade confidence deterministically
+
+4. AI Model Provenance
+
+You MUST:
+
+Persist trained models (not retrain silently)
+
+Persist full SHAP explanations (not just hashes)
+
+Store:
+
+model version
+
+training data hash
+
+SHAP artifact hash
+
+Ensure replay produces identical AI output
+
+FILES YOU MUST INSPECT & MODIFY
+
+(quote exact paths and lines)
+
+services/correlation-engine/app/*
+
+services/ai-core/app/*
+
+AI model storage / registry code
+
+SHAP persistence logic
+
+FORBIDDEN
+
+No heuristics
+
+No probabilistic shortcuts
+
+No “best effort” explanations
+
+No runtime retraining without persistence
+
+EVIDENCE REQUIRED IN YOUR RESPONSE
+
+You MUST provide:
+
+State machine definition (textual + code)
+
+Confidence accumulation math
+
+Contradiction handling logic
+
+AI provenance storage proof
+
+Replay proof (why same inputs → same AI output)
+
+Mapping required to:
+
+Validation File 07
+
+Validation File 08
+
+Validation File 16
+
+If any AI output cannot be re-derived → FAIL.
+
+Prompt Ends
