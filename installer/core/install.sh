@@ -606,7 +606,12 @@ check_postgresql() {
         error_exit "PostgreSQL client (psql) not found. Please install PostgreSQL first."
     fi
     
-    # v1.0 GA: Use single gagan user (Phase A.2 reverted)
+    # Validate database credentials are provided
+    if [[ -z "${RANSOMEYE_DB_USER}" ]] || [[ -z "${RANSOMEYE_DB_PASSWORD}" ]]; then
+        error_exit "SECURITY VIOLATION: Database credentials are required (user and password must be provided)"
+    fi
+    
+    # Verify database connection
     export PGPASSWORD="${RANSOMEYE_DB_PASSWORD}"
     if psql -h "${RANSOMEYE_DB_HOST}" -p "${RANSOMEYE_DB_PORT}" -U "${RANSOMEYE_DB_USER}" -d "${RANSOMEYE_DB_NAME}" -c "SELECT 1" &> /dev/null; then
         echo -e "${GREEN}✓${NC} Database connection verified: ${RANSOMEYE_DB_USER}@${RANSOMEYE_DB_HOST}:${RANSOMEYE_DB_PORT}/${RANSOMEYE_DB_NAME}"
