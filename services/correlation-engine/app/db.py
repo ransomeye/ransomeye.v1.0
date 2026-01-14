@@ -63,12 +63,20 @@ def get_db_connection():
         from common.shutdown import ExitCode, exit_fatal
         exit_fatal(error_msg, ExitCode.STARTUP_ERROR)
     
+    # PHASE-9: No default password - fail-fast if not provided
+    db_password = os.getenv("RANSOMEYE_DB_PASSWORD")
+    if not db_password:
+        error_msg = "RANSOMEYE_DB_PASSWORD is required (no defaults allowed)"
+        print(f"FATAL: {error_msg}", file=sys.stderr)
+        from common.shutdown import ExitCode, exit_fatal
+        exit_fatal(error_msg, ExitCode.STARTUP_ERROR)
+    
     conn = create_write_connection(
         host=os.getenv("RANSOMEYE_DB_HOST", "localhost"),
         port=int(os.getenv("RANSOMEYE_DB_PORT", "5432")),
         database=os.getenv("RANSOMEYE_DB_NAME", "ransomeye"),
-        user=db_user,  # v1.0 GA: gagan
-        password=os.getenv("RANSOMEYE_DB_PASSWORD", ""),
+        user=db_user,
+        password=db_password,
         isolation_level=IsolationLevel.READ_COMMITTED,
         logger=_logger
     )
