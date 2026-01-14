@@ -585,7 +585,14 @@ def store_event(conn, envelope: dict, validation_status: str, late_arrival: bool
 
 @app.post("/events")
 async def ingest_event(request: Request):
-    """Ingest event endpoint."""
+    """
+    Ingest event endpoint.
+    
+    PHASE 1 REQUIREMENTS:
+    - Service-to-service authentication (via middleware)
+    - Telemetry signature verification (reject unsigned/spoofed telemetry)
+    - Component identity binding verification
+    """
     if shutdown_handler.is_shutdown_requested():
         raise HTTPException(status_code=503, detail={"error_code": "SERVICE_SHUTTING_DOWN"})
     
