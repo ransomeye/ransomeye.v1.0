@@ -123,14 +123,19 @@ echo "Step 3: Checking for forbidden licenses..."
 echo "-----------------------------------"
 
 # Quick check: scan inventory for forbidden licenses
-FORBIDDEN_COUNT=$(python3 -c "
+FORBIDDEN_COUNT=$(python3 << 'PYTHON_SCRIPT'
 import json
 import sys
+import os
 
-with open('${SCRIPT_DIR}/LICENSE_POLICY.json', 'r') as f:
+script_dir = os.environ.get('SCRIPT_DIR', '.')
+policy_path = os.path.join(script_dir, 'LICENSE_POLICY.json')
+inventory_path = os.path.join(script_dir, 'THIRD_PARTY_INVENTORY.json')
+
+with open(policy_path, 'r') as f:
     policy = json.load(f)
 
-with open('${SCRIPT_DIR}/THIRD_PARTY_INVENTORY.json', 'r') as f:
+with open(inventory_path, 'r') as f:
     inventory = json.load(f)
 
 forbidden = [f.lower() for f in policy.get('forbidden_licenses', [])]
@@ -147,11 +152,12 @@ for entry in inventory:
             violations.append('{}: {}'.format(entry['name'], entry.get('license')))
 
 if violations:
-    print('\\n'.join(violations))
+    print('\n'.join(violations))
     sys.exit(1)
 else:
     print('0')
-" 2>&1)
+PYTHON_SCRIPT
+SCRIPT_DIR="${SCRIPT_DIR}" 2>&1)
 
 if [[ "$FORBIDDEN_COUNT" != "0" ]] && [[ -n "$FORBIDDEN_COUNT" ]]; then
     echo -e "${RED}FAILED: Forbidden licenses detected in inventory:${NC}" >&2
