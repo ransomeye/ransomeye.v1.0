@@ -192,6 +192,9 @@ class CommandGate:
             # Step 9: PHASE F2 - Check cached policy if Core is offline
             self._check_cached_policy_if_offline(command)
             
+            # PHASE 4: Step 10: Policy authority validation
+            self._validate_policy_authority(command)
+            
             # All checks passed
             self._log_audit_event('command_received', command_id, 'SUCCESS')
             
