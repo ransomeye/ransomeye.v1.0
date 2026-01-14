@@ -773,10 +773,19 @@ class PhaseCExecutor:
         return verdict
     
     def _run_linux_tracks(self):
-        """Execute Phase C-L tracks (1-5 + Track 6-A)."""
-        # Enforce: Windows tracks cannot run on Linux
+        """
+        Execute Phase C-L tracks (1-5 + Track 6-A).
+        
+        GA-BLOCKING: All tracks in this method are Linux-only.
+        OS compatibility validated at executor startup and track execution time.
+        """
+        # Defense-in-depth: Re-validate execution mode
         if self.execution_mode != 'linux':
-            error_msg = "FATAL: Linux tracks can only run on Linux host."
+            error_msg = (
+                f"FATAL: Linux tracks can only run on Linux host.\n"
+                f"Current execution mode: {self.execution_mode}\n"
+                f"Host OS: {platform.system()} {platform.release()}"
+            )
             print(f"❌ {error_msg}", file=sys.stderr)
             sys.exit(1)
         
