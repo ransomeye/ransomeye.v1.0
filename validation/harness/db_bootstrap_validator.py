@@ -470,7 +470,7 @@ def format_bootstrap_failure_message(failure_reason: Dict[str, Any], user: str =
         if pg_hba_path:
             pg_hba_display = f"  {pg_hba_path}"
         else:
-            pg_hba_display = "  (location not detected)"
+            pg_hba_display = "  (location not detected - check PostgreSQL data directory)"
         
         # OS-aware guidance
         os_guidance = ""
@@ -479,18 +479,26 @@ def format_bootstrap_failure_message(failure_reason: Dict[str, Any], user: str =
                 f"\n"
                 f"On Ubuntu/Debian, PostgreSQL defaults to PEER auth for local sockets.\n"
             )
+        elif pg_hba_path and "/var/lib/pgsql" in pg_hba_path:
+            os_guidance = (
+                f"\n"
+                f"On RHEL/CentOS, PostgreSQL may use PEER auth for local connections.\n"
+            )
         
         return (
             f"❌ FATAL: PostgreSQL is using PEER authentication.\n"
             f"\n"
             f"Password-based login for role '{user}' is ignored.\n"
+            f"PostgreSQL is configured to use PEER authentication, which requires\n"
+            f"the system user to match the database role name.\n"
             f"\n"
             f"Detected authentication method: {auth_method}\n"
             f"Detected pg_hba.conf location:\n"
             f"{pg_hba_display}\n"
             f"{os_guidance}"
             f"\n"
-            f"To allow password authentication, update pg_hba.conf and change:\n"
+            f"EXPLICIT INSTRUCTION:\n"
+            f"To allow password authentication, edit pg_hba.conf and change:\n"
             f"\n"
             f"  local   all   {user}   peer\n"
             f"\n"
@@ -498,7 +506,18 @@ def format_bootstrap_failure_message(failure_reason: Dict[str, Any], user: str =
             f"\n"
             f"  local   all   {user}   md5\n"
             f"\n"
-            f"Then restart PostgreSQL.\n"
+            f"OR for TCP/IP connections:\n"
+            f"\n"
+            f"  host    all   {user}   127.0.0.1/32   md5\n"
+            f"\n"
+            f"After editing pg_hba.conf:\n"
+            f"  1. Save the file\n"
+            f"  2. Restart PostgreSQL service:\n"
+            f"     - systemctl restart postgresql  (systemd)\n"
+            f"     - service postgresql restart    (SysV init)\n"
+            f"\n"
+            f"This is NOT a code issue.\n"
+            f"PostgreSQL is not bootstrapped correctly.\n"
             f"\n"
             f"Phase C cannot continue.\n"
         )
