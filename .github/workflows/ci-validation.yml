@@ -4,15 +4,29 @@ name: CI Validation - PHASE 6
 # GA gating, validation execution, signing, and SBOM verification are FINAL.
 # Any modification requires Phase-6 re-certification.
 
+# PHASE 7 LOCKED
+# CI triggers, reusable workflow boundaries, and GA invocation paths are FINAL.
+# Any modification requires Phase-7 re-certification.
+
 # THIN WRAPPER WORKFLOW
 # This workflow handles push/PR triggers and delegates to the reusable workflow.
 # It contains NO validation logic - all validation is in ci-validation-reusable.yml
+#
+# PHASE 7: Branch-aware triggers for active development branches
+# Validation runs on main, develop, and explicit feature/bugfix/hotfix patterns
 
 on:
   push:
-    branches: [ main, develop ]
+    branches:
+      - main
+      - develop
+      - 'feature/**'
+      - 'bugfix/**'
+      - 'hotfix/**'
   pull_request:
-    branches: [ main, develop ]
+    branches:
+      - main
+      - develop
   workflow_dispatch:
 
 permissions:
@@ -23,3 +37,4 @@ jobs:
   validate:
     name: CI Validation Wrapper
     uses: ./.github/workflows/ci-validation-reusable.yml
+    secrets: inherit

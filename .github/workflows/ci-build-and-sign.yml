@@ -4,6 +4,10 @@ name: CI Build and Sign - PHASE 6
 # GA gating, validation execution, signing, and SBOM verification are FINAL.
 # Any modification requires Phase-6 re-certification.
 
+# PHASE 7 LOCKED
+# CI triggers, reusable workflow boundaries, and GA invocation paths are FINAL.
+# Any modification requires Phase-7 re-certification.
+
 on:
   push:
     branches: [ main ]
@@ -28,6 +32,7 @@ jobs:
   ci-validation:
     name: CI Validation - PHASE 6
     uses: ./.github/workflows/ci-validation-reusable.yml
+    secrets: inherit
     # PHASE 6: Fail-closed - validation must pass before build and sign
 
   # PHASE 6: Build and Sign Artifacts
