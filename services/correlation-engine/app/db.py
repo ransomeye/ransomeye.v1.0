@@ -372,13 +372,54 @@ def add_evidence_to_incident(conn, incident_id: str, event: Dict[str, Any],
     return execute_write_operation(conn, "add_evidence_to_incident", _do_add_evidence, _logger)
 
 
-def apply_contradiction_to_incident(conn, incident_id: str):
+def get_incident_evidence(conn, incident_id: str) -> List[Dict[str, Any]]:
     """
-    GA-BLOCKING: Apply contradiction decay to incident confidence.
+    PHASE 3: Get existing evidence for an incident.
     
     Args:
         conn: Database connection
         incident_id: Incident identifier
+        
+    Returns:
+        List of evidence dictionaries
+    """
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT e.event_id, e.evidence_type, e.confidence_level, e.confidence_score,
+                   e.observed_at, re.component, re.payload
+            FROM evidence e
+            LEFT JOIN raw_events re ON e.event_id = re.event_id
+            WHERE e.incident_id = %s
+            ORDER BY e.observed_at ASC
+        """, (incident_id,))
+        
+        columns = [desc[0] for desc in cur.description]
+        evidence_list = []
+        for row in cur.fetchall():
+            evidence = dict(zip(columns, row))
+            # Convert datetime to string if needed
+            if evidence.get('observed_at') and isinstance(evidence['observed_at'], datetime):
+                evidence['observed_at'] = evidence['observed_at'].isoformat()
+            evidence_list.append(evidence)
+        
+        return evidence_list
+    finally:
+        cur.close()
+
+
+def apply_contradiction_to_incident(conn, incident_id: str, contradiction_type: Optional[str] = None):
+    """
+    PHASE 3: Apply contradiction decay to incident confidence (deterministic).
+    
+    Contradictions:
+    - Block escalation (state does not progress)
+    - Downgrade confidence deterministically
+    
+    Args:
+        conn: Database connection
+        incident_id: Incident identifier
+        contradiction_type: Type of contradiction detected (for logging)
     """
     def _do_apply_contradiction():
         """Inner function for write operation."""
