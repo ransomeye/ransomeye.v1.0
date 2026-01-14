@@ -285,6 +285,57 @@ class PhaseCExecutor:
             print(error_msg, file=sys.stderr)
             sys.exit(1)
     
+    def _validate_track_os_compatibility(self, track_name: str):
+        """
+        GA-BLOCKING: Validate individual track-OS compatibility.
+        
+        Enforces hard OS gating at track execution time (defense-in-depth).
+        Prevents execution of platform-specific tracks on wrong OS.
+        
+        Args:
+            track_name: Track name to validate
+            
+        Raises:
+            SystemExit: If track is incompatible with host OS (fail-closed)
+        """
+        # Check if track has OS requirement
+        required_os = self.TRACK_OS_MAPPING.get(track_name)
+        
+        if required_os is None:
+            # Track not in mapping - allow execution (backward compatibility)
+            return
+        
+        # Validate track OS requirement matches host OS
+        if required_os != self.host_os:
+            if required_os == 'windows':
+                error_msg = (
+                    f"FATAL: Track '{track_name}' cannot run on {platform.system()} host.\n"
+                    f"\n"
+                    f"Track '{track_name}' requires Windows (ETW - Event Tracing for Windows).\n"
+                    f"Host OS: {platform.system()} {platform.release()}\n"
+                    f"\n"
+                    f"ETW is Windows-only and cannot run on Linux.\n"
+                    f"This track must be executed on a native Windows host.\n"
+                    f"\n"
+                    f"This is an audit-blocking failure.\n"
+                    f"Invalid track execution would produce false audit results.\n"
+                )
+            else:  # required_os == 'linux'
+                error_msg = (
+                    f"FATAL: Track '{track_name}' cannot run on {platform.system()} host.\n"
+                    f"\n"
+                    f"Track '{track_name}' requires Linux (eBPF/Linux-specific features).\n"
+                    f"Host OS: {platform.system()} {platform.release()}\n"
+                    f"\n"
+                    f"eBPF (extended Berkeley Packet Filter) is Linux-only and cannot run on Windows.\n"
+                    f"This track must be executed on a native Linux host.\n"
+                    f"\n"
+                    f"This is an audit-blocking failure.\n"
+                    f"Invalid track execution would produce false audit results.\n"
+                )
+            print(f"❌ {error_msg}", file=sys.stderr)
+            sys.exit(1)
+    
     def _detect_execution_mode(self) -> str:
         """
         Detect execution mode based on OS.
