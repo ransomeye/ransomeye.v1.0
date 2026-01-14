@@ -76,6 +76,142 @@ prompt_install_root() {
 detect_installer_dir() {
     INSTALLER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     SRC_ROOT="$(cd "${INSTALLER_DIR}/../.." && pwd)"
+    
+    # Detect release root (parent of installer directory, or current directory if in release bundle)
+    if [[ -f "${INSTALLER_DIR}/../manifest.json" ]]; then
+        RELEASE_ROOT="$(cd "${INSTALLER_DIR}/.." && pwd)"
+    elif [[ -f "${INSTALLER_DIR}/../../manifest.json" ]]; then
+        RELEASE_ROOT="$(cd "${INSTALLER_DIR}/../.." && pwd)"
+    else
+        # Try to find release root by looking for manifest.json
+        RELEASE_ROOT=""
+        local search_dir="${INSTALLER_DIR}"
+        for i in {1..5}; do
+            if [[ -f "${search_dir}/manifest.json" ]]; then
+                RELEASE_ROOT="$(cd "${search_dir}" && pwd)"
+                break
+            fi
+            search_dir="${search_dir}/.."
+        done
+    fi
+}
+
+# GA-BLOCKING: Verify SBOM (manifest.json) before installation
+verify_sbom() {
+    echo ""
+    echo "Verifying release bundle integrity (SBOM verification)..."
+    
+    if [[ -z "${RELEASE_ROOT:-}" ]] || [[ ! -d "${RELEASE_ROOT}" ]]; then
+        error_exit "Release root not found. Cannot verify SBOM."
+    fi
+    
+    local manifest_path="${RELEASE_ROOT}/manifest.json"
+    local signature_path="${RELEASE_ROOT}/manifest.json.sig"
+    
+    # Check if manifest exists
+    if [[ ! -f "$manifest_path" ]]; then
+        error_exit "SBOM manifest not found: $manifest_path. Installation cannot proceed without SBOM verification."
+    fi
+    
+    if [[ ! -f "$signature_path" ]]; then
+        error_exit "SBOM signature not found: $signature_path. Installation cannot proceed without signature verification."
+    fi
+    
+    # GA-BLOCKING: Verify using Python verification utility (offline, no network)
+    # Check if verify_sbom.py is available
+    local verify_script=""
+    if [[ -f "${SRC_ROOT}/release/verify_sbom.py" ]]; then
+        verify_script="${SRC_ROOT}/release/verify_sbom.py"
+    elif [[ -f "${RELEASE_ROOT}/../verify_sbom.py" ]]; then
+        verify_script="${RELEASE_ROOT}/../verify_sbom.py"
+    else
+        # Fallback: Use inline verification (basic hash checking)
+        echo -e "${YELLOW}WARNING: verify_sbom.py not found, using basic hash verification${NC}"
+        verify_sbom_basic
+        return
+    fi
+    
+    # Use Python verification utility
+    if ! command -v python3 &> /dev/null; then
+        error_exit "python3 not found. Cannot verify SBOM."
+    fi
+    
+    # Try to find public key
+    local public_key_path=""
+    local key_dir=""
+    local signing_key_id=""
+    
+    # Check for public key in release bundle
+    if [[ -f "${RELEASE_ROOT}/public_key.pem" ]]; then
+        public_key_path="${RELEASE_ROOT}/public_key.pem"
+    elif [[ -d "${RELEASE_ROOT}/keys" ]]; then
+        key_dir="${RELEASE_ROOT}/keys"
+        signing_key_id="vendor-release-key-1"  # Default key ID
+    elif [[ -n "${RANSOMEYE_SIGNING_KEY_DIR:-}" ]] && [[ -d "${RANSOMEYE_SIGNING_KEY_DIR}" ]]; then
+        key_dir="${RANSOMEYE_SIGNING_KEY_DIR}"
+        signing_key_id="${RANSOMEYE_SIGNING_KEY_ID:-vendor-release-key-1}"
+    fi
+    
+    # Run verification
+    local verify_cmd="python3 \"${verify_script}\" --release-root \"${RELEASE_ROOT}\" --manifest \"${manifest_path}\" --signature \"${signature_path}\""
+    
+    if [[ -n "$public_key_path" ]]; then
+        verify_cmd="${verify_cmd} --public-key \"${public_key_path}\""
+    elif [[ -n "$key_dir" ]] && [[ -n "$signing_key_id" ]]; then
+        verify_cmd="${verify_cmd} --key-dir \"${key_dir}\" --signing-key-id \"${signing_key_id}\""
+    else
+        error_exit "Public key not found. Cannot verify SBOM signature. Provide public key via RANSOMEYE_SIGNING_KEY_DIR or place public_key.pem in release root."
+    fi
+    
+    if ! eval "$verify_cmd"; then
+        error_exit "SBOM verification failed. Installation aborted (fail-closed)."
+    fi
+    
+    echo -e "${GREEN}✓${NC} SBOM verification passed"
+    echo -e "${GREEN}✓${NC} Manifest signature: VALID"
+    echo -e "${GREEN}✓${NC} All artifact hashes: VERIFIED"
+}
+
+# Basic SBOM verification (fallback if Python utility not available)
+verify_sbom_basic() {
+    echo "Performing basic SBOM verification (hash checking only)..."
+    
+    local manifest_path="${RELEASE_ROOT}/manifest.json"
+    
+    if ! command -v jq &> /dev/null; then
+        error_exit "jq not found. Cannot parse manifest.json for basic verification."
+    fi
+    
+    # Verify artifact hashes (signature verification skipped in basic mode)
+    local artifacts
+    artifacts=$(jq -r '.artifacts[] | "\(.path)|\(.sha256)"' "$manifest_path" 2>/dev/null || true)
+    
+    if [[ -z "$artifacts" ]]; then
+        error_exit "Failed to parse manifest.json or no artifacts found"
+    fi
+    
+    local failed_artifacts=()
+    while IFS='|' read -r artifact_path expected_hash; do
+        local full_path="${RELEASE_ROOT}/${artifact_path}"
+        
+        if [[ ! -f "$full_path" ]]; then
+            failed_artifacts+=("${artifact_path} (file not found)")
+            continue
+        fi
+        
+        local computed_hash
+        computed_hash=$(sha256sum "$full_path" | cut -d' ' -f1)
+        
+        if [[ "$expected_hash" != "$computed_hash" ]]; then
+            failed_artifacts+=("${artifact_path} (hash mismatch)")
+        fi
+    done <<< "$artifacts"
+    
+    if [[ ${#failed_artifacts[@]} -gt 0 ]]; then
+        error_exit "Artifact hash verification failed: ${failed_artifacts[*]}"
+    fi
+    
+    echo -e "${GREEN}✓${NC} Basic SBOM verification passed (artifact hashes verified)"
 }
 
 # Create directory structure (no hardcoded paths)
