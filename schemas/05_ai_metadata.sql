@@ -337,19 +337,27 @@ CREATE TABLE shap_explanations (
     -- INTEGER sufficient for SHAP explanation sizes (typically < 10000)
     
     shap_explanation_storage_path TEXT,
-    -- External storage path where SHAP explanation is stored
+    -- PHASE 3: External storage path where full SHAP explanation is stored
     -- NULL if SHAP explanation is not stored externally
     -- TEXT for unlimited length (paths can be long)
-    -- NOTE: This is a reference, not the actual SHAP explanation
+    -- NOTE: Full SHAP explanation is stored (not just reference)
+    
+    shap_explanation_full JSONB,
+    -- PHASE 3: Full SHAP explanation as JSONB (for replay support)
+    -- Complete explanation with all feature contributions
+    -- NULL if not stored
+    -- JSONB for efficient querying and indexing
+    -- Full explanation enables replay and verification
     
     top_features_contributions JSONB,
     -- Top N feature contributions as JSONB (for quick access)
     -- Example: [{"feature": "file_path", "contribution": 0.123}, ...]
     -- NULL if not extracted
     -- JSONB for efficient querying and indexing
-    -- Limited to top N features (not full explanation)
+    -- Limited to top N features (for quick access, full explanation in shap_explanation_full)
     
-    computed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    computed_at TIMESTAMPTZ NOT NULL,
+    -- PHASE 3: Deterministic timestamp - must be provided explicitly
     -- When SHAP explanation was computed
     
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
