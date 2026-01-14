@@ -341,9 +341,16 @@ def store_cluster_membership(conn, cluster_id: str, incident_id: str, membership
 
 
 def store_shap_explanation(conn, incident_id: str, model_version_id: str,
-                          shap_explanation: List[Dict[str, Any]], top_n: int = 10):
+                          shap_explanation: List[Dict[str, Any]], top_n: int = 10,
+                          computed_at: Optional[datetime] = None):
     """
-    Store SHAP explanation reference (not the actual explanation).
+    PHASE 3: Store full SHAP explanation (for replay support).
+    
+    Stores:
+    - Full SHAP explanation (for replay)
+    - Top N features (for quick access)
+    - SHAP hash (for integrity verification)
+    
     Transaction discipline: Explicit begin, commit on success, rollback on failure.
     Deadlock/integrity violation detection: Log and terminate (no retries).
     """
@@ -352,25 +359,38 @@ def store_shap_explanation(conn, incident_id: str, model_version_id: str,
         try:
             import hashlib
             
+            # PHASE 3: Store full SHAP explanation (not just hash)
             shap_bytes = json.dumps(shap_explanation, sort_keys=True).encode('utf-8')
             shap_hash = hashlib.sha256(shap_bytes).hexdigest()
             shap_size = len(shap_explanation)
             
+            # PHASE 3: Store full explanation as JSONB
+            shap_explanation_full_json = json.dumps(shap_explanation, sort_keys=True)
+            
+            # Top N features for quick access
             top_features = sorted(shap_explanation, key=lambda x: abs(x.get('contribution', 0)), reverse=True)[:top_n]
             top_features_json = json.dumps(top_features)
+            
+            # PHASE 3: Use deterministic timestamp (from incident observed_at)
+            if computed_at is None:
+                # Fallback: use current time (should not happen in production)
+                from datetime import datetime, timezone
+                computed_at = datetime.now(timezone.utc)
             
             cur.execute("""
                 INSERT INTO shap_explanations (
                     event_id, model_version_id, shap_explanation_hash_sha256,
-                    shap_explanation_size, top_features_contributions, computed_at
+                    shap_explanation_size, shap_explanation_full, top_features_contributions, computed_at
                 )
-                VALUES (%s, %s, %s, %s, %s::jsonb, NOW())
+                VALUES (%s, %s, %s, %s, %s::jsonb, %s::jsonb, %s)
                 ON CONFLICT (event_id, model_version_id) DO UPDATE
                 SET shap_explanation_hash_sha256 = EXCLUDED.shap_explanation_hash_sha256,
                     shap_explanation_size = EXCLUDED.shap_explanation_size,
+                    shap_explanation_full = EXCLUDED.shap_explanation_full,
                     top_features_contributions = EXCLUDED.top_features_contributions,
-                    computed_at = NOW()
-            """, (incident_id, model_version_id, shap_hash, shap_size, top_features_json))
+                    computed_at = EXCLUDED.computed_at
+            """, (incident_id, model_version_id, shap_hash, shap_size, 
+                  shap_explanation_full_json, top_features_json, computed_at))
             
             return True
         finally:
