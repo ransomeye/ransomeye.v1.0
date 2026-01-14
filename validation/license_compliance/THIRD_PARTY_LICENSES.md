@@ -48,7 +48,7 @@ The following licenses are explicitly allowed for use in RansomEye without restr
 ### MIT License
 - **Status:** ✅ ALLOWED
 - **Rationale:** Most permissive license. Allows commercial use, modification, distribution, and private use without restrictions.
-- **Dependencies:** react, react-dom, vite, vitejs-plugin-react, bitsandbytes (see binary redistribution note), jsonlines, pyyaml, python-dotenv, llama-cpp-python, beautifulsoup4, fastapi, fastapi-cors, pydantic, pydantic-settings, jsonschema, sha2, hostname
+- **Dependencies:** react, react-dom, vite, vitejs-plugin-react, jsonlines, pyyaml, python-dotenv, llama-cpp-python, beautifulsoup4, fastapi, fastapi-cors, pydantic, pydantic-settings, jsonschema, sha2, hostname (16 dependencies). Note: bitsandbytes uses MIT but has medium risk due to binary redistribution requirements.
 
 ### Apache License 2.0
 - **Status:** ✅ ALLOWED
@@ -58,7 +58,12 @@ The following licenses are explicitly allowed for use in RansomEye without restr
 ### BSD-3-Clause License
 - **Status:** ✅ ALLOWED
 - **Rationale:** Permissive license with minimal restrictions (attribution, no endorsement). Compatible with commercial licensing.
-- **Dependencies:** torch (primary license, includes Apache-2.0 components), pandas, numpy, scikit-learn, python-dotenv, uvicorn
+- **Dependencies:** pandas, numpy, scikit-learn, python-dotenv, uvicorn (5 dependencies)
+
+### BSD-3-Clause (with Apache-2.0 components)
+- **Status:** ✅ ALLOWED
+- **Rationale:** Permissive license with minimal restrictions. Includes bundled components under Apache-2.0, both licenses are permissive and compatible.
+- **Dependencies:** torch (1 dependency - PyTorch includes bundled Apache-2.0 components in torch/_vendor/packaging)
 
 ### BSD-2-Clause License
 - **Status:** ✅ ALLOWED
