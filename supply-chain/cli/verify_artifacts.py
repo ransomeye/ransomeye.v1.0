@@ -16,7 +16,8 @@ sys.path.insert(0, str(_supply_chain_dir))
 _branding_dir = Path(__file__).parent.parent.parent / "branding"
 sys.path.insert(0, str(_branding_dir))
 
-from crypto.vendor_key_manager import VendorKeyManager, VendorKeyManagerError
+from crypto.persistent_signing_authority import PersistentSigningAuthority, PersistentSigningAuthorityError
+from crypto.key_registry import KeyRegistry, KeyRegistryError
 from crypto.artifact_verifier import ArtifactVerifier, ArtifactVerificationError
 from engine.verification_engine import VerificationEngine, VerificationEngineError
 from branding.branding_utils import BrandingUtils
