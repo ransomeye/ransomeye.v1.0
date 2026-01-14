@@ -278,8 +278,8 @@ class CommandGate:
         except (ValueError, AttributeError) as e:
             raise CommandRejectionError(f"Invalid timestamp format: {e}")
         
-        # Reject unknown fields
-        allowed_fields = set(required_fields) | {'approval_id', 'signing_key_id'}
+        # PHASE 4: Reject unknown fields (including policy authority fields)
+        allowed_fields = set(required_fields) | {'approval_id', 'signing_key_id', 'signing_algorithm', 'signed_at'}
         unknown_fields = set(command.keys()) - allowed_fields
         if unknown_fields:
             raise CommandRejectionError(f"Unknown fields: {unknown_fields}")
