@@ -74,7 +74,8 @@ CREATE TABLE ai_model_versions (
     -- NULL if not provided
     -- TEXT for unlimited length
     
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMPTZ NOT NULL,
+    -- PHASE 3: Deterministic timestamp - must be provided explicitly
     -- Schema-level timestamp (immutable)
     
     CONSTRAINT ai_model_versions_version_string_not_empty CHECK (LENGTH(TRIM(model_version_string)) > 0),
@@ -127,7 +128,8 @@ CREATE TABLE feature_vectors (
     status feature_vector_status NOT NULL DEFAULT 'PENDING',
     -- Feature vector processing status (PENDING, PROCESSED, ERROR)
     
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMPTZ NOT NULL,
+    -- PHASE 3: Deterministic timestamp - must be provided explicitly
     -- Schema-level timestamp (immutable)
     
     CONSTRAINT feature_vectors_hash_format CHECK (feature_vector_hash_sha256 ~ '^[a-fA-F0-9]{64}$'),
@@ -192,7 +194,8 @@ CREATE TABLE clusters (
     -- Cluster ID that this cluster was merged into (NULL if not merged)
     -- Used for cluster merge tracking
     
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMPTZ NOT NULL,
+    -- PHASE 3: Deterministic timestamp - must be provided explicitly
     -- Schema-level timestamp (immutable)
     -- When cluster was created in database
     
@@ -244,7 +247,8 @@ CREATE TABLE cluster_memberships (
     added_at TIMESTAMPTZ NOT NULL,
     -- PHASE 3: Deterministic timestamp - must be provided explicitly (use event observed_at)
     
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMPTZ NOT NULL,
+    -- PHASE 3: Deterministic timestamp - must be provided explicitly
     -- Schema-level timestamp (immutable)
     
     CONSTRAINT cluster_memberships_score_range CHECK (membership_score IS NULL OR (membership_score >= 0.0000 AND membership_score <= 1.0000)),
@@ -289,7 +293,8 @@ CREATE TABLE novelty_scores (
     computed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     -- When novelty score was computed
     
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMPTZ NOT NULL,
+    -- PHASE 3: Deterministic timestamp - must be provided explicitly
     -- Schema-level timestamp (immutable)
     
     CONSTRAINT novelty_scores_score_range CHECK (novelty_score >= 0.0000 AND novelty_score <= 1.0000),
@@ -361,7 +366,8 @@ CREATE TABLE shap_explanations (
     -- PHASE 3: Deterministic timestamp - must be provided explicitly
     -- When SHAP explanation was computed
     
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMPTZ NOT NULL,
+    -- PHASE 3: Deterministic timestamp - must be provided explicitly
     -- Schema-level timestamp (immutable)
     
     CONSTRAINT shap_explanations_hash_format CHECK (shap_explanation_hash_sha256 ~ '^[a-fA-F0-9]{64}$'),
