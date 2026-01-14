@@ -319,11 +319,34 @@ function App() {
                     </div>
                   )}
 
+                  {/* PHASE 5: Policy Recommendations with Warnings */}
                   <h3>Policy Recommendations</h3>
                   {incidentDetail.policy_recommendations && incidentDetail.policy_recommendations.length > 0 ? (
                     <div>
                       {incidentDetail.policy_recommendations.map((rec, idx) => (
                         <div key={idx} style={{ marginBottom: '10px', padding: '10px', backgroundColor: '#f5f5f5', borderRadius: '4px' }}>
+                          {/* PHASE 5: Warning for ambiguous intelligence */}
+                          {(incidentDetail.evidence_quality?.has_contradiction || 
+                            incidentDetail.evidence_quality?.evidence_completeness === 'INCOMPLETE' ||
+                            incidentDetail.evidence_quality?.evidence_completeness === 'NO_EVIDENCE' ||
+                            (incidentDetail.evidence_quality && !incidentDetail.evidence_quality.has_ai_provenance && incidentDetail.ai_insights)) && (
+                            <div style={{
+                              padding: '10px',
+                              marginBottom: '10px',
+                              backgroundColor: '#fff3cd',
+                              border: '1px solid #ffc107',
+                              borderRadius: '4px'
+                            }}>
+                              <p style={{ color: '#856404', fontWeight: 'bold', margin: 0 }}>
+                                ⚠️ WARNING: Action recommended on ambiguous intelligence. 
+                                {incidentDetail.evidence_quality?.has_contradiction && ' Contradictions detected. '}
+                                {incidentDetail.evidence_quality?.evidence_completeness === 'INCOMPLETE' && ' Evidence is incomplete. '}
+                                {incidentDetail.evidence_quality?.evidence_completeness === 'NO_EVIDENCE' && ' No evidence available. '}
+                                {incidentDetail.evidence_quality && !incidentDetail.evidence_quality.has_ai_provenance && incidentDetail.ai_insights && ' AI output is advisory only. '}
+                                Explicit acknowledgment required before action.
+                              </p>
+                            </div>
+                          )}
                           <p><strong>Recommended Action:</strong> {rec.recommended_action}</p>
                           <p><strong>Simulation Mode:</strong> {rec.simulation_mode ? 'Yes' : 'No'}</p>
                           <p><strong>Enforcement Disabled:</strong> {rec.enforcement_disabled ? 'Yes' : 'No'}</p>
