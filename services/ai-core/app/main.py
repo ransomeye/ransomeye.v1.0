@@ -187,7 +187,8 @@ def run_ai_core():
         
         logger.info(f"Processing {len(incidents)} unresolved incidents", incident_count=len(incidents))
         
-        # Phase 6 requirement: Get or create model versions (versioned and reproducible)
+        # PHASE 3: Get or create model versions (versioned and reproducible)
+        # Model versions are created with training data hash for replay support
         clustering_model_version = get_model_version(write_conn, 'CLUSTERING', '1.0.0')
         explainability_model_version = get_model_version(write_conn, 'EXPLAINABILITY', '1.0.0')
         

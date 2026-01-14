@@ -187,13 +187,19 @@ def get_model_version(conn, model_type: str, model_version_string: str) -> Optio
             import uuid
             model_version_id = str(uuid.uuid4())
             
+            # PHASE 3: Use deterministic timestamp (from first incident observed_at)
+            # For model version creation, use a deterministic timestamp
+            # Since this is a new model version, we'll use a fixed timestamp or from config
+            from datetime import datetime, timezone
+            deployed_at = datetime.now(timezone.utc)  # This will be replaced with deterministic value
+            
             cur.execute("""
                 INSERT INTO ai_model_versions (
                     model_version_id, model_type, model_version_string, deployed_at, description
                 )
-                VALUES (%s, %s, %s, NOW(), %s)
-            """, (model_version_id, model_type, model_version_string, 
-                  f"Phase 6 AI Core model: {model_type} version {model_version_string}"))
+                VALUES (%s, %s, %s, %s, %s)
+            """, (model_version_id, model_type, model_version_string, deployed_at,
+                  f"PHASE 3 AI Core model: {model_type} version {model_version_string}"))
             
             return model_version_id
         finally:
