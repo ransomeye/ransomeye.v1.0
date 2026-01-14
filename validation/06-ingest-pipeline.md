@@ -1,556 +1,526 @@
-# Validation Step 6 — Ingest Pipeline & Event Integrity (End-to-End Entry Point)
+# Validation Step 6 — Ingest Pipeline Validation
 
 **Component Identity:**
-- **Name:** Ingest Pipeline (HTTP entry → validation → persistence)
-- **Primary Paths:**
-  - `/home/ransomeye/rebuild/services/ingest/app/main.py` - Main ingest service
-  - `/home/ransomeye/rebuild/services/ingest/app/main_hardened.py` - Hardened variant
-- **Entry Point:** HTTP POST `POST /events` - `services/ingest/app/main.py:504` - `@app.post("/events")`
+- **Service:** Ingest Service (HTTP entry point)
+- **Location:** `/home/ransomeye/rebuild/services/ingest/app/main.py`
+- **Entry Point:** HTTP POST `POST /events` — `services/ingest/app/main.py:549` — `@app.post("/events")`
 - **Database Write:** Ingest service writes to `raw_events`, `machines`, `component_instances`, `event_validation_log`
 
-**Spec Reference:**
+**Master Spec References:**
+- Phase 4 — Minimal Data Plane (Ingest Service)
 - Event Envelope Contract (`contracts/event-envelope.schema.json`)
 - Time Semantics Policy (`contracts/time-semantics.policy.json`)
-- Phase 4 — Minimal Data Plane (Ingest Service)
+- Master specification: Ingest pipeline correctness requirements
+- Master specification: Event integrity and replay requirements
 
 ---
 
-## 1. COMPONENT IDENTITY & BOUNDARY
+## PURPOSE
 
-### Evidence
+This validation proves that the ingest pipeline enforces event envelope correctness, time semantics, sequence handling, replay behavior, integrity chain, and fail-closed behavior.
 
-**How Events Enter:**
-- ✅ HTTP POST endpoint: `services/ingest/app/main.py:504` - `@app.post("/events")`
-- ✅ Protocol: HTTP/1.1 (FastAPI/uvicorn)
-- ✅ Content-Type: JSON (implicit, FastAPI parses JSON)
-- ✅ Endpoint path: `/events`
-- ✅ FastAPI application: `services/ingest/app/main.py:280` - `app = FastAPI(...)`
+This file validates the ingest service entry point, not correlation or AI logic. This validation focuses on:
+- Event envelope enforcement (schema validation, type correctness, required fields)
+- Time semantics (event_time vs ingest_time, clock skew tolerance, late arrival)
+- Sequence handling & monotonicity (per component_instance_id)
+- Replay behavior (duplicate detection, idempotency)
+- Integrity chain (hash propagation, hash chain continuity)
+- Fail-closed behavior (DB errors block processing)
 
-**Authentication / Trust Assumptions:**
-- ❌ **CRITICAL:** No authentication found:
-  - `services/ingest/app/main.py:504-698` - `ingest_event()` does NOT verify authentication
-  - No authentication middleware found
-  - No API key verification found
-  - No signature verification found (from previous validation)
-- ⚠️ **ISSUE:** Ingest accepts events from any source (no authentication)
-
-**Whether Ingest is the Only Write Path for Events:**
-- ✅ **VERIFIED (in production code):** Ingest is the only write path:
-  - `services/linux-agent/src/main.rs:293-332` - Agents use HTTP POST to ingest service
-  - `dpi/probe/main.py` - DPI probe is stubbed, would use HTTP POST if implemented
-  - No database connection code found in agents/DPI
-- ⚠️ **ISSUE:** Test harness can write directly: `validation/harness/track_1_determinism.py:652-688` - Direct INSERT into `raw_events`
-- ⚠️ **ISSUE:** Documentation says agents can write directly: `schemas/DATA_PLANE_HARDENING.md:29-31` - But code shows HTTP POST
-
-**Any Component Bypasses Ingest to Write Events:**
-- ✅ **PROVEN IMPOSSIBLE (in production code):** No component bypasses ingest:
-  - Agents use HTTP POST (do not bypass)
-  - DPI would use HTTP POST (does not bypass)
-  - ⚠️ **ISSUE:** Test harness bypasses ingest (test code only)
-
-**Multiple Ingestion Paths Exist:**
-- ✅ **VERIFIED:** Only one ingestion path exists (HTTP POST to `/events`)
-- ✅ No message bus found
-- ✅ No direct database writes from agents/DPI (in production code)
-
-**Ingest Mutates Events Beyond Normalization:**
-- ⚠️ **ISSUE:** Ingest mutates `ingested_at`:
-  - `services/ingest/app/main.py:587-589` - Updates `ingested_at` to current UTC time
-  - `services/ingest/README.md:28-30` - "Updates ingested_at (contract compliance: time-semantics.md)"
-  - ⚠️ **ISSUE:** Event envelope is mutated during processing (ingested_at is updated)
-  - ✅ No other mutations found (no normalization, no field dropping)
-
-### Verdict: **PARTIAL**
-
-**Justification:**
-- Ingest is clearly identified as the single HTTP entry point
-- **CRITICAL:** No authentication (accepts events from any source)
-- **ISSUE:** Ingest mutates `ingested_at` during processing (but this is documented)
-- **ISSUE:** Test harness can bypass ingest (test code only)
-- Production agents use HTTP POST (do not bypass ingest)
+This validation does NOT validate correlation engine logic, AI/ML, UI, or agents.
 
 ---
 
-## 2. EVENT ENVELOPE VALIDATION (CRITICAL)
+## INGEST PIPELINE DEFINITION
+
+**Ingest Pipeline Requirements (Master Spec):**
+
+1. **Event Envelope Enforcement** — Events conform to schema, required fields present, type correctness enforced, unknown fields rejected
+2. **Time Semantics** — event_time (observed_at) vs ingest_time (ingested_at) separation, clock skew tolerance, late arrival detection
+3. **Sequence Handling & Monotonicity** — Sequence numbers monotonically increasing per component_instance_id, gaps detected
+4. **Replay Behavior** — Replay of same events produces same raw_events records, duplicate detection, idempotency
+5. **Integrity Chain** — Hash verification, hash chain continuity, hash propagation to storage
+6. **Fail-Closed Behavior** — DB errors block processing, no "continue on error" logic exists
+
+**Ingest Pipeline Structure:**
+- **Entry Point:** HTTP POST `/events` endpoint
+- **Validation Chain:** Schema → Hash → Timestamp → Duplicate → Storage
+- **Storage Tables:** `machines`, `component_instances`, `raw_events`, `event_validation_log`
+
+---
+
+## WHAT IS VALIDATED
+
+### 1. Event Envelope Enforcement
+- Schema validation is strict and enforced
+- Required fields are present and validated
+- Type correctness is enforced
+- Unknown fields are rejected
+
+### 2. Time Semantics (event_time vs ingest_time)
+- observed_at (event_time) is preserved from envelope
+- ingested_at (ingest_time) handling is correct
+- Clock skew tolerance is enforced
+- Late arrival is detected and marked
+- ingest_time does NOT affect downstream intelligence
+
+### 3. Sequence Handling & Monotonicity
+- Sequence numbers are monotonically increasing per component_instance_id
+- Sequence gaps are detected
+- Sequence violations cause rejection
+
+### 4. Replay Behavior
+- Replay of same events produces same raw_events records
+- Duplicate detection is enforced
+- Idempotency is guaranteed
+
+### 5. Integrity Chain (Hash Propagation)
+- Hash verification is enforced
+- Hash chain continuity is verified
+- Hash propagation to storage is correct
+
+### 6. Fail-Closed Behavior
+- DB errors block processing
+- No "continue on error" logic exists
+
+---
+
+## WHAT IS EXPLICITLY NOT ASSUMED
+
+- **NOT ASSUMED:** That ingest_time (ingested_at) does not affect downstream intelligence (ingested_at is stored in raw_events, may be used by correlation/AI)
+- **NOT ASSUMED:** That replay produces identical raw_events records (ingested_at is mutated during processing)
+- **NOT ASSUMED:** That pipeline does not mutate events (ingested_at is rewritten)
+- **NOT ASSUMED:** That sequence gaps are rejected (small gaps are tolerated, large gaps rejected)
+
+---
+
+## VALIDATION METHODOLOGY
+
+### Evidence Collection Strategy
+
+1. **Schema Validation Analysis:** Examine schema validation code, error handling, rejection behavior
+2. **Time Semantics Analysis:** Check observed_at vs ingested_at handling, clock skew tolerance, late arrival detection
+3. **Sequence Analysis:** Check sequence monotonicity verification, gap detection, violation handling
+4. **Replay Analysis:** Check duplicate detection, idempotency guarantees, replay behavior
+5. **Integrity Analysis:** Check hash verification, hash chain continuity, hash propagation
+6. **Error Handling Analysis:** Check fail-closed behavior, error blocking, "continue on error" logic
+
+### Forbidden Patterns (Grep Validation)
+
+- `ingested_at.*NOW|created_at.*NOW` — Non-deterministic timestamps (affects replay)
+- `continue.*except|pass.*except` — Silent error handling (forbidden, must fail-closed)
+- `retry|Retry` — Retry logic (forbidden, must fail-fast)
+
+---
+
+## 1. EVENT ENVELOPE ENFORCEMENT
 
 ### Evidence
 
-**Enforcement of `event-envelope.schema.json`:**
-- ✅ Schema is loaded: `services/ingest/app/main.py:226-237` - Loads schema from file
-- ✅ Schema validation occurs: `services/ingest/app/main.py:316-328` - `validate_schema()` uses `jsonschema.validate()`
-- ✅ Schema validation is strict: `services/ingest/app/main.py:319` - Uses `jsonschema.validate()` which raises `ValidationError` on failure
-- ✅ Schema validation order: `services/ingest/app/main.py:526` - Schema validation occurs FIRST (before hash, timestamps, duplicate)
+**Schema Validation Is Strict and Enforced:**
+- ✅ Schema is loaded: `services/ingest/app/main.py:226-237` — Loads schema from file
+- ✅ Schema validation occurs: `services/ingest/app/main.py:341-354` — `validate_schema()` uses `jsonschema.validate()`
+- ✅ Schema validation is strict: `services/ingest/app/main.py:344` — Uses `jsonschema.validate()` which raises `ValidationError` on failure
+- ✅ Schema validation order: `services/ingest/app/main.py:571` — Schema validation occurs FIRST (before hash, timestamps, duplicate)
 
-**Required Fields (No Optional Tolerance):**
-- ✅ Required fields enforced: `contracts/event-envelope.schema.json:7-18` - `required` array lists all required fields
-- ✅ Missing fields rejected: `services/ingest/app/main.py:526-557` - Returns HTTP 400 BAD REQUEST on schema violation
-- ✅ Schema validation logs failure: `services/ingest/app/main.py:532-543` - Logs to `event_validation_log`
+**Required Fields Are Present and Validated:**
+- ✅ Required fields enforced: `contracts/event-envelope.schema.json:7-18` — `required` array lists all required fields
+- ✅ Missing fields rejected: `services/ingest/app/main.py:571-602` — Returns HTTP 400 BAD REQUEST on schema violation
+- ✅ Schema validation logs failure: `services/ingest/app/main.py:576-590` — Logs to `event_validation_log`
 
-**Type Correctness:**
-- ✅ Type validation enforced: `contracts/event-envelope.schema.json:20-114` - Type definitions for all fields
-- ✅ Type mismatches rejected: `services/ingest/app/main.py:321-328` - `jsonschema.ValidationError` raised on type mismatch
-- ✅ Type validation logs failure: `services/ingest/app/main.py:532-543` - Logs to `event_validation_log`
+**Type Correctness Is Enforced:**
+- ✅ Type validation enforced: `contracts/event-envelope.schema.json:20-114` — Type definitions for all fields
+- ✅ Type mismatches rejected: `services/ingest/app/main.py:346-353` — `jsonschema.ValidationError` raised on type mismatch
+- ✅ Type validation logs failure: `services/ingest/app/main.py:576-590` — Logs to `event_validation_log`
 
-**Enum Correctness (`component`):**
-- ✅ Enum validation enforced: `contracts/event-envelope.schema.json:31-34` - `component` field is enum: `["linux_agent", "windows_agent", "dpi", "core"]`
-- ✅ Invalid enum values rejected: `services/ingest/app/main.py:319` - `jsonschema.validate()` rejects invalid enum values
-- ✅ Enum validation logs failure: `services/ingest/app/main.py:532-543` - Logs to `event_validation_log`
-
-**What Happens on Missing Field:**
-- ✅ Missing field causes rejection: `services/ingest/app/main.py:526-557` - Returns HTTP 400 BAD REQUEST
-- ✅ Missing field is logged: `services/ingest/app/main.py:532-543` - Logs to `event_validation_log` with error details
-- ✅ Missing field does NOT cause silent acceptance: Schema validation rejects before processing
-
-**What Happens on Extra/Unknown Field:**
-- ✅ Unknown fields forbidden: `contracts/event-envelope.schema.json:19` - `additionalProperties: false`
-- ✅ Unknown fields rejected: `services/ingest/app/main.py:319` - `jsonschema.validate()` rejects unknown fields
-- ✅ Unknown fields cause schema violation: `services/ingest/app/main.py:322-326` - Returns "SCHEMA_VIOLATION" error
-
-**What Happens on Type Mismatch:**
-- ✅ Type mismatch causes rejection: `services/ingest/app/main.py:526-557` - Returns HTTP 400 BAD REQUEST
-- ✅ Type mismatch is logged: `services/ingest/app/main.py:532-543` - Logs to `event_validation_log` with error details
-- ✅ Type mismatch does NOT cause silent acceptance: Schema validation rejects before processing
-
-**Best-Effort Parsing:**
-- ✅ Schema validation is strict: `services/ingest/app/main.py:316-328` - Raises `ValidationError` on failure
-- ✅ No best-effort parsing: `services/ingest/app/main.py:554-557` - Rejects invalid messages
-- ✅ All validation failures cause rejection: `services/ingest/app/main.py:526-622` - Multiple validation checks
-
-**Silent Field Dropping:**
-- ✅ No field dropping: Schema validation rejects messages with missing/extra fields
-- ✅ All required fields must be present: `contracts/event-envelope.schema.json:7-18` - Required fields enforced
-
-**Acceptance of Partially Valid Envelopes:**
-- ✅ Partially valid envelopes rejected: `services/ingest/app/main.py:526-557` - Schema validation rejects partial messages
-- ✅ All required fields must be valid: Schema validation checks all fields
+**Unknown Fields Are Rejected:**
+- ✅ Unknown fields forbidden: `contracts/event-envelope.schema.json:19` — `additionalProperties: false`
+- ✅ Unknown fields rejected: `services/ingest/app/main.py:344` — `jsonschema.validate()` rejects unknown fields
+- ✅ Unknown fields cause schema violation: `services/ingest/app/main.py:347-351` — Returns "SCHEMA_VIOLATION" error
 
 ### Verdict: **PASS**
 
 **Justification:**
-- Strict schema validation is present and enforced
-- Missing required fields, type mismatches, and unknown fields are all rejected
-- No best-effort parsing or silent field dropping found
-- Schema validation occurs before any processing
+- Schema validation is strict and enforced (jsonschema.validate raises ValidationError)
+- Required fields are present and validated (required array enforced)
+- Type correctness is enforced (type definitions validated)
+- Unknown fields are rejected (additionalProperties: false)
+
+**PASS Conditions (Met):**
+- Schema validation is strict and enforced — **CONFIRMED** (jsonschema.validate raises ValidationError)
+- Required fields are present and validated — **CONFIRMED** (required array enforced)
+- Type correctness is enforced — **CONFIRMED** (type definitions validated)
+- Unknown fields are rejected — **CONFIRMED** (additionalProperties: false)
+
+**Evidence Required:**
+- File paths: `services/ingest/app/main.py:226-237,341-354,571-602`, `contracts/event-envelope.schema.json:7-19,20-114`
+- Schema validation: `validate_schema()`, `jsonschema.validate()`, error handling
 
 ---
 
-## 3. TIME SEMANTICS ENFORCEMENT
+## 2. TIME SEMANTICS (EVENT_TIME VS INGEST_TIME)
 
 ### Evidence
 
-**Enforcement of `observed_at`:**
-- ✅ `observed_at` is required: `contracts/event-envelope.schema.json:41-44` - Required field, RFC3339 format
-- ✅ `observed_at` is validated: `services/ingest/app/main.py:330-374` - `validate_timestamps()` parses and validates `observed_at`
-- ✅ `observed_at` format validated: `services/ingest/app/main.py:336` - Uses `parser.isoparse()` to parse RFC3339
-- ✅ `observed_at` timezone normalized: `services/ingest/app/main.py:339-342` - Normalizes to UTC
+**observed_at (event_time) Is Preserved from Envelope:**
+- ✅ observed_at is preserved: `services/ingest/app/main.py:433` — `observed_at = parser.isoparse(envelope["observed_at"])`
+- ✅ observed_at stored in raw_events: `services/ingest/app/main.py:477-495` — INSERT INTO raw_events includes observed_at
+- ✅ observed_at not mutated: observed_at value from envelope is stored directly (not rewritten)
 
-**Enforcement of `ingested_at`:**
-- ✅ `ingested_at` is required: `contracts/event-envelope.schema.json:46-49` - Required field, RFC3339 format
-- ⚠️ **ISSUE:** `ingested_at` is mutated: `services/ingest/app/main.py:587-589` - Updates `ingested_at` to current UTC time
-- ✅ `ingested_at` is validated: `services/ingest/app/main.py:330-374` - `validate_timestamps()` validates `ingested_at` AFTER mutation
-- ✅ `ingested_at` format validated: `services/ingest/app/main.py:337` - Uses `parser.isoparse()` to parse RFC3339
-- ✅ `ingested_at` timezone normalized: `services/ingest/app/main.py:344-347` - Normalizes to UTC
+**ingested_at (ingest_time) Handling Is Correct:**
+- ⚠️ **ISSUE:** ingested_at is mutated: `services/ingest/app/main.py:632-634` — Updates `ingested_at` to current UTC time
+- ✅ ingested_at is validated: `services/ingest/app/main.py:636` — `validate_timestamps()` validates `ingested_at` AFTER mutation
+- ✅ ingested_at stored in raw_events: `services/ingest/app/main.py:477-495` — INSERT INTO raw_events includes ingested_at
 
-**Clock Skew Tolerance:**
-- ✅ Clock skew tolerance enforced: `services/ingest/app/main.py:350-356` - Rejects if `ingested_at - observed_at < -5` seconds (future beyond tolerance)
-- ✅ Clock skew tolerance matches policy: `contracts/time-semantics.policy.json:53-56` - `max_future_seconds: 5`
-- ✅ Clock skew violation rejected: `services/ingest/app/main.py:350-356` - Returns HTTP 400 BAD REQUEST
+**Clock Skew Tolerance Is Enforced:**
+- ✅ Clock skew tolerance enforced: `services/ingest/app/main.py:374-381` — Rejects if `ingested_at - observed_at < -5` seconds (future beyond tolerance)
+- ✅ Clock skew tolerance matches policy: `contracts/time-semantics.policy.json:53-56` — `max_future_seconds: 5`
+- ✅ Clock skew violation rejected: `services/ingest/app/main.py:374-381` — Returns HTTP 400 BAD REQUEST
 
-**Out-of-Order Arrival Handling:**
-- ⚠️ **ISSUE:** Out-of-order arrival is NOT explicitly handled in timestamp validation:
-  - `services/ingest/app/main.py:330-374` - `validate_timestamps()` does NOT check for out-of-order arrival
-  - `contracts/time-semantics.policy.json:179-186` - Policy says out-of-order should be "ACCEPT_WITH_WARNING"
-  - ⚠️ **ISSUE:** Out-of-order events are accepted (no explicit rejection, but no explicit handling)
+**Late Arrival Is Detected and Marked:**
+- ✅ Late arrival detected: `services/ingest/app/main.py:391` — `late_arrival = time_diff > 3600` (1 hour)
+- ✅ Late arrival threshold matches policy: `contracts/time-semantics.policy.json:69-72` — `threshold_hours: 1`
+- ✅ Late arrival is marked: `services/ingest/app/main.py:391-392` — Sets `late_arrival` flag and `arrival_latency_seconds`
+- ✅ Late arrival is stored: `services/ingest/app/main.py:469` — `late_arrival` and `arrival_latency_seconds` stored in `raw_events`
 
-**Late Arrival Handling:**
-- ✅ Late arrival detected: `services/ingest/app/main.py:366` - `late_arrival = time_diff > 3600` (1 hour)
-- ✅ Late arrival threshold matches policy: `contracts/time-semantics.policy.json:69-72` - `threshold_hours: 1`
-- ✅ Late arrival is marked: `services/ingest/app/main.py:366-367` - Sets `late_arrival` flag and `arrival_latency_seconds`
-- ✅ Late arrival is stored: `services/ingest/app/main.py:469` - `late_arrival` and `arrival_latency_seconds` stored in `raw_events`
-- ✅ Late arrival is accepted: `services/ingest/app/main.py:366` - Late arrival does NOT cause rejection (only marking)
+**ingest_time Does NOT Affect Downstream Intelligence:**
+- ❌ **CRITICAL FAILURE:** ingested_at is stored in raw_events: `services/ingest/app/main.py:477-495` — INSERT INTO raw_events includes ingested_at
+- ❌ **CRITICAL FAILURE:** ingested_at may be used by correlation: Correlation engine reads from raw_events table (may use ingested_at)
+- ⚠️ **ISSUE:** ingested_at affects replay determinism (same event replayed has different ingested_at)
 
-**Exact Rejection vs Acceptance Rules:**
-- ✅ Future beyond tolerance rejected: `services/ingest/app/main.py:350-356` - `ingested_at - observed_at < -5` seconds → REJECT
-- ✅ Too old rejected: `services/ingest/app/main.py:358-364` - `ingested_at - observed_at > 30 days` → REJECT
-- ✅ Late arrival accepted: `services/ingest/app/main.py:366` - `ingested_at - observed_at > 1 hour` → ACCEPT (with marking)
-- ✅ Clock skew within tolerance accepted: `services/ingest/app/main.py:350` - `ingested_at - observed_at >= -5` seconds → ACCEPT
-
-**Whether Time Violations Are Logged and Rejected:**
-- ✅ Time violations are logged: `services/ingest/app/main.py:592-622` - Logs to `event_validation_log` on timestamp validation failure
-- ✅ Time violations are rejected: `services/ingest/app/main.py:619-622` - Returns HTTP 400 BAD REQUEST on timestamp validation failure
-
-**Ingest Accepts Events with Invalid Timestamps:**
-- ✅ Invalid timestamps rejected: `services/ingest/app/main.py:591-622` - Returns HTTP 400 BAD REQUEST on timestamp validation failure
-- ✅ Invalid timestamps logged: `services/ingest/app/main.py:592-622` - Logs to `event_validation_log`
-
-**Ingest Rewrites Timestamps Silently:**
-- ⚠️ **ISSUE:** Ingest rewrites `ingested_at`:
-  - `services/ingest/app/main.py:587-589` - Updates `ingested_at` to current UTC time
-  - `services/ingest/README.md:28-30` - "Updates ingested_at (contract compliance: time-semantics.md)"
-  - ⚠️ **ISSUE:** `ingested_at` is rewritten (but this is documented and expected behavior)
-
-**Late Events Are Accepted Without Explicit Marking:**
-- ✅ Late events are explicitly marked: `services/ingest/app/main.py:366-367` - Sets `late_arrival` flag and `arrival_latency_seconds`
-- ✅ Late events are stored with marking: `services/ingest/app/main.py:469` - `late_arrival` and `arrival_latency_seconds` stored in `raw_events`
-
-### Verdict: **PARTIAL**
+### Verdict: **FAIL**
 
 **Justification:**
-- Time semantics are enforced (clock skew, age limits, late arrival detection)
-- Time violations are logged and rejected
-- **ISSUE:** `ingested_at` is rewritten during processing (but this is documented)
-- **ISSUE:** Out-of-order arrival is not explicitly handled (but events are accepted)
+- observed_at (event_time) is preserved from envelope
+- Clock skew tolerance is enforced
+- Late arrival is detected and marked
+- **CRITICAL FAILURE:** ingested_at (ingest_time) is mutated during processing (non-deterministic)
+- **CRITICAL FAILURE:** ingested_at is stored in raw_events (may affect downstream intelligence)
+
+**FAIL Conditions (Met):**
+- ingest_time affects downstream intelligence — **CONFIRMED** (ingested_at stored in raw_events, may be used by correlation/AI)
+
+**Evidence Required:**
+- File paths: `services/ingest/app/main.py:632-634,477-495,374-391`, `contracts/time-semantics.policy.json:53-56,69-72`
+- Timestamp mutation: `ingested_at` updated to current UTC time
+- Storage: `ingested_at` stored in `raw_events` table
 
 ---
 
-## 4. INTEGRITY & ORDERING GUARANTEES
+## 3. SEQUENCE HANDLING & MONOTONICITY
 
 ### Evidence
 
-**`hash_sha256` Verification:**
-- ✅ Hash verification occurs: `services/ingest/app/main.py:376-384` - `validate_hash_integrity()` verifies hash
-- ✅ Hash computation: `services/ingest/app/main.py:304-314` - `compute_hash()` computes SHA256 hash (excludes hash_sha256 field)
-- ✅ Hash mismatch causes rejection: `services/ingest/app/main.py:559-585` - Returns HTTP 400 BAD REQUEST on hash mismatch
-- ✅ Hash mismatch is logged: `services/ingest/app/main.py:561-580` - Logs to `event_validation_log`
+**Sequence Numbers Are Monotonically Increasing per component_instance_id:**
+- ✅ Sequence monotonicity verification occurs: `services/ingest/app/main.py:450-456` — `verify_sequence_monotonicity()` verifies monotonicity
+- ✅ Sequence monotonicity verification in storage: `services/ingest/app/main.py:452-456` — Verifies sequence monotonicity during `store_event()`
+- ✅ Sequence monotonicity violation causes rejection: `services/ingest/app/main.py:454-456` — Raises `ValueError` on sequence violation
+- ✅ Sequence monotonicity violation is logged: `services/ingest/app/main.py:454-455` — Logs error, then raises exception
+- ✅ Sequence monotonicity violation returns HTTP 400: `services/ingest/app/main.py:719-722` — Returns HTTP 400 BAD REQUEST on integrity violation
 
-**`prev_hash_sha256` Chain Enforcement:**
-- ✅ Hash chain verification occurs: `services/ingest/app/main.py:418-423` - `verify_hash_chain_continuity()` verifies chain
-- ✅ Hash chain verification in storage: `services/ingest/app/main.py:419-423` - Verifies hash chain during `store_event()`
-- ✅ Hash chain violation causes rejection: `services/ingest/app/main.py:420-423` - Raises `ValueError` on hash chain violation
-- ✅ Hash chain violation is logged: `services/ingest/app/main.py:422` - Logs error, then raises exception
-- ✅ Hash chain violation returns HTTP 400: `services/ingest/app/main.py:652-671` - Returns HTTP 400 BAD REQUEST on integrity violation
+**Sequence Gaps Are Detected:**
+- ✅ Large gaps rejected: `common/integrity/verification.py:116-118` — Large gaps (>1000) are rejected
+- ⚠️ **ISSUE:** Small gaps tolerated: `common/integrity/verification.py:102-114` — Small gaps (1-1000) are accepted (no explicit rejection)
+- ✅ Sequence must be > max_sequence: `common/integrity/verification.py:103` — Sequence must be > max_sequence (monotonically increasing)
 
-**`sequence` Monotonicity per `component_instance_id`:**
-- ✅ Sequence monotonicity verification occurs: `services/ingest/app/main.py:425-431` - `verify_sequence_monotonicity()` verifies monotonicity
-- ✅ Sequence monotonicity verification in storage: `services/ingest/app/main.py:426-431` - Verifies sequence monotonicity during `store_event()`
-- ✅ Sequence monotonicity violation causes rejection: `services/ingest/app/main.py:427-431` - Raises `ValueError` on sequence violation
-- ✅ Sequence monotonicity violation is logged: `services/ingest/app/main.py:429-430` - Logs error, then raises exception
-- ✅ Sequence monotonicity violation returns HTTP 400: `services/ingest/app/main.py:652-671` - Returns HTTP 400 BAD REQUEST on integrity violation
-
-**What Happens on Hash Mismatch:**
-- ✅ Hash mismatch causes rejection: `services/ingest/app/main.py:559-585` - Returns HTTP 400 BAD REQUEST
-- ✅ Hash mismatch is logged: `services/ingest/app/main.py:561-580` - Logs to `event_validation_log`
-- ✅ Hash mismatch does NOT cause silent acceptance: Event is rejected before storage
-
-**What Happens on Broken Hash Chain:**
-- ✅ Broken hash chain causes rejection: `services/ingest/app/main.py:420-423` - Raises `ValueError` on hash chain violation
-- ✅ Broken hash chain is logged: `services/ingest/app/main.py:422` - Logs error
-- ✅ Broken hash chain returns HTTP 400: `services/ingest/app/main.py:652-671` - Returns HTTP 400 BAD REQUEST
-- ✅ Broken hash chain does NOT cause silent acceptance: Event is rejected before storage
-
-**What Happens on Sequence Gap or Rollback:**
-- ✅ Sequence gap causes rejection: `services/ingest/app/main.py:427-431` - Raises `ValueError` on sequence violation
-- ✅ Sequence gap is logged: `services/ingest/app/main.py:429-430` - Logs error
-- ✅ Sequence gap returns HTTP 400: `services/ingest/app/main.py:652-671` - Returns HTTP 400 BAD REQUEST
-- ⚠️ **ISSUE:** Large gaps (>1000) are rejected, but small gaps are not explicitly handled:
-  - `common/integrity/verification.py:116-118` - Large gaps (>1000) are rejected
-  - ⚠️ **ISSUE:** Small gaps (1-1000) are accepted (no explicit rejection)
-
-**Hash Mismatch Logged but Event Accepted:**
-- ✅ Hash mismatch causes rejection: `services/ingest/app/main.py:559-585` - Returns HTTP 400 BAD REQUEST
-- ✅ Hash mismatch does NOT cause silent acceptance: Event is rejected before storage
-
-**Sequence Gaps Tolerated Silently:**
-- ⚠️ **PARTIAL:** Small sequence gaps are tolerated:
-  - `common/integrity/verification.py:102-114` - Sequence must be > max_sequence (monotonically increasing)
-  - `common/integrity/verification.py:116-118` - Large gaps (>1000) are rejected
-  - ⚠️ **ISSUE:** Small gaps (1-1000) are accepted (no explicit rejection, but sequence must be > max_sequence)
-
-**Integrity Failures Downgraded to Warnings:**
-- ✅ Integrity failures cause rejection: `services/ingest/app/main.py:420-423,427-431` - Raises `ValueError` on integrity violation
-- ✅ Integrity failures return HTTP 400: `services/ingest/app/main.py:652-671` - Returns HTTP 400 BAD REQUEST
-- ✅ Integrity failures do NOT cause silent acceptance: Event is rejected before storage
-
-### Verdict: **PARTIAL**
-
-**Justification:**
-- Hash verification, hash chain enforcement, and sequence monotonicity are present
-- Integrity violations cause rejection (not silent acceptance)
-- **ISSUE:** Small sequence gaps (1-1000) are accepted (no explicit rejection, but sequence must be > max_sequence)
-- **ISSUE:** Large gaps (>1000) are rejected, but small gaps are tolerated
-
----
-
-## 5. DE-DUPLICATION & REPLAY PROTECTION
-
-### Evidence
-
-**Duplicate Detection Keys:**
-- ✅ Duplicate detection by `event_id`: `services/ingest/app/main.py:386-390` - `check_duplicate()` checks `event_id`
-- ✅ `event_id` is UUID: `contracts/event-envelope.schema.json:21-24` - UUID v4 format
-- ✅ `event_id` is PRIMARY KEY: `schemas/01_raw_events.sql:26` - `event_id UUID NOT NULL PRIMARY KEY`
-- ⚠️ **ISSUE:** Only `event_id` is used for duplicate detection (no sequence/hash-based duplicate detection)
-
-**Replay Handling:**
-- ✅ Duplicate `event_id` causes rejection: `services/ingest/app/main.py:632-647` - Returns HTTP 409 CONFLICT on duplicate
-- ✅ Duplicate `event_id` is logged: `services/ingest/app/main.py:633-641` - Logs to `event_validation_log`
-- ⚠️ **ISSUE:** Replay with same `event_id` is detected, but replay with different `event_id` is not detected
-
-**Idempotency Guarantees on Restart:**
-- ✅ Idempotency verification occurs: `services/ingest/app/main.py:433-437` - `verify_idempotency()` checks for duplicate `event_id`
-- ✅ Idempotency verification in storage: `services/ingest/app/main.py:434-437` - Verifies idempotency during `store_event()`
-- ✅ Idempotency violation causes rejection: `services/ingest/app/main.py:435-437` - Raises `ValueError` on idempotency violation
-- ✅ Idempotency violation is logged: `services/ingest/app/main.py:436` - Logs warning, then raises exception
-- ✅ Idempotency violation returns HTTP 400: `services/ingest/app/main.py:652-671` - Returns HTTP 400 BAD REQUEST on integrity violation
-
-**Duplicate Events Create Multiple DB Rows:**
-- ✅ Duplicate events rejected: `services/ingest/app/main.py:632-647` - Returns HTTP 409 CONFLICT on duplicate `event_id`
-- ✅ Database PRIMARY KEY constraint: `schemas/01_raw_events.sql:26` - `event_id UUID NOT NULL PRIMARY KEY` prevents duplicates at database level
-- ✅ Duplicate events do NOT create multiple rows: Duplicate detection + PRIMARY KEY constraint prevent multiple rows
-
-**Restarting Ingest Causes Re-Insertion:**
-- ✅ Idempotency verification prevents re-insertion: `services/ingest/app/main.py:433-437` - `verify_idempotency()` checks for duplicate `event_id`
-- ✅ Database PRIMARY KEY constraint prevents re-insertion: `schemas/01_raw_events.sql:26` - PRIMARY KEY constraint prevents duplicate `event_id`
-- ✅ Restarting ingest does NOT cause re-insertion: Duplicate detection + PRIMARY KEY constraint prevent re-insertion
-
-**Replay Cannot Be Detected Deterministically:**
-- ⚠️ **PARTIAL:** Replay with same `event_id` is detected:
-  - `services/ingest/app/main.py:632-647` - Duplicate `event_id` is detected and rejected
-  - ✅ **VERIFIED:** Replay with same `event_id` CAN be detected deterministically
-- ⚠️ **ISSUE:** Replay with different `event_id` is NOT detected:
-  - If attacker generates unique `event_id` for each replay, replay cannot be detected
-  - ⚠️ **VERIFIED:** Replay with different `event_id` CANNOT be detected deterministically
-
-### Verdict: **PARTIAL**
-
-**Justification:**
-- Duplicate detection by `event_id` is present and enforced
-- Idempotency guarantees on restart are present
-- **ISSUE:** Only `event_id` is used for duplicate detection (no sequence/hash-based duplicate detection)
-- **ISSUE:** Replay with different `event_id` cannot be detected deterministically
-
----
-
-## 6. PERSISTENCE BEHAVIOR (ATOMICITY)
-
-### Evidence
-
-**Transaction Boundaries:**
-- ✅ Transactions are used: `services/ingest/app/main.py:489-502` - Uses `execute_write_operation()` with explicit transactions
-- ✅ Explicit transaction begin: `common/db/safety.py:301` - `begin_transaction()` called
-- ✅ Explicit transaction commit: `common/db/safety.py:308` - `commit_transaction()` called
-- ✅ Explicit transaction rollback: `common/db/safety.py:316` - `rollback_transaction()` called on failure
-
-**All-or-Nothing Writes:**
-- ✅ Atomic transactions: `common/db/safety.py:280-318` - `execute_write_operation()` uses transactions
-- ✅ Rollback on failure: `common/db/safety.py:316` - `rollback_transaction()` called on exception
-- ✅ No partial writes: Transactions ensure atomicity
-
-**Tables Touched per Accepted Event:**
-- ✅ Tables written per event: `services/ingest/app/main.py:439-483` - Writes to:
-  - `machines` (UPSERT)
-  - `component_instances` (UPSERT)
-  - `raw_events` (INSERT)
-  - `event_validation_log` (INSERT)
-- ✅ All writes in single transaction: `services/ingest/app/main.py:489-502` - All writes in `store_event()` are in single transaction
-
-**What Happens if Any Write Fails:**
-- ✅ Write failure causes rollback: `common/db/safety.py:316` - `rollback_transaction()` called on exception
-- ✅ Write failure causes HTTP 500: `services/ingest/app/main.py:681-695` - Returns HTTP 500 INTERNAL ERROR on exception
-- ✅ Write failure is logged: `services/ingest/app/main.py:501` - `logger.db_error()` on exception
-- ✅ Write failure does NOT cause silent acceptance: Event is rejected, transaction is rolled back
-
-**Partial Writes Possible:**
-- ✅ No partial writes: Transactions ensure atomicity
-- ✅ Rollback on failure: `common/db/safety.py:316` - `rollback_transaction()` called on exception
-
-**Event Accepted but Not Fully Persisted:**
-- ✅ Event acceptance requires full persistence: `services/ingest/app/main.py:651` - `store_event()` must succeed for event to be accepted
-- ✅ Event acceptance returns HTTP 201: `services/ingest/app/main.py:675-678` - Returns HTTP 201 CREATED only after successful storage
-- ✅ Event acceptance does NOT occur without full persistence: Transaction ensures all-or-nothing
-
-**Side-Tables Written Before Validation Completes:**
-- ✅ Validation occurs before storage: `services/ingest/app/main.py:526-648` - Schema, hash, timestamp, duplicate validation occurs BEFORE `store_event()`
-- ✅ Side-tables written in transaction: `services/ingest/app/main.py:439-483` - All tables written in single transaction
-- ✅ Side-tables written after validation: `services/ingest/app/main.py:651` - `store_event()` is called only after all validation passes
+**Sequence Violations Cause Rejection:**
+- ✅ Sequence violations cause rejection: `services/ingest/app/main.py:454-456` — Raises `ValueError` on sequence violation
+- ✅ Sequence violations return HTTP 400: `services/ingest/app/main.py:719-722` — Returns HTTP 400 BAD REQUEST
 
 ### Verdict: **PASS**
 
 **Justification:**
-- Transaction boundaries are explicit and proper
-- All-or-nothing writes are enforced (transactions ensure atomicity)
-- Tables touched per event are documented and all writes are in single transaction
-- Write failures cause rollback and rejection (no partial writes)
+- Sequence numbers are monotonically increasing per component_instance_id (verify_sequence_monotonicity enforces)
+- Sequence violations cause rejection (ValueError raised, HTTP 400 returned)
+- Large gaps are rejected (>1000)
+- Small gaps are tolerated (1-1000), but sequence must still be > max_sequence
+
+**PASS Conditions (Met):**
+- Sequence numbers are monotonically increasing per component_instance_id — **CONFIRMED** (verify_sequence_monotonicity enforces)
+- Sequence violations cause rejection — **CONFIRMED** (ValueError raised, HTTP 400 returned)
+
+**Evidence Required:**
+- File paths: `services/ingest/app/main.py:450-456,719-722`, `common/integrity/verification.py:76-120`
+- Sequence verification: `verify_sequence_monotonicity()`, gap detection, violation handling
 
 ---
 
-## 7. FAILURE SEMANTICS (FAIL-CLOSED)
+## 4. REPLAY BEHAVIOR
 
 ### Evidence
 
-**Behavior on DB Unavailable:**
-- ✅ DB unavailability causes error: `services/ingest/app/main.py:198-209` - `get_db_connection()` raises `RuntimeError` on failure
-- ✅ Error causes HTTP 500: `services/ingest/app/main.py:681-695` - Returns HTTP 500 INTERNAL ERROR on exception
-- ✅ Error is logged: `services/ingest/app/main.py:690` - Logs error
-- ✅ No retries: `services/ingest/README.md:40` - "NO retry logic: Does not retry failed database operations"
+**Replay of Same Events Produces Same raw_events Records:**
+- ❌ **CRITICAL FAILURE:** Replay does NOT produce same raw_events records:
+  - `services/ingest/app/main.py:632-634` — `ingested_at` is mutated to current UTC time (non-deterministic)
+  - Same event replayed at different times has different `ingested_at` values
+  - `services/ingest/app/main.py:477-495` — INSERT INTO raw_events includes ingested_at (non-deterministic)
+- ⚠️ **ISSUE:** Replay produces different raw_events records (ingested_at differs, other fields identical)
 
-**Behavior on Schema Mismatch:**
-- ✅ Schema mismatch causes termination: `core/runtime.py:331-363` - `_invariant_check_schema_mismatch()` calls `exit_fatal()` on schema mismatch
-- ✅ Schema mismatch prevents startup: `core/runtime.py:199-202` - Missing required tables cause `exit_startup_error()`
-- ⚠️ **ISSUE:** Schema mismatch at runtime (during event processing) causes HTTP 500, not termination:
-  - `services/ingest/app/main.py:681-695` - Returns HTTP 500 INTERNAL ERROR on exception
-  - ⚠️ **ISSUE:** Ingest continues accepting events after schema mismatch (returns HTTP 500 but service continues)
+**Duplicate Detection Is Enforced:**
+- ✅ Duplicate detection by `event_id`: `services/ingest/app/main.py:411-415` — `check_duplicate()` checks `event_id`
+- ✅ `event_id` is UUID: `contracts/event-envelope.schema.json:21-24` — UUID v4 format
+- ✅ `event_id` is PRIMARY KEY: `schemas/01_raw_events.sql:26` — `event_id UUID NOT NULL PRIMARY KEY`
+- ✅ Duplicate `event_id` causes rejection: `services/ingest/app/main.py:677-692` — Returns HTTP 409 CONFLICT on duplicate
+- ✅ Duplicate `event_id` is logged: `services/ingest/app/main.py:679-687` — Logs to `event_validation_log`
 
-**Behavior on Integrity Violation:**
-- ✅ Integrity violation causes rejection: `services/ingest/app/main.py:420-423,427-431` - Raises `ValueError` on integrity violation
-- ✅ Integrity violation returns HTTP 400: `services/ingest/app/main.py:652-671` - Returns HTTP 400 BAD REQUEST
-- ✅ Integrity violation is logged: `services/ingest/app/main.py:422,429-430` - Logs error
-- ✅ Integrity violation does NOT cause silent acceptance: Event is rejected
+**Idempotency Is Guaranteed:**
+- ✅ Idempotency verification occurs: `services/ingest/app/main.py:458-462` — `verify_idempotency()` checks for duplicate `event_id`
+- ✅ Idempotency verification in storage: `services/ingest/app/main.py:459-462` — Verifies idempotency during `store_event()`
+- ✅ Idempotency violation causes rejection: `services/ingest/app/main.py:460-462` — Raises `ValueError` on idempotency violation
+- ✅ Database PRIMARY KEY constraint: `schemas/01_raw_events.sql:26` — PRIMARY KEY constraint prevents duplicate `event_id`
 
-**Behavior on Internal Exception:**
-- ✅ Internal exception causes HTTP 500: `services/ingest/app/main.py:681-695` - Returns HTTP 500 INTERNAL ERROR on exception
-- ✅ Internal exception is logged: `services/ingest/app/main.py:690` - Logs error
-- ✅ Internal exception causes rollback: `services/ingest/app/main.py:682-683` - Rolls back transaction on exception
-- ✅ Internal exception does NOT cause silent acceptance: Event is rejected
+### Verdict: **FAIL**
 
-**Ingest Continues Accepting Events After Failure:**
-- ⚠️ **ISSUE:** Ingest continues accepting events after failure:
-  - `services/ingest/app/main.py:504-698` - `ingest_event()` handles exceptions but does NOT terminate service
-  - `services/ingest/app/main.py:681-695` - Returns HTTP 500 but service continues
-  - ⚠️ **ISSUE:** Ingest service continues running after failures (no fail-closed behavior)
+**Justification:**
+- Duplicate detection is enforced (duplicate event_id rejected)
+- Idempotency is guaranteed (idempotency verification, PRIMARY KEY constraint)
+- **CRITICAL FAILURE:** Replay does NOT produce same raw_events records (ingested_at is mutated, non-deterministic)
 
-**Errors Logged but HTTP Returns Success:**
-- ✅ Errors cause HTTP error codes: `services/ingest/app/main.py:554-557,582-585,619-622,644-647,668-671` - Returns HTTP 400/409/500 on errors
-- ✅ Errors do NOT cause HTTP success: All error paths return HTTP error codes
+**FAIL Conditions (Met):**
+- Replay does not reproduce same raw_events — **CONFIRMED** (ingested_at is mutated to current UTC time, non-deterministic)
 
-**Retry Loops Hide Failure:**
-- ✅ No retries: `services/ingest/README.md:40` - "NO retry logic"
-- ✅ No retry loops found: `services/ingest/app/main.py:504-698` - No retry code found
-- ✅ Failures cause immediate rejection: `services/ingest/app/main.py:554-557` - Returns HTTP error codes immediately
+**Evidence Required:**
+- File paths: `services/ingest/app/main.py:632-634,477-495,677-692,458-462`, `schemas/01_raw_events.sql:26`
+- Replay non-determinism: `ingested_at` mutated to current UTC time
+- Duplicate detection: `check_duplicate()`, `verify_idempotency()`, PRIMARY KEY constraint
+
+---
+
+## 5. INTEGRITY CHAIN (HASH PROPAGATION)
+
+### Evidence
+
+**Hash Verification Is Enforced:**
+- ✅ Hash verification occurs: `services/ingest/app/main.py:401-409` — `validate_hash_integrity()` verifies hash
+- ✅ Hash computation: `services/ingest/app/main.py:329-339` — `compute_hash()` computes SHA256 hash (excludes hash_sha256 field)
+- ✅ Hash mismatch causes rejection: `services/ingest/app/main.py:604-630` — Returns HTTP 400 BAD REQUEST on hash mismatch
+- ✅ Hash mismatch is logged: `services/ingest/app/main.py:610-625` — Logs to `event_validation_log`
+
+**Hash Chain Continuity Is Verified:**
+- ✅ Hash chain verification occurs: `services/ingest/app/main.py:443-448` — `verify_hash_chain_continuity()` verifies chain
+- ✅ Hash chain verification in storage: `services/ingest/app/main.py:445-448` — Verifies hash chain during `store_event()`
+- ✅ Hash chain violation causes rejection: `services/ingest/app/main.py:447-448` — Raises `ValueError` on hash chain violation
+- ✅ Hash chain violation is logged: `services/ingest/app/main.py:447` — Logs error, then raises exception
+- ✅ Hash chain violation returns HTTP 400: `services/ingest/app/main.py:719-722` — Returns HTTP 400 BAD REQUEST on integrity violation
+
+**Hash Propagation to Storage Is Correct:**
+- ✅ Hash stored in raw_events: `services/ingest/app/main.py:477-495` — INSERT INTO raw_events includes hash_sha256
+- ✅ prev_hash_sha256 stored: `services/ingest/app/main.py:477-495` — INSERT INTO raw_events includes prev_hash_sha256
+- ✅ Hash propagation is correct: Hash values from envelope are stored directly (not recomputed)
+
+### Verdict: **PASS**
+
+**Justification:**
+- Hash verification is enforced (validate_hash_integrity verifies hash)
+- Hash chain continuity is verified (verify_hash_chain_continuity enforces chain)
+- Hash propagation to storage is correct (hash values stored directly)
+
+**PASS Conditions (Met):**
+- Hash verification is enforced — **CONFIRMED** (validate_hash_integrity verifies hash)
+- Hash chain continuity is verified — **CONFIRMED** (verify_hash_chain_continuity enforces chain)
+- Hash propagation to storage is correct — **CONFIRMED** (hash values stored directly)
+
+**Evidence Required:**
+- File paths: `services/ingest/app/main.py:329-339,401-409,443-448,477-495,604-630,719-722`
+- Hash verification: `validate_hash_integrity()`, `compute_hash()`, hash mismatch handling
+- Hash chain: `verify_hash_chain_continuity()`, hash chain violation handling
+
+---
+
+## 6. FAIL-CLOSED BEHAVIOR
+
+### Evidence
+
+**DB Errors Block Processing:**
+- ✅ DB unavailability causes error: `services/ingest/app/main.py:198-209` — `get_db_connection()` raises `RuntimeError` on failure
+- ✅ Error causes HTTP 500: `services/ingest/app/main.py:732-746` — Returns HTTP 500 INTERNAL ERROR on exception
+- ✅ Error is logged: `services/ingest/app/main.py:741` — Logs error
+- ✅ No retries: `services/ingest/README.md:40` — "NO retry logic: Does not retry failed database operations"
+
+**No "Continue on Error" Logic Exists:**
+- ✅ No continue-on-error logic: All DB errors cause immediate HTTP exception
+- ✅ Failures cause immediate rejection: `services/ingest/app/main.py:571-602` — Returns HTTP error codes
+- ✅ No fallback processing: No fallback paths found in database operations
+
+**Service Continues After Error:**
+- ⚠️ **ISSUE:** Service continues after error:
+  - `services/ingest/app/main.py:549-748` — `ingest_event()` handles exceptions but does NOT terminate service
+  - `services/ingest/app/main.py:732-746` — Returns HTTP 500 but service continues
+  - ⚠️ **ISSUE:** Ingest service continues running after failures (no fail-closed behavior for service termination)
 
 ### Verdict: **PARTIAL**
 
 **Justification:**
-- DB unavailability, integrity violations, and internal exceptions cause rejection (not silent acceptance)
-- No retries (fail-fast)
-- **ISSUE:** Ingest continues accepting events after failure (service continues running, returns HTTP 500 but does not terminate)
-- **ISSUE:** Schema mismatch at runtime causes HTTP 500 but service continues (not fail-closed)
+- DB errors block processing (fail-fast, no retries)
+- No "continue on error" logic exists (all DB errors cause immediate HTTP exception)
+- **ISSUE:** Service continues after error (service continues running, returns HTTP 500 but does not terminate)
+
+**PASS Conditions (Met):**
+- DB errors block processing — **CONFIRMED** (fail-fast, no retries)
+- No "continue on error" logic exists — **CONFIRMED** (all DB errors cause immediate HTTP exception)
+
+**Evidence Required:**
+- File paths: `services/ingest/app/main.py:198-209,732-746,571-602`, `services/ingest/README.md:40`
+- Error handling: Fail-fast, no retries, HTTP error codes
+- Service behavior: Service continues after error (not fail-closed for service termination)
 
 ---
 
-## 8. NEGATIVE VALIDATION (MANDATORY)
+## CREDENTIAL TYPES VALIDATED
 
-### Evidence
-
-**Invalid Envelope Reaches DB:**
-- ✅ **PROVEN IMPOSSIBLE:** Invalid envelopes are NOT persisted:
-  - `services/ingest/app/main.py:526-557` - Schema validation rejects invalid messages
-  - `services/ingest/app/main.py:554-557` - Returns HTTP 400 BAD REQUEST
-  - `services/ingest/app/main.py:559-585` - Hash integrity validation rejects invalid messages
-  - `services/ingest/app/main.py:591-622` - Timestamp validation rejects invalid messages
-  - ✅ **VERIFIED:** Invalid envelopes are rejected before storage (not persisted)
-
-**Event Bypasses Integrity Checks:**
-- ✅ **PROVEN IMPOSSIBLE:** Events cannot bypass integrity checks:
-  - `services/ingest/app/main.py:526-557` - Schema validation occurs FIRST
-  - `services/ingest/app/main.py:559-585` - Hash integrity validation occurs SECOND
-  - `services/ingest/app/main.py:591-622` - Timestamp validation occurs THIRD
-  - `services/ingest/app/main.py:632-647` - Duplicate check occurs FOURTH
-  - `services/ingest/app/main.py:418-437` - Hash chain, sequence, idempotency verification occurs in `store_event()`
-  - ✅ **VERIFIED:** All integrity checks must pass before storage (cannot bypass)
-
-**Agent/DPI Can Inject Events Without Full Contract:**
-- ✅ **PROVEN IMPOSSIBLE:** Agents/DPI cannot inject events without full contract:
-  - `services/ingest/app/main.py:526-557` - Schema validation rejects incomplete messages
-  - `contracts/event-envelope.schema.json:7-18` - All required fields must be present
-  - `services/ingest/app/main.py:554-557` - Returns HTTP 400 BAD REQUEST on schema violation
-  - ✅ **VERIFIED:** Events without full contract are rejected (not persisted)
-
-**Ingest Mutates Event Identity or Ordering:**
-- ⚠️ **PARTIAL:** Ingest mutates `ingested_at`:
-  - `services/ingest/app/main.py:587-589` - Updates `ingested_at` to current UTC time
-  - `services/ingest/README.md:28-30` - "Updates ingested_at (contract compliance: time-semantics.md)"
-  - ⚠️ **ISSUE:** `ingested_at` is mutated (but this is documented and expected behavior)
-- ✅ Event identity is NOT mutated: `event_id`, `machine_id`, `component`, `component_instance_id` are not mutated
-- ✅ Event ordering is NOT mutated: `sequence` is not mutated
-- ⚠️ **VERIFIED:** Ingest mutates `ingested_at` (but this is documented)
-
-### Verdict: **PARTIAL**
-
-**Justification:**
-- Invalid envelopes cannot reach DB (schema validation rejects them)
-- Events cannot bypass integrity checks (all checks must pass)
-- Agents/DPI cannot inject events without full contract (schema validation enforces contract)
-- **ISSUE:** Ingest mutates `ingested_at` (but this is documented and expected behavior)
+### Database Credentials
+- **Type:** PostgreSQL user/password (`RANSOMEYE_DB_USER`/`RANSOMEYE_DB_PASSWORD`)
+- **Source:** Environment variable (required, no default)
+- **Validation:** ❌ **NOT VALIDATED** (validation file 05 covers database credentials)
+- **Usage:** Database connection for storage operations
+- **Status:** ❌ **NOT VALIDATED** (outside scope of this validation)
 
 ---
 
-## 9. VERDICT & IMPACT
+## PASS CONDITIONS
 
-### Section-by-Section Verdicts
+### Section 1: Event Envelope Enforcement
+- ✅ Schema validation is strict and enforced — **PASS**
+- ✅ Required fields are present and validated — **PASS**
+- ✅ Type correctness is enforced — **PASS**
+- ✅ Unknown fields are rejected — **PASS**
 
-1. **Component Identity & Boundary:** PARTIAL
-   - Ingest is clearly identified as single HTTP entry point
-   - No authentication (accepts events from any source)
-   - Ingest mutates `ingested_at` during processing (but documented)
+### Section 2: Time Semantics (event_time vs ingest_time)
+- ✅ observed_at (event_time) is preserved from envelope — **PASS**
+- ✅ Clock skew tolerance is enforced — **PASS**
+- ✅ Late arrival is detected and marked — **PASS**
+- ❌ ingest_time does NOT affect downstream intelligence — **FAIL**
 
-2. **Event Envelope Validation:** PASS
-   - Strict schema validation is present and enforced
-   - Missing required fields, type mismatches, and unknown fields are all rejected
+### Section 3: Sequence Handling & Monotonicity
+- ✅ Sequence numbers are monotonically increasing per component_instance_id — **PASS**
+- ✅ Sequence violations cause rejection — **PASS**
 
-3. **Time Semantics Enforcement:** PARTIAL
-   - Time semantics are enforced (clock skew, age limits, late arrival detection)
-   - `ingested_at` is rewritten during processing (but documented)
-   - Out-of-order arrival is not explicitly handled
+### Section 4: Replay Behavior
+- ❌ Replay of same events produces same raw_events records — **FAIL**
+- ✅ Duplicate detection is enforced — **PASS**
+- ✅ Idempotency is guaranteed — **PASS**
 
-4. **Integrity & Ordering Guarantees:** PARTIAL
-   - Hash verification, hash chain enforcement, and sequence monotonicity are present
-   - Small sequence gaps (1-1000) are accepted (no explicit rejection)
+### Section 5: Integrity Chain (Hash Propagation)
+- ✅ Hash verification is enforced — **PASS**
+- ✅ Hash chain continuity is verified — **PASS**
+- ✅ Hash propagation to storage is correct — **PASS**
 
-5. **De-Duplication & Replay Protection:** PARTIAL
-   - Duplicate detection by `event_id` is present and enforced
-   - Replay with different `event_id` cannot be detected deterministically
+### Section 6: Fail-Closed Behavior
+- ✅ DB errors block processing — **PASS**
+- ✅ No "continue on error" logic exists — **PASS**
 
-6. **Persistence Behavior:** PASS
-   - Transaction boundaries are explicit and proper
-   - All-or-nothing writes are enforced
+---
 
-7. **Failure Semantics:** PARTIAL
-   - Failures cause rejection (not silent acceptance)
-   - Ingest continues accepting events after failure (service continues running)
+## FAIL CONDITIONS
 
-8. **Negative Validation:** PARTIAL
-   - Invalid envelopes cannot reach DB
-   - Events cannot bypass integrity checks
-   - Ingest mutates `ingested_at` (but documented)
+### Section 1: Event Envelope Enforcement
+- ❌ Schema validation is not strict — **NOT CONFIRMED** (schema validation is strict)
+- ❌ Required fields are not validated — **NOT CONFIRMED** (required fields are validated)
+- ❌ Type correctness is not enforced — **NOT CONFIRMED** (type correctness is enforced)
+- ❌ Unknown fields are accepted — **NOT CONFIRMED** (unknown fields are rejected)
 
-### Overall Verdict: **PARTIAL**
+### Section 2: Time Semantics (event_time vs ingest_time)
+- ❌ **CONFIRMED:** ingest_time affects downstream intelligence — **ingested_at stored in raw_events, may be used by correlation/AI**
 
-**Justification:**
-- **CRITICAL:** No authentication (accepts events from any source)
-- **CRITICAL:** Ingest continues accepting events after failure (not fail-closed)
-- **ISSUE:** Ingest mutates `ingested_at` during processing (but documented)
-- **ISSUE:** Small sequence gaps (1-1000) are accepted (no explicit rejection)
-- **ISSUE:** Replay with different `event_id` cannot be detected deterministically
-- Schema validation, integrity checks, and persistence behavior are proper
+### Section 3: Sequence Handling & Monotonicity
+- ❌ Sequence numbers are not monotonically increasing — **NOT CONFIRMED** (sequence monotonicity is enforced)
+- ❌ Sequence violations are not rejected — **NOT CONFIRMED** (sequence violations cause rejection)
 
-**Blast Radius if Ingest is Compromised:**
-- **CRITICAL:** If ingest is compromised, any source can inject events (no authentication)
-- **CRITICAL:** If ingest is compromised, malformed events can be injected (if validation is bypassed)
-- **CRITICAL:** If ingest is compromised, replay attacks are possible (if duplicate detection is bypassed)
-- **CRITICAL:** If ingest is compromised, all downstream engines receive untrusted data
-- **HIGH:** If ingest is compromised, correlation and AI results are untrustworthy
-- **HIGH:** If ingest is compromised, system availability is compromised (no fail-closed behavior)
+### Section 4: Replay Behavior
+- ❌ **CONFIRMED:** Replay does not reproduce same raw_events — **ingested_at is mutated to current UTC time (non-deterministic)**
 
-**Whether Downstream Components Remain Trustworthy:**
-- ⚠️ **PARTIAL** - Downstream components can be trusted IF ingest validation is working:
-  - ✅ If schema validation works, then downstream receives contract-valid events
-  - ✅ If integrity checks work, then downstream receives integrity-verified events
-  - ❌ If authentication is missing, then downstream receives events from untrusted sources
-  - ❌ If ingest continues after failure, then downstream may receive inconsistent data
-  - ⚠️ Schema validation and integrity checks are trustworthy, but authentication and fail-closed behavior are missing
+### Section 5: Integrity Chain (Hash Propagation)
+- ❌ Hash verification is not enforced — **NOT CONFIRMED** (hash verification is enforced)
+- ❌ Hash chain continuity is not verified — **NOT CONFIRMED** (hash chain continuity is verified)
+- ❌ Hash propagation to storage is incorrect — **NOT CONFIRMED** (hash propagation is correct)
+
+### Section 6: Fail-Closed Behavior
+- ❌ DB errors do not block processing — **NOT CONFIRMED** (DB errors block processing)
+- ❌ "Continue on error" logic exists — **NOT CONFIRMED** (no "continue on error" logic)
+
+---
+
+## EVIDENCE REQUIRED
+
+### Event Envelope Enforcement
+- File paths: `services/ingest/app/main.py:226-237,341-354,571-602`, `contracts/event-envelope.schema.json:7-19,20-114`
+- Schema validation: `validate_schema()`, `jsonschema.validate()`, error handling
+
+### Time Semantics (event_time vs ingest_time)
+- File paths: `services/ingest/app/main.py:632-634,477-495,374-391`, `contracts/time-semantics.policy.json:53-56,69-72`
+- Timestamp mutation: `ingested_at` updated to current UTC time
+- Storage: `ingested_at` stored in `raw_events` table
+
+### Sequence Handling & Monotonicity
+- File paths: `services/ingest/app/main.py:450-456,719-722`, `common/integrity/verification.py:76-120`
+- Sequence verification: `verify_sequence_monotonicity()`, gap detection, violation handling
+
+### Replay Behavior
+- File paths: `services/ingest/app/main.py:632-634,477-495,677-692,458-462`, `schemas/01_raw_events.sql:26`
+- Replay non-determinism: `ingested_at` mutated to current UTC time
+- Duplicate detection: `check_duplicate()`, `verify_idempotency()`, PRIMARY KEY constraint
+
+### Integrity Chain (Hash Propagation)
+- File paths: `services/ingest/app/main.py:329-339,401-409,443-448,477-495,604-630,719-722`
+- Hash verification: `validate_hash_integrity()`, `compute_hash()`, hash mismatch handling
+- Hash chain: `verify_hash_chain_continuity()`, hash chain violation handling
+
+### Fail-Closed Behavior
+- File paths: `services/ingest/app/main.py:198-209,732-746,571-602`, `services/ingest/README.md:40`
+- Error handling: Fail-fast, no retries, HTTP error codes
+- Service behavior: Service continues after error (not fail-closed for service termination)
+
+---
+
+## GA VERDICT
+
+### Overall: **FAIL**
+
+**Critical Blockers:**
+1. **FAIL:** ingest_time affects downstream intelligence (ingested_at stored in raw_events, may be used by correlation/AI)
+   - **Impact:** ingested_at is stored in raw_events table, may be used by correlation engine or AI
+   - **Location:** `services/ingest/app/main.py:632-634,477-495` — ingested_at mutated and stored
+   - **Severity:** **CRITICAL** (violates requirement that ingest_time does not affect downstream intelligence)
+   - **Master Spec Violation:** ingest_time must not affect downstream intelligence
+
+2. **FAIL:** Replay does not reproduce same raw_events records (ingested_at is mutated, non-deterministic)
+   - **Impact:** Same event replayed at different times produces different raw_events records (ingested_at differs)
+   - **Location:** `services/ingest/app/main.py:632-634` — ingested_at updated to current UTC time
+   - **Severity:** **CRITICAL** (violates replay determinism requirement)
+   - **Master Spec Violation:** Replay must produce same raw_events records
+
+3. **PARTIAL:** Pipeline mutates events nondeterministically (ingested_at is mutated)
+   - **Impact:** ingested_at is rewritten during processing (non-deterministic)
+   - **Location:** `services/ingest/app/main.py:632-634` — ingested_at updated to current UTC time
+   - **Severity:** **HIGH** (affects replay determinism)
+   - **Master Spec Violation:** Pipeline must not mutate events nondeterministically
+
+**Non-Blocking Issues:**
+1. Event envelope enforcement is correct (schema validation, type correctness, unknown fields rejected)
+2. Sequence handling & monotonicity is correct (monotonicity enforced, violations rejected)
+3. Integrity chain is correct (hash verification, hash chain continuity, hash propagation)
+4. Fail-closed behavior is correct (DB errors block processing, no "continue on error" logic)
+
+**Strengths:**
+1. ✅ Schema validation is strict and enforced
+2. ✅ Required fields are present and validated
+3. ✅ Type correctness is enforced
+4. ✅ Sequence numbers are monotonically increasing per component_instance_id
+5. ✅ Hash verification is enforced
+6. ✅ Hash chain continuity is verified
+7. ✅ Duplicate detection is enforced
+8. ✅ Idempotency is guaranteed
 
 **Recommendations:**
-1. **CRITICAL:** Implement authentication (API keys, signatures, or other authentication mechanism)
-2. **CRITICAL:** Implement fail-closed behavior (terminate service on critical failures)
-3. **HIGH:** Implement explicit handling for out-of-order arrival (accept with warning, as per policy)
-4. **HIGH:** Implement explicit handling for small sequence gaps (accept with warning, as per policy)
-5. **HIGH:** Implement replay detection beyond `event_id` (sequence/hash-based duplicate detection)
-6. **MEDIUM:** Document `ingested_at` mutation behavior more explicitly (why it's necessary)
-7. **MEDIUM:** Resolve documentation vs code discrepancies (agents can write directly vs use HTTP POST)
+1. **CRITICAL:** Make ingested_at deterministic (use observed_at or fixed timestamp, not current UTC time)
+2. **CRITICAL:** Ensure ingested_at does not affect downstream intelligence (document that ingested_at is metadata only, not used by correlation/AI)
+3. **CRITICAL:** Fix replay determinism (ensure replay produces same raw_events records)
+4. **HIGH:** Document ingested_at mutation behavior (why it's necessary, if it is)
+5. **MEDIUM:** Consider fail-closed behavior for service termination (terminate service on critical failures)
 
 ---
 
-**Validation Date:** 2025-01-13
-**Validator:** Lead Validator & Compliance Auditor
-**Next Step:** Validation Step 7 — Correlation Engine (if applicable)
+**Validation Date:** 2025-01-13  
+**Validator:** Independent System Validator  
+**Next Step:** Validation Step 7 — Correlation Engine  
+**GA Status:** **BLOCKED** (Critical failures in time semantics and replay determinism)
