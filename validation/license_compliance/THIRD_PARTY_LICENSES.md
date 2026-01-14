@@ -135,6 +135,26 @@ The following licenses are explicitly forbidden and must not be used in RansomEy
 - Models loaded via llama-cpp-python (GGUF format): License depends on specific model
 - All model licenses must be verified before deployment
 
+### Transitive Dependencies
+
+**Rule:** Transitive dependencies (dependencies of dependencies) are not individually inventoried unless they pose license risk.
+
+**Handling:**
+- Only direct dependencies are inventoried in THIRD_PARTY_INVENTORY.json
+- Transitive dependencies with permissive licenses (MIT, Apache-2.0, BSD) are acceptable and not individually tracked
+- Transitive dependencies with copyleft licenses must be flagged during dependency selection
+- Example: transformers library has transitive dependencies (filelock, huggingface-hub, numpy, packaging, pyyaml, regex, requests, tokenizers, safetensors, tqdm) - all permissively licensed, not individually inventoried
+
+### Binary Redistribution
+
+**Rule:** Libraries that include binary components may have additional redistribution requirements beyond code licenses.
+
+**Handling:**
+- Binary redistribution must comply with all applicable EULAs (e.g., NVIDIA CUDA Toolkit EULA for CUDA binaries)
+- Source code redistribution follows code license terms (e.g., MIT for bitsandbytes source)
+- Binary redistribution risks are documented in inventory notes field
+- Risk level may be elevated for libraries with binary components (e.g., bitsandbytes marked as medium risk due to CUDA binary redistribution requirements)
+
 ### Grafana / AGPL Handling
 
 **Rule:** Grafana uses AGPL-3.0. If Grafana is required, it MUST be deployed as a separate service with clear boundaries. Direct code integration is FORBIDDEN.
