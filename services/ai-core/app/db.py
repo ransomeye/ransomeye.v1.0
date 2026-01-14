@@ -250,7 +250,7 @@ def store_feature_vector(conn, incident_id: str, model_version_id: str,
                     event_id, model_version_id, feature_vector_hash_sha256,
                     feature_vector_size, feature_vector_storage_path, computed_at, status
                 )
-                VALUES (%s, %s, %s, %s, %s, NOW(), 'PROCESSED')
+                VALUES (%s, %s, %s, %s, %s, %s, 'PROCESSED')
             """, (incident_id, model_version_id, feature_vector_hash, feature_vector_size, storage_path))
             
             return True
