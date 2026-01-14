@@ -691,6 +691,12 @@ async def ingest_event(request: Request):
                 detail={"error_code": "DUPLICATE_EVENT_ID"}
             )
         
+        # GA-BLOCKING: Record event ingestion for operational telemetry
+        if _metrics_available:
+            metrics = get_metrics()
+            if metrics:
+                metrics.record_event_ingested()
+        
         # Phase 10 requirement: Store event with integrity verification
         try:
             store_event(conn, envelope, VALIDATION_STATUS_VALID, late_arrival, arrival_latency_seconds)
