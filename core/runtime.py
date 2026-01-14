@@ -399,6 +399,31 @@ def _core_startup_validation():
     # Phase 10.1 requirement: Validate all required environment variables
     _validate_environment()
     
+    # GA-BLOCKING: Pre-flight database bootstrap validation (MUST run before schema validation)
+    # This prevents opaque startup crashes caused by PostgreSQL authentication misconfiguration
+    try:
+        from core.diagnostics.db_bootstrap_validator import validate_db_bootstrap
+        validate_db_bootstrap(
+            host=config.get('RANSOMEYE_DB_HOST', 'localhost'),
+            port=config.get('RANSOMEYE_DB_PORT', 5432),
+            database=config.get('RANSOMEYE_DB_NAME', 'ransomeye'),
+            user=config.get('RANSOMEYE_DB_USER', 'gagan'),
+            password=config.get('RANSOMEYE_DB_PASSWORD', 'gagan'),
+            logger=logger
+        )
+    except ImportError:
+        # If diagnostics module not available, log warning but continue
+        # (This should not happen in production, but preserves backward compatibility)
+        logger.warning("Database bootstrap validator not available, skipping pre-flight check")
+    except SystemExit:
+        # Re-raise SystemExit (from exit_startup_error) to preserve fail-closed behavior
+        raise
+    except Exception as e:
+        # Unexpected error in validator itself
+        error_msg = f"Database bootstrap validator failed: {e}"
+        logger.fatal(error_msg)
+        exit_startup_error(error_msg)
+    
     # Phase 10.1 requirement: Validate DB connectivity
     _validate_db_connectivity()
     
