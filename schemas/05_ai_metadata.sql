@@ -241,8 +241,8 @@ CREATE TABLE cluster_memberships (
     -- NULL if score not computed
     -- NUMERIC(5,4) for precise decimal scoring
     
-    added_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    -- When event was added to cluster
+    added_at TIMESTAMPTZ NOT NULL,
+    -- PHASE 3: Deterministic timestamp - must be provided explicitly (use event observed_at)
     
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     -- Schema-level timestamp (immutable)
