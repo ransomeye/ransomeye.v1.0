@@ -1,0 +1,116 @@
+Prompt Start
+
+You are fixing PHASE 2 — DETERMINISM RESTORATION for RansomEye.
+
+This phase is BLOCKING.
+No downstream work is allowed until this phase is PASS.
+
+OBJECTIVE
+
+Eliminate all non-deterministic behavior from ingest and correlation.
+
+After this phase:
+
+Replay of the same evidence MUST produce identical results
+
+Event ordering MUST NOT depend on wall-clock time
+
+Correlation MUST be replay-stable
+
+MANDATORY FIXES (ALL REQUIRED)
+1. Eliminate Non-Deterministic Time
+
+You MUST:
+
+Remove ALL usage of:
+
+datetime.now()
+
+SQL NOW()
+
+No wall-clock mutation allowed
+
+2. Deterministic Event Ordering
+
+You MUST:
+
+Introduce a deterministic sequence identifier for events
+
+Ordering MUST be based on:
+
+sequence number OR
+
+deterministic hash ordering
+
+ingested_at MUST NOT be used for ordering
+
+3. Ingest Timestamp Model
+
+You MUST:
+
+Preserve original event time (event_time)
+
+Use deterministic ingest sequence
+
+Ensure replay produces identical timestamps
+
+4. Correlation Replay Stability
+
+You MUST:
+
+Replace ORDER BY ingested_at
+
+Ensure correlation produces:
+
+identical incident graphs
+
+identical transitions
+
+identical IDs
+on replay
+
+FILES YOU MUST INSPECT & MODIFY
+
+(quote exact paths and lines)
+
+services/ingest/app/main.py
+
+schemas/01_raw_events.sql
+
+services/correlation-engine/app/db.py
+
+Any SQL using NOW() or ordering by ingest time
+
+FORBIDDEN
+
+No heuristics
+
+No “best effort” ordering
+
+No randomness
+
+No time-based mutation
+
+No partial fixes
+
+EVIDENCE REQUIRED IN YOUR RESPONSE
+
+You MUST provide:
+
+Exact code diffs
+
+Old vs new ordering logic
+
+Replay proof explanation (why it is identical)
+
+Explicit mapping to:
+
+Validation File 04
+
+Validation File 06
+
+Validation File 07
+
+If any replay can differ → FAIL.
+
+Prompt Ends
