@@ -42,11 +42,18 @@ class VendorKeyManager:
         """
         Get or create vendor signing keypair.
         
+        PHASE-9: Ephemeral key generation is FORBIDDEN.
+        This method now only loads existing keys from persistent storage.
+        Key generation must be done through key generation ceremony.
+        
         Args:
-            key_id: Key identifier (e.g., vendor-release-key-1)
+            key_id: Key identifier (e.g., vendor-signing-key-1)
         
         Returns:
             Tuple of (private_key, public_key, key_id)
+        
+        Raises:
+            VendorKeyManagerError: If key not found (ephemeral generation forbidden)
         """
         private_key_path = self.key_dir / f"{key_id}.pem"
         public_key_path = self.key_dir / f"{key_id}.pub"
@@ -55,8 +62,13 @@ class VendorKeyManager:
             # Load existing keypair
             return self._load_keypair(private_key_path, public_key_path, key_id)
         else:
-            # Generate new keypair
-            return self._generate_keypair(private_key_path, public_key_path, key_id)
+            # PHASE-9: Ephemeral key generation is FORBIDDEN
+            raise VendorKeyManagerError(
+                f"Key {key_id} not found in {self.key_dir}. "
+                "Ephemeral key generation is forbidden. "
+                "Keys must be generated through key generation ceremony and stored in persistent vault. "
+                "See scripts/key_generation_ceremony.py for key generation procedure."
+            )
     
     def _generate_keypair(
         self,
