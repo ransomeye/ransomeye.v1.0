@@ -16,9 +16,9 @@ from cryptography.hazmat.backends import default_backend
 
 class TRESigner:
     """
-    Command signer for TRE.
+    PHASE 4: Command signer for TRE.
     
-    CRITICAL: Uses ed25519 for command signing (separate from Policy Engine's HMAC).
+    CRITICAL: Uses ed25519 for command signing (single signing standard).
     All commands are signed before dispatch to agents.
     """
     
