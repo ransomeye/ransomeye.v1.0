@@ -45,9 +45,13 @@ try:
                                    validate_connection_health)
     from common.resource.safety import (safe_create_directory, safe_read_file,
                                         safe_write_file, check_file_descriptors)
+    from common.security.telemetry_verifier import TelemetryVerifier, TelemetryVerificationError
+    from common.security.middleware import ServiceAuthMiddleware
     _common_integrity_available = True
     _common_db_safety_available = True
     _common_resource_safety_available = True
+    _telemetry_verification_available = True
+    _service_auth_available = True
 except ImportError as e:
     _common_integrity_available = False
     _common_db_safety_available = False
