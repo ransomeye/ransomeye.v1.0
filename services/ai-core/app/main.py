@@ -268,6 +268,9 @@ def run_ai_core():
                 logger.info(f"Trained and persisted model", 
                           model_path=model_path, model_hash=model_hash[:16],
                           training_data_hash=training_data_hash[:16])
+                
+                # Store model_path for later use in store_cluster
+                stored_model_path = model_path
         except MemoryError:
             error_msg = "MEMORY ALLOCATION FAILURE: Failed to cluster incidents"
             logger.fatal(error_msg)
