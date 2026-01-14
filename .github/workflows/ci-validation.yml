@@ -12,21 +12,14 @@ name: CI Validation - PHASE 6
 # This workflow handles push/PR triggers and delegates to the reusable workflow.
 # It contains NO validation logic - all validation is in ci-validation-reusable.yml
 #
-# PHASE 7: Branch-aware triggers for active development branches
-# Validation runs on main, develop, and explicit feature/bugfix/hotfix patterns
+# PHASE 7: Branch-aware triggers aligned with actual repository topology
+# Validation runs on main branch (only branch that currently exists)
 
 on:
   push:
-    branches:
-      - main
-      - develop
-      - 'feature/**'
-      - 'bugfix/**'
-      - 'hotfix/**'
+    branches: [ main ]
   pull_request:
-    branches:
-      - main
-      - develop
+    branches: [ main ]
   workflow_dispatch:
 
 permissions:
