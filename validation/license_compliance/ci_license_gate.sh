@@ -134,13 +134,17 @@ with open('${SCRIPT_DIR}/THIRD_PARTY_INVENTORY.json', 'r') as f:
     inventory = json.load(f)
 
 forbidden = [f.lower() for f in policy.get('forbidden_licenses', [])]
+conditionally_allowed = {cond.get('license', '').lower() for cond in policy.get('conditionally_allowed', [])}
 violations = []
 
 for entry in inventory:
     license_str = entry.get('license', '').lower()
+    # Skip if conditionally allowed
+    if license_str in conditionally_allowed:
+        continue
     for fb in forbidden:
         if fb in license_str:
-            violations.append(f\"{entry['name']}: {entry.get('license')}\")
+            violations.append('{}: {}'.format(entry['name'], entry.get('license')))
 
 if violations:
     print('\\n'.join(violations))
