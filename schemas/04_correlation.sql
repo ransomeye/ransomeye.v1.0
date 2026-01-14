@@ -46,8 +46,9 @@ CREATE TABLE incidents (
     -- Foreign key to machines (host-centric incident tracking)
     -- Incident is associated with a specific machine
     
-    current_stage incident_stage NOT NULL DEFAULT 'CLEAN',
-    -- Current incident stage (CLEAN, SUSPICIOUS, PROBABLE, CONFIRMED)
+    current_stage incident_stage NOT NULL DEFAULT 'SUSPICIOUS',
+    -- PHASE 3: Current incident stage (SUSPICIOUS, PROBABLE, CONFIRMED)
+    -- Incidents start at SUSPICIOUS (single signal creates SUSPICIOUS incident)
     -- Updated via incident_stages table (auditable state transitions)
     
     first_observed_at TIMESTAMPTZ NOT NULL,
@@ -58,7 +59,8 @@ CREATE TABLE incidents (
     -- Timestamp of last evidence event contributing to this incident
     -- Updated when new evidence is added
     
-    stage_changed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    stage_changed_at TIMESTAMPTZ NOT NULL,
+    -- PHASE 3: Deterministic timestamp - must be provided explicitly (use event observed_at)
     -- When current_stage was last changed
     -- Updated via incident_stages table
     
