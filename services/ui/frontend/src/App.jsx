@@ -107,10 +107,75 @@ function App() {
               incidentDetail ? (
                 <div>
                   <h2>Incident Detail</h2>
+                  
+                  {/* PHASE 5: Operator Action Warnings */}
+                  {incidentDetail.evidence_quality && (
+                    <div style={{
+                      padding: '15px',
+                      marginBottom: '20px',
+                      borderRadius: '4px',
+                      backgroundColor: (
+                        incidentDetail.evidence_quality.has_contradiction ||
+                        incidentDetail.evidence_quality.evidence_completeness === 'INCOMPLETE' ||
+                        incidentDetail.evidence_quality.evidence_completeness === 'NO_EVIDENCE'
+                      ) ? '#fff3cd' : '#d4edda',
+                      border: '1px solid ' + (
+                        incidentDetail.evidence_quality.has_contradiction ||
+                        incidentDetail.evidence_quality.evidence_completeness === 'INCOMPLETE' ||
+                        incidentDetail.evidence_quality.evidence_completeness === 'NO_EVIDENCE'
+                      ) ? '#ffc107' : '#28a745'
+                    }}>
+                      <h3 style={{ marginTop: 0, color: '#856404' }}>⚠️ Evidence Quality Warning</h3>
+                      {incidentDetail.evidence_quality.has_contradiction && (
+                        <p style={{ color: '#856404', fontWeight: 'bold' }}>
+                          ⚠️ CONTRADICTION DETECTED: Evidence contains contradictions. Confidence may be unreliable.
+                        </p>
+                      )}
+                      {incidentDetail.evidence_quality.evidence_completeness === 'INCOMPLETE' && (
+                        <p style={{ color: '#856404', fontWeight: 'bold' }}>
+                          ⚠️ INCOMPLETE EVIDENCE: Evidence count ({incidentDetail.evidence_quality.evidence_count}) is below expected minimum for stage {incidentDetail.incident?.stage}.
+                        </p>
+                      )}
+                      {incidentDetail.evidence_quality.evidence_completeness === 'NO_EVIDENCE' && (
+                        <p style={{ color: '#856404', fontWeight: 'bold' }}>
+                          ⚠️ NO EVIDENCE: No evidence available for this incident.
+                        </p>
+                      )}
+                      {incidentDetail.ai_insights && !incidentDetail.evidence_quality.has_ai_provenance && (
+                        <p style={{ color: '#856404' }}>
+                          ⚠️ AI OUTPUT ADVISORY: AI insights are available but AI provenance (model version, training data hash) is missing. AI output is advisory only.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  
                   <p><strong>Incident ID:</strong> {incidentDetail.incident?.incident_id}</p>
                   <p><strong>Machine ID:</strong> {incidentDetail.incident?.machine_id}</p>
-                  <p><strong>Stage:</strong> {incidentDetail.incident?.stage}</p>
-                  <p><strong>Confidence:</strong> {incidentDetail.incident?.confidence}</p>
+                  
+                  {/* PHASE 5: Separate confidence from certainty */}
+                  <div style={{ marginBottom: '10px' }}>
+                    <p><strong>Stage:</strong> {incidentDetail.incident?.stage}</p>
+                    <p><strong>Confidence Score:</strong> {incidentDetail.incident?.confidence}%</p>
+                    {incidentDetail.incident?.certainty_state && (
+                      <p>
+                        <strong>Certainty State:</strong> 
+                        <span style={{
+                          color: incidentDetail.incident.certainty_state === 'CONFIRMED' ? '#28a745' : 
+                                 incidentDetail.incident.certainty_state === 'PROBABLE' ? '#ffc107' : '#ff6b6b',
+                          fontWeight: 'bold',
+                          marginLeft: '10px'
+                        }}>
+                          {incidentDetail.incident.certainty_state}
+                        </span>
+                        {incidentDetail.incident.is_probabilistic && (
+                          <span style={{ color: '#ffc107', marginLeft: '10px' }}>
+                            (Probabilistic - Not Confirmed)
+                          </span>
+                        )}
+                      </p>
+                    )}
+                  </div>
+                  
                   <p><strong>Created:</strong> {incidentDetail.incident?.created_at}</p>
                   
                   <h3>Timeline</h3>
