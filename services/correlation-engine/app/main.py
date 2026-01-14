@@ -137,20 +137,25 @@ def process_event(conn, event: Dict[str, Any]) -> bool:
             existing_incident_id = find_existing_incident(conn, machine_id, dedup_key, observed_at)
         
         if existing_incident_id:
-            # GA-BLOCKING: Add evidence to existing incident
-            # Check for contradiction
+            # PHASE 3: Add evidence to existing incident
+            # Check for contradiction with existing evidence
             try:
-                # GA-BLOCKING: Detect contradiction (simplified - check event payload)
-                is_contradiction = detect_contradiction(event, [])
+                # PHASE 3: Get existing evidence for contradiction detection
+                from db import get_incident_evidence
+                existing_evidence_list = get_incident_evidence(conn, existing_incident_id)
+                
+                # PHASE 3: Detect contradiction (deterministic, specific types)
+                is_contradiction, contradiction_type = detect_contradiction(event, existing_evidence_list)
                 
                 if is_contradiction:
-                    # GA-BLOCKING: Apply contradiction decay
+                    # PHASE 3: Apply contradiction decay (blocks escalation, downgrades confidence)
                     from db import apply_contradiction_to_incident
-                    apply_contradiction_to_incident(conn, existing_incident_id)
+                    apply_contradiction_to_incident(conn, existing_incident_id, contradiction_type)
                     logger.info(f"Applied contradiction decay to incident",
-                              incident_id=existing_incident_id, event_id=event_id)
+                              incident_id=existing_incident_id, event_id=event_id,
+                              contradiction_type=contradiction_type)
                 else:
-                    # GA-BLOCKING: Add evidence and accumulate confidence
+                    # PHASE 3: Add evidence and accumulate confidence (deterministic)
                     from db import add_evidence_to_incident
                     add_evidence_to_incident(conn, existing_incident_id, event, event_id, 
                                            'CORRELATION_PATTERN', confidence_score)
