@@ -275,6 +275,34 @@ function Test-CommandRateLimit {
     $RateLimitData | ConvertTo-Json | Set-Content $RateLimitPath
 }
 
+function Test-CommandPolicyAuthority {
+    param([hashtable]$Command)
+    
+    # PHASE 4: Validate policy_id
+    $PolicyId = $Command.policy_id
+    if (-not $PolicyId) {
+        throw "Missing policy_id (PHASE 4: Policy authority binding required)"
+    }
+    
+    # PHASE 4: Validate policy_version
+    $PolicyVersion = $Command.policy_version
+    if (-not $PolicyVersion) {
+        throw "Missing policy_version (PHASE 4: Policy version required)"
+    }
+    
+    # PHASE 4: Validate issuing_authority
+    $IssuingAuthority = $Command.issuing_authority
+    if (-not $IssuingAuthority) {
+        throw "Missing issuing_authority (PHASE 4: Issuing authority required)"
+    }
+    
+    # PHASE 4: Validate issuing_authority is valid
+    $ValidAuthorities = @('policy-engine', 'threat-response-engine', 'human-authority')
+    if ($ValidAuthorities -notcontains $IssuingAuthority) {
+        throw "Invalid issuing_authority: $IssuingAuthority (must be one of: $($ValidAuthorities -join ', '))"
+    }
+}
+
 function Write-AuditLog {
     param(
         [string]$EventType,
