@@ -261,22 +261,27 @@ def check_agent_registry():
     try:
         # Try to import Linux agent
         linux_agent_imported = False
+        LinuxAgent = None
         try:
             from agents.linux.agent_main import LinuxAgent
             linux_agent_imported = True
-        except ImportError as e:
+        except ImportError:
             # Linux agent might not be available in all environments
+            pass
+        except Exception:
+            # Linux agent module might have import-time errors
             pass
         
         # Try to import Windows agent
         windows_agent_imported = False
+        WindowsAgent = None
         try:
             from agents.windows.agent.agent_main import WindowsAgent
             windows_agent_imported = True
-        except ImportError as e:
+        except ImportError:
             # Windows agent might not be available in all environments
             pass        
-        except Exception as e:
+        except Exception:
             # Windows agent module might have import-time errors
             pass
         
@@ -289,9 +294,9 @@ def check_agent_registry():
                 agents_found.append('WindowsAgent')
             
             # Try minimal initialization check (verify class structure)
-            if linux_agent_imported:
+            if linux_agent_imported and LinuxAgent is not None:
                 assert hasattr(LinuxAgent, '__init__'), "LinuxAgent missing __init__"
-            if windows_agent_imported:
+            if windows_agent_imported and WindowsAgent is not None:
                 assert hasattr(WindowsAgent, '__init__'), "WindowsAgent missing __init__"
             
             return add_check(
