@@ -113,6 +113,7 @@ jobs:
       - name: Verify all artifact signatures
         env:
           SIGNING_KEY_DIR: /tmp/ci-signing-keys
+          SIGNING_KEY_ID: ${{ env.SIGNING_KEY_ID }}
         run: |
           cd build/artifacts
           SIGNED_COUNT=0
@@ -134,7 +135,8 @@ jobs:
               python3 ${{ github.workspace }}/supply-chain/cli/verify_artifacts.py \
                 --artifact "$artifact" \
                 --manifest "$MANIFEST_PATH" \
-                --key-dir "$SIGNING_KEY_DIR"
+                --key-dir "$SIGNING_KEY_DIR" \
+                --signing-key-id "$SIGNING_KEY_ID"
               
               if [ $? -eq 0 ]; then
                 echo "✅ Signature verified: $artifact"

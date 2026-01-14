@@ -20,7 +20,7 @@ on:
 
 env:
   PYTHON_VERSION: '3.10'
-  SIGNING_KEY_ID: 'release-signing-key'
+  SIGNING_KEY_ID: 'ci-signing-key'  # PHASE 6: Use same key ID as CI build-and-sign workflow
 
 jobs:
   # PHASE 6: Release Gate Checklist
