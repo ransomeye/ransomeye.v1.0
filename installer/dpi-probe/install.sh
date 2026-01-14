@@ -273,8 +273,10 @@ RANSOMEYE_DPI_CAPTURE_ENABLED="false"
 RANSOMEYE_DPI_INTERFACE="${RANSOMEYE_DPI_INTERFACE}"
 
 # Database credentials (if probe needs direct DB access in future)
-RANSOMEYE_DB_USER="gagan"
-RANSOMEYE_DB_PASSWORD="gagan"
+# NOTE: These are optional for probes - only required if probe needs direct DB access
+# If not needed, these can be left empty or removed
+# RANSOMEYE_DB_USER=""
+# RANSOMEYE_DB_PASSWORD=""
 EOF
 
     chmod 600 "${INSTALL_ROOT}/config/environment" || error_exit "Failed to set permissions on environment file"
