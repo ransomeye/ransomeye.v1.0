@@ -1,0 +1,199 @@
+name: CI Build and Sign - PHASE 6
+
+on:
+  push:
+    branches: [ main ]
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+# PHASE 6: Artifact Signing & Verification
+# This workflow signs all build artifacts and verifies signatures
+# Refuses unsigned artifacts
+
+env:
+  PYTHON_VERSION: '3.10'
+  SIGNING_KEY_ID: 'ci-signing-key'
+
+jobs:
+  # PHASE 6: Build and Sign Artifacts
+  build-and-sign:
+    name: Build and Sign Artifacts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          find . -name "requirements.txt" -exec pip install -r {} \;
+      
+      - name: Generate signing keypair (CI)
+        id: generate-keys
+        run: |
+          mkdir -p /tmp/ci-signing-keys
+          cd /tmp/ci-signing-keys
+          python3 << 'EOF'
+          import sys
+          sys.path.insert(0, '${{ github.workspace }}/supply-chain')
+          from crypto.vendor_key_manager import VendorKeyManager
+          from pathlib import Path
+          key_dir = Path('/tmp/ci-signing-keys')
+          key_manager = VendorKeyManager(key_dir)
+          private_key, public_key, key_id = key_manager.get_or_create_keypair('${{ env.SIGNING_KEY_ID }}')
+          print(f"key_id={key_id}")
+          EOF
+        # PHASE 6: Fail-closed - key generation must succeed
+        continue-on-error: false
+      
+      - name: Build artifacts
+        run: |
+          # PHASE 6: Build all artifacts (placeholder - actual build steps depend on project structure)
+          echo "Building artifacts..."
+          mkdir -p build/artifacts
+          # Example: Build core, agents, etc.
+          # This is a placeholder - actual build commands should be added here
+          touch build/artifacts/core-installer.tar.gz
+          touch build/artifacts/linux-agent.tar.gz
+          touch build/artifacts/windows-agent.zip
+          touch build/artifacts/dpi-probe.tar.gz
+        # PHASE 6: Fail-closed - build must succeed
+        continue-on-error: false
+      
+      - name: Sign all artifacts
+        env:
+          SIGNING_KEY_DIR: /tmp/ci-signing-keys
+          SIGNING_KEY_ID: ${{ env.SIGNING_KEY_ID }}
+        run: |
+          cd build/artifacts
+          for artifact in *.tar.gz *.zip; do
+            if [ -f "$artifact" ]; then
+              echo "Signing $artifact..."
+              ARTIFACT_TYPE=""
+              if [[ "$artifact" == *"core"* ]]; then
+                ARTIFACT_TYPE="CORE_INSTALLER"
+              elif [[ "$artifact" == *"linux-agent"* ]]; then
+                ARTIFACT_TYPE="LINUX_AGENT"
+              elif [[ "$artifact" == *"windows-agent"* ]]; then
+                ARTIFACT_TYPE="WINDOWS_AGENT"
+              elif [[ "$artifact" == *"dpi-probe"* ]]; then
+                ARTIFACT_TYPE="DPI_PROBE"
+              else
+                echo "❌ Unknown artifact type: $artifact"
+                exit 1
+              fi
+              
+              python3 ${{ github.workspace }}/supply-chain/cli/sign_artifacts.py \
+                --artifact "$artifact" \
+                --artifact-name "$(basename $artifact)" \
+                --artifact-type "$ARTIFACT_TYPE" \
+                --version "${{ github.ref_name }}" \
+                --signing-key-id "${{ env.SIGNING_KEY_ID }}" \
+                --key-dir "$SIGNING_KEY_DIR" \
+                --output-dir "$(dirname $artifact)/signed"
+              
+              if [ $? -ne 0 ]; then
+                echo "❌ Failed to sign $artifact"
+                exit 1
+              fi
+            fi
+          done
+        # PHASE 6: Fail-closed - all artifacts must be signed
+        continue-on-error: false
+      
+      - name: Verify all artifact signatures
+        env:
+          SIGNING_KEY_DIR: /tmp/ci-signing-keys
+        run: |
+          cd build/artifacts
+          SIGNED_COUNT=0
+          UNSIGNED_COUNT=0
+          
+          for artifact in *.tar.gz *.zip; do
+            if [ -f "$artifact" ]; then
+              ARTIFACT_NAME=$(basename "$artifact")
+              MANIFEST_PATH="signed/${ARTIFACT_NAME}.manifest.json"
+              SIGNATURE_PATH="signed/${ARTIFACT_NAME}.manifest.sig"
+              
+              if [ ! -f "$MANIFEST_PATH" ] || [ ! -f "$SIGNATURE_PATH" ]; then
+                echo "❌ UNSIGNED ARTIFACT: $artifact (missing manifest or signature)"
+                UNSIGNED_COUNT=$((UNSIGNED_COUNT + 1))
+                continue
+              fi
+              
+              echo "Verifying signature for $artifact..."
+              python3 ${{ github.workspace }}/supply-chain/cli/verify_artifacts.py \
+                --artifact "$artifact" \
+                --manifest "$MANIFEST_PATH" \
+                --key-dir "$SIGNING_KEY_DIR"
+              
+              if [ $? -eq 0 ]; then
+                echo "✅ Signature verified: $artifact"
+                SIGNED_COUNT=$((SIGNED_COUNT + 1))
+              else
+                echo "❌ Signature verification failed: $artifact"
+                exit 1
+              fi
+            fi
+          done
+          
+          if [ $UNSIGNED_COUNT -gt 0 ]; then
+            echo "❌ Found $UNSIGNED_COUNT unsigned artifact(s)"
+            exit 1
+          fi
+          
+          echo "✅ All $SIGNED_COUNT artifact(s) signed and verified"
+        # PHASE 6: Fail-closed - all artifacts must be signed and verified
+        continue-on-error: false
+      
+      - name: Generate SBOM
+        env:
+          SIGNING_KEY_DIR: /tmp/ci-signing-keys
+          SIGNING_KEY_ID: ${{ env.SIGNING_KEY_ID }}
+        run: |
+          mkdir -p build/sbom
+          python3 ${{ github.workspace }}/release/generate_sbom.py \
+            --release-root build/artifacts \
+            --version "${{ github.ref_name }}" \
+            --build-id "${{ github.run_id }}" \
+            --signing-key-id "${{ env.SIGNING_KEY_ID }}" \
+            --key-dir "$SIGNING_KEY_DIR" \
+            --output build/sbom/manifest.json
+        # PHASE 6: Fail-closed - SBOM generation must succeed
+        continue-on-error: false
+      
+      - name: Verify SBOM signature
+        env:
+          SIGNING_KEY_DIR: /tmp/ci-signing-keys
+        run: |
+          python3 ${{ github.workspace }}/release/verify_sbom.py \
+            --release-root build/artifacts \
+            --manifest build/sbom/manifest.json \
+            --signature build/sbom/manifest.json.sig \
+            --key-dir "$SIGNING_KEY_DIR"
+        # PHASE 6: Fail-closed - SBOM signature must be valid
+        continue-on-error: false
+      
+      - name: Upload signed artifacts
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: signed-artifacts
+          path: |
+            build/artifacts/signed/
+            build/sbom/
+          retention-days: 90
+      
+      - name: Upload signing public key
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: signing-public-key
+          path: /tmp/ci-signing-keys/*.pub
+          retention-days: 90
