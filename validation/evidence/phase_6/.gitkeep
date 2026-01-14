@@ -1,0 +1,6 @@
+# This directory will contain Phase-6 CI evidence files
+# 
+# Files in this directory are collected from GitHub Actions CI runs
+# and should not be modified once committed.
+#
+# See README.md for collection instructions.
