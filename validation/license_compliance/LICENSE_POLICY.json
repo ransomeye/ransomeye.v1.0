@@ -1,0 +1,104 @@
+{
+  "allowed_licenses": [
+    "MIT",
+    "Apache-2.0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "MPL-2.0",
+    "Apache-2.0 OR MIT",
+    "MIT OR Apache-2.0"
+  ],
+  "conditionally_allowed": [
+    {
+      "license": "LGPL-3.0",
+      "condition": "Dynamic linking only - no static linking",
+      "components": ["psycopg2-binary"],
+      "rationale": "LGPL-3.0 allows dynamic linking without copyleft contamination. psycopg2-binary is used as a dynamically linked library only."
+    }
+  ],
+  "forbidden_licenses": [
+    "GPL-2.0",
+    "GPL-3.0",
+    "AGPL-1.0",
+    "AGPL-3.0",
+    "GPL-2.0+",
+    "GPL-3.0+",
+    "AGPL-3.0+"
+  ],
+  "special_rules": {
+    "lgpl": {
+      "rule": "LGPL libraries are conditionally allowed ONLY if used via dynamic linking. Static linking of LGPL code is FORBIDDEN. All LGPL dependencies must be explicitly listed in conditionally_allowed with justification.",
+      "enforcement": "CI must verify dynamic linking only for LGPL dependencies"
+    },
+    "agpl": {
+      "rule": "AGPL is FORBIDDEN in all forms. This includes AGPL-1.0, AGPL-3.0, and any AGPL variants. AGPL requires source code disclosure for network services, which is incompatible with RansomEye commercial licensing.",
+      "enforcement": "CI must fail immediately on any AGPL dependency detection"
+    },
+    "gpl": {
+      "rule": "GPL (GPL-2.0, GPL-3.0) is FORBIDDEN in all forms. GPL requires derivative works to be GPL-licensed, which is incompatible with RansomEye commercial licensing.",
+      "enforcement": "CI must fail immediately on any GPL dependency detection"
+    },
+    "llm_models": {
+      "rule": "LLM models used in RansomEye (via llama-cpp-python, transformers, etc.) must have permissive licenses. Model weights may have separate licensing terms. All model licenses must be documented in THIRD_PARTY_INVENTORY.json. Proprietary models require explicit customer agreement.",
+      "enforcement": "Model license validation is separate from code license validation. Model licenses are tracked in inventory notes field."
+    },
+    "kernel_syscalls": {
+      "rule": "Use of Linux kernel syscalls via standard library (libc, Rust std, Python stdlib) does NOT constitute GPL contamination. Syscalls are interfaces, not derived works. This is explicitly allowed.",
+      "enforcement": "No enforcement needed - syscall usage is standard and legal"
+    },
+    "grafana_agpl": {
+      "rule": "Grafana uses AGPL-3.0. If Grafana or any AGPL component is required, it MUST be deployed as a separate service with clear boundaries. Direct code integration is FORBIDDEN. If used, must be documented as customer_supplied distribution_scope.",
+      "enforcement": "Any Grafana dependency must be flagged for manual review"
+    },
+    "dual_licensed": {
+      "rule": "Dual-licensed packages (e.g., 'Apache-2.0 OR MIT') are ALLOWED. RansomEye may choose either license term. Default to the more permissive option (MIT) when both are available.",
+      "enforcement": "Dual licenses are treated as permissive and allowed"
+    }
+  },
+  "distribution_scopes": {
+    "core": {
+      "definition": "Core RansomEye platform components distributed with main product",
+      "license_requirements": "Must use allowed_licenses only, or conditionally_allowed with explicit approval"
+    },
+    "agent": {
+      "definition": "Endpoint agent components (Linux, Windows)",
+      "license_requirements": "Must use allowed_licenses only. Agents are distributed separately but are part of core product."
+    },
+    "dpi": {
+      "definition": "Deep Packet Inspection components",
+      "license_requirements": "Must use allowed_licenses only. DPI components have strict security requirements."
+    },
+    "optional": {
+      "definition": "Optional components that may not be deployed in all installations",
+      "license_requirements": "Must use allowed_licenses only. Customer must explicitly opt-in."
+    },
+    "customer_supplied": {
+      "definition": "Components supplied by customer, not by RansomEye",
+      "license_requirements": "Customer responsibility. Must be documented but not validated by RansomEye."
+    }
+  },
+  "validation_rules": {
+    "inventory_completeness": {
+      "rule": "Every dependency in requirements.txt, Cargo.toml, package.json must be listed in THIRD_PARTY_INVENTORY.json",
+      "enforcement": "validate_licenses.py must verify completeness"
+    },
+    "forbidden_detection": {
+      "rule": "Any dependency with forbidden_licenses must cause immediate CI failure",
+      "enforcement": "license_scan.py and validate_licenses.py must check against forbidden_licenses"
+    },
+    "version_pinning": {
+      "rule": "All dependencies must have explicit version constraints (no unpinned dependencies)",
+      "enforcement": "validate_licenses.py must verify version constraints exist"
+    },
+    "license_accuracy": {
+      "rule": "License information in inventory must match actual package licenses. Manual verification required for new dependencies.",
+      "enforcement": "Manual audit process - automated tools may not detect all license variants"
+    }
+  },
+  "audit_requirements": {
+    "frequency": "Quarterly full audit, continuous CI validation",
+    "scope": "All dependencies across all components",
+    "documentation": "All license decisions must be documented in THIRD_PARTY_LICENSES.md",
+    "approval": "New conditionally_allowed licenses require legal review"
+  }
+}
