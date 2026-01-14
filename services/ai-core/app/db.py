@@ -400,9 +400,9 @@ def store_shap_explanation(conn, incident_id: str, model_version_id: str,
             
             # PHASE 3: Use deterministic timestamp (from incident observed_at)
             if computed_at is None:
-                # Fallback: use current time (should not happen in production)
+                # Fallback: use deterministic timestamp (should not happen in production)
                 from datetime import datetime, timezone
-                computed_at = datetime.now(timezone.utc)
+                computed_at = datetime(2024, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
             
             # PHASE 3: Store full SHAP explanation (for replay support)
             cur.execute("""
