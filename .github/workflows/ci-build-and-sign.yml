@@ -343,10 +343,41 @@ jobs:
             build/artifacts/sbom/
           retention-days: 90
       
-      - name: Upload signing public key
+      - name: Export public key for distribution
+        if: success()
+        env:
+          RANSOMEYE_KEY_VAULT_DIR: ${{ secrets.RANSOMEYE_KEY_VAULT_DIR || 'keys/vault' }}
+          RANSOMEYE_KEY_REGISTRY_PATH: ${{ secrets.RANSOMEYE_KEY_REGISTRY_PATH || 'keys/registry.json' }}
+          SIGNING_KEY_ID: ${{ env.SIGNING_KEY_ID }}
+        run: |
+          # Export public key from persistent vault
+          python3 << 'EOF'
+          import sys
+          from pathlib import Path
+          sys.path.insert(0, 'supply-chain')
+          from crypto.persistent_signing_authority import PersistentSigningAuthority
+          import os
+          
+          authority = PersistentSigningAuthority(
+              vault_dir=Path(os.environ['RANSOMEYE_KEY_VAULT_DIR']),
+              registry_path=Path(os.environ['RANSOMEYE_KEY_REGISTRY_PATH'])
+          )
+          
+          public_key_pem = authority.export_public_key_pem(os.environ['SIGNING_KEY_ID'])
+          
+          # Write public key for distribution
+          output_dir = Path('build/artifacts/public-keys')
+          output_dir.mkdir(parents=True, exist_ok=True)
+          public_key_path = output_dir / f"{os.environ['SIGNING_KEY_ID']}.pub"
+          public_key_path.write_bytes(public_key_pem)
+          
+          print(f"✅ Public key exported to {public_key_path}")
+          EOF
+      
+      - name: Upload public key
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: signing-public-key
-          path: /tmp/ci-signing-keys/vendor-signing-key-*.pub
+          path: build/artifacts/public-keys/*.pub
           retention-days: 90
