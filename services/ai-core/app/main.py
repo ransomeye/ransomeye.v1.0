@@ -324,7 +324,7 @@ def run_ai_core():
                     # PHASE 3: Store training data hash and model storage path for replay
                     training_data_hash = model_storage.compute_training_data_hash(feature_vectors)
                     model_hash = model_storage.get_model_hash(kmeans_model) if kmeans_model else None
-                    model_storage_path = model_path if 'model_path' in locals() else None
+                    model_storage_path = stored_model_path if 'stored_model_path' in locals() else None
                     
                     store_cluster(write_conn, cluster_metadata['cluster_id'], clustering_model_version,
                                 cluster_metadata['cluster_label'], cluster_metadata['cluster_size'],
