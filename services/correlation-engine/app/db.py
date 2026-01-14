@@ -173,14 +173,14 @@ def create_incident(conn, incident_id: str, machine_id: str, event: Dict[str, An
             """, (incident_id, machine_id, stage, observed_at, observed_at, observed_at, confidence_score, observed_at))
             
             # Contract compliance: Insert initial stage into incident_stages table
-            # PHASE 2: Use deterministic timestamp from event (observed_at)
+            # PHASE 3: Use deterministic timestamp from event (observed_at)
             cur.execute("""
                 INSERT INTO incident_stages (
                     incident_id, from_stage, to_stage, transitioned_at,
-                    evidence_count_at_transition, confidence_score_at_transition
+                    evidence_count_at_transition, confidence_score_at_transition, created_at
                 )
-                VALUES (%s, NULL, %s, %s, 1, %s)
-            """, (incident_id, stage, observed_at, confidence_score))
+                VALUES (%s, NULL, %s, %s, 1, %s, %s)
+            """, (incident_id, stage, observed_at, confidence_score, observed_at))
             
             # Contract compliance: Link triggering event in evidence table
             cur.execute("""
