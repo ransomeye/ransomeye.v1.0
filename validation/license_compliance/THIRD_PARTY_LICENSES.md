@@ -75,10 +75,10 @@ The following licenses are explicitly allowed for use in RansomEye without restr
 - **Rationale:** File-level copyleft only. Does not require disclosure of entire codebase. Compatible with commercial licensing.
 - **Dependencies:** tqdm
 
-### Dual-Licensed (Apache-2.0 OR MIT)
+### Dual-Licensed (Apache-2.0 OR MIT / MIT OR Apache-2.0)
 - **Status:** ✅ ALLOWED
 - **Rationale:** RansomEye may choose either license term. Defaults to MIT (more permissive).
-- **Dependencies:** reqwest, uuid (Rust), serde, serde_json, chrono, anyhow
+- **Dependencies:** reqwest, uuid (Rust), serde, serde_json (Apache-2.0 OR MIT), chrono, anyhow (MIT OR Apache-2.0) (6 dependencies)
 
 ---
 
