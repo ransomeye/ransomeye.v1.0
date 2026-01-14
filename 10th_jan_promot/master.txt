@@ -14253,4 +14253,147 @@ Confirmation of offline verification & fail-closed behavior
 PROMPT END
 
 
+PROMPT 6 — AGENT AUTONOMY (HEADLESS / FAIL-CLOSED MODE)
+
+(FINAL GA GATE)
+
+PROMPT START
+
+You are working on RansomEye v1.0 GA – Audit Remediation Phase.
+This is Phase F: Survivability & Autonomous Enforcement.
+
+🔒 GLOBAL CONSTRAINTS (MANDATORY)
+
+v1.0 GA hardening only
+
+NO new features
+
+NO new policy logic
+
+NO relaxation of enforcement
+
+Fail-closed is mandatory
+
+Agent must never crash or fail open
+
+TASK 6 — AGENT AUTONOMY WHEN CORE IS OFFLINE (GA BLOCKER)
+Objective
+
+Prove that endpoint agents remain secure, deterministic, and enforce policy even if the Core / C2 server is destroyed, unreachable, or under attack.
+
+This is mandatory for:
+
+Military deployments
+
+Cyber-warfare survivability
+
+Zero-trust enforcement
+
+SCENARIO TO SIMULATE (MANDATORY TEST)
+
+Agent starts normally and receives policy from Core
+
+Core becomes unreachable (process killed / network severed)
+
+A prohibited action is attempted on the endpoint
+
+REQUIRED BEHAVIOR (STRICT)
+1. Agent MUST NOT fail open
+
+❌ Must NOT allow action because Core is unreachable
+
+❌ Must NOT disable enforcement
+
+❌ Must NOT crash
+
+2. Agent MUST enforce last known good policy
+
+Policy must be cached securely on disk
+
+Cache must be integrity-checked at startup
+
+Enforcement must continue without Core
+
+3. If no policy exists
+
+Agent must default to SAFE / DENY
+
+Explicit log: “No policy available — default deny enforced”
+
+HARD RULES
+
+❌ No “allow all if disconnected”
+
+❌ No silent degradation
+
+❌ No best-effort mode
+
+✅ Explicit autonomous enforcement
+
+✅ Deterministic behavior
+
+REQUIRED IMPLEMENTATION
+Agent Side
+
+Secure policy cache (existing mechanism if present)
+
+Startup logic:
+
+If Core reachable → normal operation
+
+If Core unreachable → load cached policy
+
+Integrity check before applying cached policy
+
+Validation Test (GA-Blocking)
+
+Create a severed-link validation scenario:
+
+Start Agent
+
+Kill Core
+
+Attempt mock prohibited action
+
+Assert:
+
+Action is blocked
+
+Agent logs explicit autonomous enforcement
+
+Agent remains running
+
+DELIVERABLES
+
+Agent logic changes (if any)
+
+Policy cache handling explanation
+
+Validation test steps
+
+Example logs (offline enforcement)
+
+ACCEPTANCE CRITERIA (FINAL GA GATE)
+
+Agent enforces policy without Core
+
+No fail-open paths
+
+No crash
+
+Behavior is deterministic and logged
+
+Respond only with:
+
+Implementation approach
+
+File paths
+
+Key code excerpts
+
+Validation test explanation
+
+PROMPT END
+
+
 
