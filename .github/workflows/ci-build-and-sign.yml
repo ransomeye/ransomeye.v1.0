@@ -11,6 +11,10 @@ on:
       - 'v*'
   workflow_dispatch:
 
+permissions:
+  contents: read
+  actions: read
+
 # PHASE 6: Artifact Signing & Verification
 # This workflow signs all build artifacts and verifies signatures
 # Refuses unsigned artifacts
@@ -23,6 +27,7 @@ jobs:
   # PHASE 6: CI Validation (Reusable Workflow)
   ci-validation:
     name: CI Validation - PHASE 6
+    if: ${{ true }}
     uses: ./.github/workflows/ci-validation.yml
     # PHASE 6: Fail-closed - validation must pass before build and sign
 

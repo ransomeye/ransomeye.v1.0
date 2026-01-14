@@ -19,6 +19,10 @@ on:
         description: "GA readiness flag"
         value: ${{ jobs.aggregate-ga-verdict.outputs.ga_ready }}
 
+permissions:
+  contents: read
+  actions: read
+
 # PHASE 6: CI Fail-Closed Enforcement
 # This workflow blocks CI on any failed validation phase (01-40)
 # Treats warnings as failures for security phases
@@ -41,6 +45,7 @@ jobs:
   # PHASE 6: License Compliance Gate
   license-compliance:
     name: License Compliance Gate
+    if: ${{ true }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -61,6 +66,7 @@ jobs:
   # PHASE 6: Validation Phase C-L (Linux)
   validation-phase-c-linux:
     name: Validation Phase C-L (Linux)
+    if: ${{ true }}
     runs-on: ubuntu-latest
     needs: license-compliance
     services:
@@ -126,6 +132,7 @@ jobs:
   # PHASE 6: Validation Phase C-W (Windows)
   validation-phase-c-windows:
     name: Validation Phase C-W (Windows)
+    if: ${{ true }}
     runs-on: windows-latest
     needs: license-compliance
     steps:
@@ -173,6 +180,7 @@ jobs:
   # PHASE 6: Aggregate GA Verdict
   aggregate-ga-verdict:
     name: Aggregate GA Verdict
+    if: ${{ true }}
     runs-on: ubuntu-latest
     needs: [validation-phase-c-linux, validation-phase-c-windows]
     outputs:
