@@ -683,3 +683,49 @@ class CommandGate:
                 f"GA-BLOCKING: Core offline — Action {action_type} allowed by cached policy. "
                 "Autonomous enforcement: ALLOWED"
             )
+    
+    def update_cached_policy(self, policy: Dict[str, Any]) -> bool:
+        """
+        GA-BLOCKING: Update cached policy when Core is online.
+        
+        This method should be called when Core provides a new policy.
+        The policy is cached securely with integrity hash.
+        
+        Args:
+            policy: Policy dictionary from Core
+            
+        Returns:
+            True if policy was updated successfully, False otherwise
+        """
+        try:
+            # Add integrity hash to policy
+            policy_copy = policy.copy()
+            policy_copy.pop('integrity_hash', None)  # Remove existing hash if present
+            policy_json = json.dumps(policy_copy, sort_keys=True, separators=(',', ':'))
+            integrity_hash = hashlib.sha256(policy_json.encode('utf-8')).hexdigest()
+            
+            # Add metadata
+            policy['integrity_hash'] = integrity_hash
+            policy['last_updated'] = datetime.now(timezone.utc).isoformat()
+            
+            # Save cached policy
+            self.cached_policy_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(self.cached_policy_path, 'w') as f:
+                json.dump(policy, f, indent=2)
+            
+            # Reload cached policy
+            self.cached_policy = self._load_cached_policy()
+            
+            if _logger:
+                _logger.info(
+                    f"GA-BLOCKING: Cached policy updated successfully. "
+                    f"Version: {policy.get('version', 'unknown')}, "
+                    f"Integrity hash: {integrity_hash[:16]}..."
+                )
+            
+            return True
+            
+        except Exception as e:
+            if _logger:
+                _logger.error(f"GA-BLOCKING: Failed to update cached policy: {e}")
+            return False
