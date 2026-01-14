@@ -105,14 +105,18 @@ def get_signer() -> PolicyEngineSigner:
 
 
 def create_command_payload(command_type: str, target_machine_id: str, 
-                          incident_id: str) -> Dict[str, Any]:
+                          incident_id: str, policy_id: str, policy_version: str,
+                          issuing_authority: str) -> Dict[str, Any]:
     """
-    Create command payload structure.
+    PHASE 4: Create command payload structure with policy authority binding.
     
-    Phase 7 requirement: Command payload contains:
+    Command payload contains:
     - command_type (e.g., 'ISOLATE_HOST')
     - target_machine_id (machine to isolate)
     - incident_id (incident that triggered this command)
+    - policy_id (policy that authorized this command)
+    - policy_version (version of policy)
+    - issuing_authority (authority that issued this command)
     - issued_at (RFC3339 UTC timestamp)
     
     Deterministic: Command payload is deterministic (no random fields except command_id)
@@ -121,22 +125,28 @@ def create_command_payload(command_type: str, target_machine_id: str,
         command_type: Type of command (e.g., 'ISOLATE_HOST')
         target_machine_id: Machine ID to target
         incident_id: Incident ID that triggered this command
+        policy_id: Policy ID that authorized this command
+        policy_version: Version of policy
+        issuing_authority: Authority that issued this command (e.g., 'policy-engine')
         
     Returns:
         Command payload dictionary
     """
-    # Phase 7 requirement: Generate command ID (UUID v4)
+    # PHASE 4: Generate command ID (UUID v4)
     command_id = str(uuid.uuid4())
     
-    # Phase 7 requirement: issued_at is RFC3339 UTC timestamp
+    # PHASE 4: issued_at is RFC3339 UTC timestamp
     issued_at = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
     
-    # Phase 7 requirement: Command payload structure
+    # PHASE 4: Command payload structure with policy authority binding
     command_payload = {
         'command_id': command_id,
         'command_type': command_type,
         'target_machine_id': target_machine_id,
         'incident_id': incident_id,
+        'policy_id': policy_id,  # PHASE 4: Policy authority binding
+        'policy_version': policy_version,  # PHASE 4: Policy version
+        'issuing_authority': issuing_authority,  # PHASE 4: Issuing authority
         'issued_at': issued_at
     }
     
