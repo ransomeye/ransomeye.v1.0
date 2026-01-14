@@ -288,3 +288,83 @@ class ReportingAPI:
             List of report record dictionaries
         """
         return self.store.get_reports_by_incident_id(incident_id)
+    
+    def _get_incident_snapshot_time(self, incident_id: str) -> Optional[str]:
+        """
+        GA-BLOCKING: Get incident snapshot time (resolved_at or last_observed_at).
+        
+        This ensures deterministic timestamps - same incident snapshot = same timestamp.
+        All report timestamps derive from this incident-anchored time, not system time.
+        
+        Args:
+            incident_id: Incident identifier
+        
+        Returns:
+            RFC3339 UTC timestamp string, or None if incident not found
+        """
+        # Try to query incident from database
+        # Note: This requires DB connection - if not available, return None (fallback)
+        try:
+            import os
+            import psycopg2
+            from dateutil import parser
+            
+            # Get DB connection parameters from environment
+            db_host = os.getenv('RANSOMEYE_DB_HOST', 'localhost')
+            db_port = int(os.getenv('RANSOMEYE_DB_PORT', '5432'))
+            db_name = os.getenv('RANSOMEYE_DB_NAME', 'ransomeye')
+            db_user = os.getenv('RANSOMEYE_DB_USER', 'gagan')
+            db_password = os.getenv('RANSOMEYE_DB_PASSWORD', 'gagan')
+            
+            # Query incident snapshot time
+            conn = psycopg2.connect(
+                host=db_host,
+                port=db_port,
+                database=db_name,
+                user=db_user,
+                password=db_password,
+                connect_timeout=5
+            )
+            
+            try:
+                cur = conn.cursor()
+                # GA-BLOCKING: Use resolved_at if resolved, else last_observed_at
+                cur.execute("""
+                    SELECT 
+                        resolved_at,
+                        last_observed_at,
+                        resolved
+                    FROM incidents
+                    WHERE incident_id = %s
+                """, (incident_id,))
+                
+                result = cur.fetchone()
+                cur.close()
+                
+                if result:
+                    resolved_at, last_observed_at, resolved = result
+                    # Use resolved_at if incident is resolved, else last_observed_at
+                    snapshot_time = resolved_at if resolved and resolved_at else last_observed_at
+                    
+                    if snapshot_time:
+                        # Convert to RFC3339 UTC string
+                        if isinstance(snapshot_time, str):
+                            dt = parser.isoparse(snapshot_time)
+                        else:
+                            dt = snapshot_time
+                        
+                        # Ensure UTC timezone
+                        if dt.tzinfo is None:
+                            dt = dt.replace(tzinfo=timezone.utc)
+                        else:
+                            dt = dt.astimezone(timezone.utc)
+                        
+                        return dt.isoformat()
+            finally:
+                conn.close()
+        except Exception:
+            # DB query failed - return None (fallback to system time in report_record)
+            # This is acceptable for backward compatibility, but not ideal
+            pass
+        
+        return None
