@@ -13975,4 +13975,139 @@ PROMPT END
 
 
 
+PROMPT 4 — DETERMINISTIC REPORTING & BRANDING SEPARATION
+
+(MANDATORY GA GATE — LEGAL ADMISSIBILITY)
+
+PROMPT START
+
+You are working on RansomEye v1.0 GA – Audit Remediation Phase.
+This is Phase F: Forensic & Legal Hardening.
+
+🔒 GLOBAL CONSTRAINTS (MANDATORY)
+
+v1.0 GA hardening only
+
+NO new features
+
+NO schema changes unless strictly required
+
+NO behavioral drift
+
+Evidence integrity > presentation
+
+Fail-closed behavior required
+
+TASK 4 — ABSOLUTE REPORT DETERMINISM (GA BLOCKER)
+Objective
+
+Guarantee legal chain-of-custody by ensuring that a report generated for the same incident snapshot is bit-for-bit identical forever, regardless of when or where it is rendered.
+
+Current Failure
+
+PDF reports currently embed generation-time elements (e.g., datetime.now()), which causes:
+
+Different file hashes for the same incident
+
+Broken evidentiary chain
+
+Legal inadmissibility
+
+REQUIRED IMPLEMENTATION (STRICT)
+1. Incident-Anchored Timestamps
+
+All timestamps in reports MUST derive from:
+
+Incident Snapshot Time OR
+
+Incident Closure Time
+
+❌ datetime.now() or system time is FORBIDDEN in report rendering
+
+2. Branding Separation (CRITICAL)
+
+Evidence layer (facts, timelines, hashes) defines the report hash
+
+Branding / visuals (logo, CSS, theme) MUST NOT affect the hash
+
+Mandatory Rule
+
+Replacing the logo file MUST NOT change the report SHA256.
+
+3. Deterministic Rendering Rules
+
+Stable field ordering
+
+Stable numeric formatting
+
+Stable timestamp formatting
+
+No random IDs
+
+No environment-dependent metadata
+
+REQUIRED TEST (GA-BLOCKING)
+
+Generate Report A for Incident X
+
+Wait 5 minutes
+
+Generate Report B for Incident X
+
+Assert:
+
+SHA256(Report_A) == SHA256(Report_B)
+
+
+Swap logo file
+
+Re-render
+
+Assert:
+
+SHA256 unchanged
+
+HARD RULES
+
+❌ No dynamic timestamps
+
+❌ No renderer-side entropy
+
+❌ No branding mixed with evidence hash
+
+✅ Evidence snapshot is the single source of truth
+
+DELIVERABLES
+
+Files modified (renderer / exporter)
+
+Where system time was removed
+
+How incident snapshot time is injected
+
+How branding is excluded from hash domain
+
+Determinism test (code or description)
+
+ACCEPTANCE CRITERIA (LEGAL / GA BLOCKING)
+
+Same incident → same hash forever
+
+Logo swap → hash unchanged
+
+Output is court-defensible
+
+Respond only with:
+
+Implementation approach
+
+File paths
+
+Key code excerpts
+
+Determinism test explanation
+
+PROMPT END
+
+
 
