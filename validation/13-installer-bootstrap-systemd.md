@@ -10,260 +10,269 @@
   - `/home/ransomeye/rebuild/installer/core/ransomeye-core.service` - Core systemd unit
   - `/home/ransomeye/rebuild/installer/linux-agent/ransomeye-linux-agent.service` - Linux agent systemd unit
   - `/home/ransomeye/rebuild/installer/dpi-probe/ransomeye-dpi.service` - DPI probe systemd unit
-  - `/home/ransomeye/rebuild/installer/install.manifest.schema.json` - Installation manifest schema
-  - `/home/ransomeye/rebuild/installer/env.contract.json` - Environment variable contract
-  - `/home/ransomeye/rebuild/installer/installer-failure-policy.json` - Installer failure policy
 - **Entry Points:**
-  - Core installer: `installer/core/install.sh:456-491` - `main()` function
+  - Core installer: `installer/core/install.sh:773-836` - `main()` function
   - Linux agent installer: `installer/linux-agent/install.sh:356-396` - `main()` function
   - DPI probe installer: `installer/dpi-probe/install.sh:413-456` - `main()` function
   - Windows agent installer: `installer/windows-agent/install.bat` - Batch script
 
-**Spec Reference:**
+**Master Spec References:**
 - Installer Bundle (`installer/INSTALLER_BUNDLE.md`)
 - Environment Variable Contract (`installer/env.contract.md`, `installer/env.contract.json`)
 - Installer Failure Policy (`installer/installer-failure-policy.md`, `installer/installer-failure-policy.json`)
 - Privilege Model (`installer/privilege-model.md`)
+- Validation Step 1: `validation/01-governance-repo-level.md` - Credential governance (binding)
+- Validation Step 2: `validation/02-core-kernel-trust-root.md` - Trust root validation (binding)
+- Validation Step 3: `validation/03-secure-bus-interservice-trust.md` - Inter-service trust (binding)
 
 ---
 
-## 1. INSTALLER IDENTITY & AUTHORITY
+## PURPOSE
+
+This validation proves that installation and bootstrap:
+
+1. **Enforce same security guarantees as runtime** — Installer does not introduce weaker trust boundaries than runtime components
+2. **Are fail-closed** — Installation fails immediately on any security violation, missing credential, or invalid configuration
+3. **Do not introduce weaker trust boundaries** — Installer-generated credentials meet same strength requirements as runtime validation
+4. **Enforce SBOM at install time** — Installation cannot proceed without validated SBOM manifest
+5. **Enforce systemd hardening** — systemd units use capabilities, sandboxing, and least-privilege execution
+
+This validation does NOT validate threat logic, correlation, or AI. This validation validates installer and bootstrap security guarantees only.
+
+---
+
+## MASTER SPEC REFERENCES
+
+- **Installer Bundle:** `installer/INSTALLER_BUNDLE.md` - Authoritative installer specification
+- **Environment Variable Contract:** `installer/env.contract.json` - Required environment variables
+- **Installer Failure Policy:** `installer/installer-failure-policy.json` - Fail-closed behavior requirements
+- **Privilege Model:** `installer/privilege-model.md` - Runtime user and capability requirements
+
+---
+
+## COMPONENT DEFINITION
+
+**Installer Components:**
+- Core installer: `installer/core/install.sh` - Installs Core runtime and services
+- Linux agent installer: `installer/linux-agent/install.sh` - Installs standalone Linux agent
+- DPI probe installer: `installer/dpi-probe/install.sh` - Installs standalone DPI probe
+- Windows agent installer: `installer/windows-agent/install.bat` - Installs standalone Windows agent
+
+**Bootstrap Components:**
+- Environment file generation: `installer/core/install.sh:388-445` - `generate_environment_file()` function
+- Manifest generation: `installer/core/install.sh:505-613` - `create_manifest()` function
+- systemd service installation: `installer/core/install.sh:481-504` - `install_systemd_service()` function
+
+**Systemd Units:**
+- Core systemd unit: `installer/core/ransomeye-core.service` - Core runtime service
+- Linux agent systemd unit: `installer/linux-agent/ransomeye-linux-agent.service` - Linux agent service
+- DPI probe systemd unit: `installer/dpi-probe/ransomeye-dpi.service` - DPI probe service
+
+---
+
+## WHAT IS VALIDATED
+
+1. **SBOM Enforcement at Install Time** — Installer verifies SBOM manifest and signature before proceeding
+2. **Credential Handling** — No hardcoded secrets, no weak defaults, all credentials from environment
+3. **Privilege Model** — Installer runs as root, runtime drops to service user
+4. **systemd Unit Hardening** — Capabilities, sandboxing, resource limits, restart policies
+5. **Installer vs Runtime Parity** — Installer enforces same security guarantees as runtime
+6. **Re-runnability & Idempotence** — Installer can be run multiple times safely
+
+---
+
+## WHAT IS EXPLICITLY NOT ASSUMED
+
+- **NOT ASSUMED:** That installer defaults are acceptable (they are validated as insecure)
+- **NOT ASSUMED:** That fallback paths are secure (they are validated for fail-closed behavior)
+- **NOT ASSUMED:** That services start correctly after installation (validation checks actual startup)
+- **NOT ASSUMED:** That systemd units are hardened (they are validated for capabilities and sandboxing)
+- **NOT ASSUMED:** That SBOM verification is enforced (it is validated for mandatory enforcement)
+- **NOT ASSUMED:** That credentials meet strength requirements (they are validated against runtime requirements)
+
+---
+
+## VALIDATION METHODOLOGY
+
+### Evidence Collection Strategy
+
+1. **Code Path Analysis:** Trace installer execution flow, credential generation, SBOM verification
+2. **Pattern Matching:** Search for hardcoded credentials, weak defaults, missing validation
+3. **systemd Unit Analysis:** Verify capabilities, sandboxing, resource limits, restart policies
+4. **Schema Validation:** Verify manifest validation against schema
+5. **Failure Behavior Analysis:** Verify fail-closed behavior on security violations
+
+### Forbidden Patterns (Grep Validation)
+
+- `RANSOMEYE_DB_PASSWORD.*=.*["']` — Hardcoded DB password
+- `RANSOMEYE_COMMAND_SIGNING_KEY.*=.*["']` — Hardcoded signing key
+- `password.*=.*["']` — Hardcoded password (context-dependent)
+- `key.*=.*["']` — Hardcoded key (context-dependent)
+
+---
+
+## 1. SBOM ENFORCEMENT AT INSTALL TIME
 
 ### Evidence
 
-**Installer Entry Points:**
-- ✅ Core installer entry: `installer/core/install.sh:456-491` - `main()` function
-- ✅ Linux agent installer entry: `installer/linux-agent/install.sh:356-396` - `main()` function
-- ✅ DPI probe installer entry: `installer/dpi-probe/install.sh:413-456` - `main()` function
-- ✅ Windows agent installer entry: `installer/windows-agent/install.bat` - Batch script
+**SBOM Verification Before Installation:**
+- ✅ SBOM verification function: `installer/core/install.sh:99-169` - `verify_sbom()` function
+- ✅ SBOM verification called: `installer/core/install.sh:795` - `verify_sbom()` called before installation
+- ✅ Manifest file required: `installer/core/install.sh:112-114` - Terminates if `manifest.json` not found
+- ✅ Signature file required: `installer/core/install.sh:116-118` - Terminates if `manifest.json.sig` not found
+- ✅ Verification script required: `installer/core/install.sh:130` - Terminates if `verify_sbom.py` not found
+- ✅ Verification failure terminates: `installer/core/install.sh:166` - Terminates on SBOM verification failure
 
-**Supported Installation Modes:**
-- ✅ Core installation: `installer/core/install.sh` - Installs Core runtime and services
-- ✅ Linux agent installation: `installer/linux-agent/install.sh` - Installs standalone Linux agent
-- ✅ DPI probe installation: `installer/dpi-probe/install.sh` - Installs standalone DPI probe
-- ✅ Windows agent installation: `installer/windows-agent/install.bat` - Installs standalone Windows agent
+**SBOM Verification Skipped:**
+- ❌ **CRITICAL:** SBOM verification can be skipped:
+  - `installer/linux-agent/install.sh` - No SBOM verification found
+  - `installer/dpi-probe/install.sh` - No SBOM verification found
+  - `installer/windows-agent/install.bat` - No SBOM verification found
+  - ❌ **CRITICAL:** SBOM verification not enforced for all installers (only Core installer enforces SBOM)
 
-**Whether Installer Is the Only Supported Installation Method:**
-- ⚠️ **ISSUE:** Services can start without installer:
-  - `services/ingest/app/main.py:722-729` - Has `if __name__ == "__main__"` block for standalone execution
-  - `services/correlation-engine/app/main.py:239-248` - Has `if __name__ == "__main__"` block for standalone execution
-  - `services/policy-engine/app/main.py:334` - Has `if __name__ == "__main__"` block for standalone execution
-  - `services/ai-core/app/main.py:399` - Has `if __name__ == "__main__"` block for standalone execution
-  - `services/ui/backend/main.py:491` - Has `if __name__ == "__main__"` block for standalone execution
-  - ⚠️ **ISSUE:** Services can start without installer (services have standalone entry points)
-
-**Services Can Be Reliably Started Without Installer Guarantees:**
-- ⚠️ **ISSUE:** Services can be started without installer guarantees:
-  - `services/ingest/app/main.py:722-729` - Has `if __name__ == "__main__"` block for standalone execution
-  - `services/correlation-engine/app/main.py:239-248` - Has `if __name__ == "__main__"` block for standalone execution
-  - `services/policy-engine/app/main.py:334` - Has `if __name__ == "__main__"` block for standalone execution
-  - `services/ai-core/app/main.py:399` - Has `if __name__ == "__main__"` block for standalone execution
-  - `services/ui/backend/main.py:491` - Has `if __name__ == "__main__"` block for standalone execution
-  - ⚠️ **ISSUE:** Services can be started without installer guarantees (services have standalone entry points)
+**SBOM Verification Warnings Instead of Termination:**
+- ✅ **VERIFIED:** SBOM verification does NOT use warnings:
+  - `installer/core/install.sh:112-114` - `error_exit` on missing manifest (terminates, not warning)
+  - `installer/core/install.sh:116-118` - `error_exit` on missing signature (terminates, not warning)
+  - `installer/core/install.sh:166` - `error_exit` on verification failure (terminates, not warning)
+  - ✅ **VERIFIED:** SBOM verification terminates on failure (no warnings, fail-closed)
 
 ### Verdict: **PARTIAL**
 
 **Justification:**
-- Installer entry points are clearly identified (Core, Linux agent, DPI probe, Windows agent)
-- Supported installation modes are clearly defined (Core, Linux agent, DPI probe, Windows agent)
-- **ISSUE:** Services can start without installer (services have standalone entry points)
-- **ISSUE:** Services can be started without installer guarantees (services have standalone entry points)
+- Core installer enforces SBOM verification before installation (manifest and signature required, verification script required, terminates on failure)
+- SBOM verification terminates on failure (no warnings, fail-closed behavior)
+- **CRITICAL:** SBOM verification not enforced for all installers (Linux agent, DPI probe, Windows agent installers do not verify SBOM)
 
 ---
 
-## 2. MANIFEST-FIRST ENFORCEMENT (CRITICAL)
-
-### Evidence
-
-**Presence of Install Manifest(s):**
-- ✅ Install manifest schema: `installer/install.manifest.schema.json` - JSON Schema (Draft 2020-12) defining canonical manifest structure
-- ✅ Install manifest example: `installer/install.manifest.json` - Example manifest with placeholders
-- ✅ Core installer manifest: `installer/core/installer.manifest.json` - Core installer manifest schema
-- ✅ Core installer creates manifest: `installer/core/install.sh:364-399` - `create_manifest()` creates `installer.manifest.json`
-- ✅ Linux agent installer creates manifest: `installer/linux-agent/install.sh:279-315` - `create_manifest()` creates `installer.manifest.json`
-- ✅ DPI probe installer creates manifest: `installer/dpi-probe/install.sh:327-365` - `create_manifest()` creates `installer.manifest.json`
-
-**Mandatory Validation Before Install:**
-- ❌ **CRITICAL:** No manifest validation found:
-  - `installer/core/install.sh:364-399` - `create_manifest()` creates manifest (but no validation found)
-  - `installer/linux-agent/install.sh:279-315` - `create_manifest()` creates manifest (but no validation found)
-  - `installer/dpi-probe/install.sh:327-365` - `create_manifest()` creates manifest (but no validation found)
-  - ❌ **CRITICAL:** No manifest validation (manifest created, but no validation against schema found)
-
-**Refusal to Proceed on Missing Components:**
-- ⚠️ **ISSUE:** No explicit missing component check found:
-  - `installer/core/install.sh:122-161` - `install_python_files()` copies files (but no explicit missing component check found)
-  - `installer/linux-agent/install.sh:148-161` - `install_agent_binary()` copies binary (but no explicit missing component check found)
-  - `installer/dpi-probe/install.sh:138-157` - `install_dpi_probe_script()` copies script (but no explicit missing component check found)
-  - ⚠️ **ISSUE:** No explicit missing component check (files copied, but no explicit missing component check found)
-
-**Refusal to Proceed on Schema Mismatch:**
-- ❌ **CRITICAL:** No schema mismatch check found:
-  - `installer/core/install.sh:364-399` - `create_manifest()` creates manifest (but no schema validation found)
-  - `installer/linux-agent/install.sh:279-315` - `create_manifest()` creates manifest (but no schema validation found)
-  - `installer/dpi-probe/install.sh:327-365` - `create_manifest()` creates manifest (but no schema validation found)
-  - ❌ **CRITICAL:** No schema mismatch check (manifest created, but no schema validation found)
-
-**Refusal to Proceed on Version Mismatch:**
-- ⚠️ **ISSUE:** No version mismatch check found:
-  - `installer/core/install.sh:364-399` - `create_manifest()` creates manifest with version (but no version mismatch check found)
-  - `installer/linux-agent/install.sh:279-315` - `create_manifest()` creates manifest with version (but no version mismatch check found)
-  - `installer/dpi-probe/install.sh:327-365` - `create_manifest()` creates manifest with version (but no version mismatch check found)
-  - ⚠️ **ISSUE:** No version mismatch check (manifest created with version, but no version mismatch check found)
-
-**Installer Proceeds with Partial Manifest:**
-- ⚠️ **ISSUE:** Installer may proceed with partial manifest:
-  - `installer/core/install.sh:364-399` - `create_manifest()` creates manifest (but no validation found)
-  - `installer/linux-agent/install.sh:279-315` - `create_manifest()` creates manifest (but no validation found)
-  - `installer/dpi-probe/install.sh:327-365` - `create_manifest()` creates manifest (but no validation found)
-  - ⚠️ **ISSUE:** Installer may proceed with partial manifest (manifest created, but no validation found)
-
-**Manifest Validation Warnings Instead of Termination:**
-- ⚠️ **ISSUE:** No manifest validation found (cannot determine if warnings or termination):
-  - `installer/core/install.sh:364-399` - `create_manifest()` creates manifest (but no validation found)
-  - `installer/linux-agent/install.sh:279-315` - `create_manifest()` creates manifest (but no validation found)
-  - `installer/dpi-probe/install.sh:327-365` - `create_manifest()` creates manifest (but no validation found)
-  - ⚠️ **ISSUE:** No manifest validation found (cannot determine if warnings or termination)
-
-### Verdict: **FAIL**
-
-**Justification:**
-- Install manifest schema exists (JSON Schema Draft 2020-12)
-- Install manifest example exists (example manifest with placeholders)
-- Installers create manifests (Core, Linux agent, DPI probe installers create manifests)
-- **CRITICAL:** No manifest validation (manifest created, but no validation against schema found)
-- **CRITICAL:** No schema mismatch check (manifest created, but no schema validation found)
-- **ISSUE:** No explicit missing component check (files copied, but no explicit missing component check found)
-- **ISSUE:** No version mismatch check (manifest created with version, but no version mismatch check found)
-- **ISSUE:** Installer may proceed with partial manifest (manifest created, but no validation found)
-
----
-
-## 3. ENV-ONLY CONFIGURATION & CREDENTIAL HANDLING
+## 2. CREDENTIAL HANDLING (NO HARDCODED SECRETS, NO WEAK DEFAULTS)
 
 ### Evidence
 
 **No Hardcoded Credentials:**
 - ❌ **CRITICAL:** Hardcoded weak credentials found:
-  - `installer/core/install.sh:289-290` - `RANSOMEYE_DB_USER="gagan"` and `RANSOMEYE_DB_PASSWORD="gagan"` (hardcoded weak credentials)
-  - `installer/core/install.sh:301` - `RANSOMEYE_COMMAND_SIGNING_KEY="test_signing_key_minimum_32_characters_long_for_validation_long_enough"` (hardcoded weak default key)
+  - `installer/core/install.sh:424-425` - `RANSOMEYE_DB_USER="gagan"` and `RANSOMEYE_DB_PASSWORD="gagan"` (hardcoded weak credentials)
+  - `installer/core/install.sh:436` - `RANSOMEYE_COMMAND_SIGNING_KEY="test_signing_key_minimum_32_characters_long_for_validation_long_enough"` (hardcoded weak default key)
   - `installer/linux-agent/install.sh:228-229` - `RANSOMEYE_DB_USER="gagan"` and `RANSOMEYE_DB_PASSWORD="gagan"` (hardcoded weak credentials)
   - `installer/dpi-probe/install.sh:276-277` - `RANSOMEYE_DB_USER="gagan"` and `RANSOMEYE_DB_PASSWORD="gagan"` (hardcoded weak credentials)
   - ❌ **CRITICAL:** Hardcoded weak credentials (DB user/password "gagan", test signing key)
 
 **No Default Passwords or Signing Keys:**
 - ❌ **CRITICAL:** Default passwords and signing keys found:
-  - `installer/core/install.sh:289-290` - `RANSOMEYE_DB_USER="gagan"` and `RANSOMEYE_DB_PASSWORD="gagan"` (default weak credentials)
-  - `installer/core/install.sh:301` - `RANSOMEYE_COMMAND_SIGNING_KEY="test_signing_key_minimum_32_characters_long_for_validation_long_enough"` (default weak signing key)
+  - `installer/core/install.sh:424-425` - `RANSOMEYE_DB_USER="gagan"` and `RANSOMEYE_DB_PASSWORD="gagan"` (default weak credentials)
+  - `installer/core/install.sh:436` - `RANSOMEYE_COMMAND_SIGNING_KEY="test_signing_key_minimum_32_characters_long_for_validation_long_enough"` (default weak signing key)
   - `installer/linux-agent/install.sh:228-229` - `RANSOMEYE_DB_USER="gagan"` and `RANSOMEYE_DB_PASSWORD="gagan"` (default weak credentials)
   - `installer/dpi-probe/install.sh:276-277` - `RANSOMEYE_DB_USER="gagan"` and `RANSOMEYE_DB_PASSWORD="gagan"` (default weak credentials)
   - ❌ **CRITICAL:** Default passwords and signing keys (DB user/password "gagan", test signing key)
 
 **Environment Variables Required for All Secrets:**
 - ⚠️ **ISSUE:** Secrets are hardcoded, not from environment:
-  - `installer/core/install.sh:289-290` - `RANSOMEYE_DB_USER="gagan"` and `RANSOMEYE_DB_PASSWORD="gagan"` (hardcoded, not from environment)
-  - `installer/core/install.sh:301` - `RANSOMEYE_COMMAND_SIGNING_KEY="test_signing_key_minimum_32_characters_long_for_validation_long_enough"` (hardcoded, not from environment)
-  - `installer/linux-agent/install.sh:228-229` - `RANSOMEYE_DB_USER="gagan"` and `RANSOMEYE_DB_PASSWORD="gagan"` (hardcoded, not from environment)
-  - `installer/dpi-probe/install.sh:276-277` - `RANSOMEYE_DB_USER="gagan"` and `RANSOMEYE_DB_PASSWORD="gagan"` (hardcoded, not from environment)
+  - `installer/core/install.sh:424-425` - `RANSOMEYE_DB_USER="gagan"` and `RANSOMEYE_DB_PASSWORD="gagan"` (hardcoded, not from environment)
+  - `installer/core/install.sh:436` - `RANSOMEYE_COMMAND_SIGNING_KEY="test_signing_key_minimum_32_characters_long_for_validation_long_enough"` (hardcoded, not from environment)
   - ⚠️ **ISSUE:** Secrets are hardcoded, not from environment (DB user/password and signing key are hardcoded)
 
 **Secrets Not Written to World-Readable Files:**
-- ✅ Environment file permissions: `installer/core/install.sh:307` - `chmod 600 "${INSTALL_ROOT}/config/environment"` (600 = owner read/write only)
-- ✅ Environment file permissions: `installer/linux-agent/install.sh:232` - `chmod 600 "${INSTALL_ROOT}/config/environment"` (600 = owner read/write only)
-- ✅ Environment file permissions: `installer/dpi-probe/install.sh:280` - `chmod 600 "${INSTALL_ROOT}/config/environment"` (600 = owner read/write only)
-- ✅ Manifest file permissions: `installer/core/install.sh:396` - `chmod 644 "$manifest_file"` (644 = owner/group read, world read)
+- ✅ Environment file permissions: `installer/core/install.sh:442` - `chmod 600 "${INSTALL_ROOT}/config/environment"` (600 = owner read/write only)
+- ✅ Environment file ownership: `installer/core/install.sh:443` - `chown ransomeye:ransomeye "${INSTALL_ROOT}/config/environment"` (restricted ownership)
+- ✅ Manifest file permissions: `installer/core/install.sh:612` - `chmod 644 "$manifest_file"` (644 = owner/group read, world read)
 - ⚠️ **ISSUE:** Manifest file is world-readable:
-  - `installer/core/install.sh:396` - `chmod 644 "$manifest_file"` (644 = world-readable)
-  - `installer/linux-agent/install.sh:311` - `chmod 644 "$manifest_file"` (644 = world-readable)
-  - `installer/dpi-probe/install.sh:361` - `chmod 644 "$manifest_file"` (644 = world-readable)
+  - `installer/core/install.sh:612` - `chmod 644 "$manifest_file"` (644 = world-readable)
   - ⚠️ **ISSUE:** Manifest file is world-readable (644 permissions, world-readable)
 
-**Embedded Credentials:**
-- ❌ **CRITICAL:** Embedded credentials found:
-  - `installer/core/install.sh:289-290` - `RANSOMEYE_DB_USER="gagan"` and `RANSOMEYE_DB_PASSWORD="gagan"` (embedded in installer script)
-  - `installer/core/install.sh:301` - `RANSOMEYE_COMMAND_SIGNING_KEY="test_signing_key_minimum_32_characters_long_for_validation_long_enough"` (embedded in installer script)
-  - `installer/linux-agent/install.sh:228-229` - `RANSOMEYE_DB_USER="gagan"` and `RANSOMEYE_DB_PASSWORD="gagan"` (embedded in installer script)
-  - `installer/dpi-probe/install.sh:276-277` - `RANSOMEYE_DB_USER="gagan"` and `RANSOMEYE_DB_PASSWORD="gagan"` (embedded in installer script)
-  - ❌ **CRITICAL:** Embedded credentials (DB user/password and signing key embedded in installer scripts)
-
-**Weak Defaults:**
-- ❌ **CRITICAL:** Weak defaults found:
-  - `installer/core/install.sh:289-290` - `RANSOMEYE_DB_USER="gagan"` and `RANSOMEYE_DB_PASSWORD="gagan"` (weak default credentials)
-  - `installer/core/install.sh:301` - `RANSOMEYE_COMMAND_SIGNING_KEY="test_signing_key_minimum_32_characters_long_for_validation_long_enough"` (weak default signing key)
-  - `installer/linux-agent/install.sh:228-229` - `RANSOMEYE_DB_USER="gagan"` and `RANSOMEYE_DB_PASSWORD="gagan"` (weak default credentials)
-  - `installer/dpi-probe/install.sh:276-277` - `RANSOMEYE_DB_USER="gagan"` and `RANSOMEYE_DB_PASSWORD="gagan"` (weak default credentials)
-  - ❌ **CRITICAL:** Weak defaults (DB user/password "gagan", test signing key)
-
-**Secrets Logged or Echoed:**
-- ⚠️ **ISSUE:** Secrets may be logged or echoed:
-  - `installer/core/install.sh:260-305` - `generate_environment_file()` writes secrets to environment file (but no explicit logging found)
-  - `installer/core/install.sh:336` - `export PGPASSWORD="gagan"` (password exported to environment, may be visible in process list)
-  - ⚠️ **ISSUE:** Secrets may be logged or echoed (password exported to environment, may be visible in process list)
+**Credential Strength Validation:**
+- ❌ **CRITICAL:** Installer does NOT validate credential strength:
+  - `installer/core/install.sh:424-425` - Weak password `"gagan"` (4 chars, insufficient entropy) accepted without validation
+  - `installer/core/install.sh:436` - Weak default signing key accepted without validation
+  - ❌ **CRITICAL:** Installer does NOT validate credential strength (weak credentials accepted without validation)
 
 ### Verdict: **FAIL**
 
 **Justification:**
 - Environment file permissions are correct (600 = owner read/write only)
+- Environment file ownership is correct (restricted ownership)
 - **CRITICAL:** Hardcoded weak credentials (DB user/password "gagan", test signing key)
 - **CRITICAL:** Default passwords and signing keys (DB user/password "gagan", test signing key)
-- **CRITICAL:** Embedded credentials (DB user/password and signing key embedded in installer scripts)
-- **CRITICAL:** Weak defaults (DB user/password "gagan", test signing key)
+- **CRITICAL:** Installer does NOT validate credential strength (weak credentials accepted without validation)
 - **ISSUE:** Secrets are hardcoded, not from environment (DB user/password and signing key are hardcoded)
 - **ISSUE:** Manifest file is world-readable (644 permissions, world-readable)
-- **ISSUE:** Secrets may be logged or echoed (password exported to environment, may be visible in process list)
 
 ---
 
-## 4. SYSTEMD UNIT GOVERNANCE
+## 3. PRIVILEGE MODEL (ROOT VS SERVICE USER)
 
 ### Evidence
 
-**Centralized systemd Units:**
-- ✅ Core systemd unit: `installer/core/ransomeye-core.service` - Single systemd unit for Core
-- ✅ Linux agent systemd unit: `installer/linux-agent/ransomeye-linux-agent.service` - Single systemd unit for Linux agent
-- ✅ DPI probe systemd unit: `installer/dpi-probe/ransomeye-dpi.service` - Single systemd unit for DPI probe
-- ✅ Systemd units installed: `installer/core/install.sh:345-362` - `install_systemd_service()` installs systemd unit
-- ✅ Systemd units installed: `installer/linux-agent/install.sh:260-277` - `install_systemd_service()` installs systemd unit
-- ✅ Systemd units installed: `installer/dpi-probe/install.sh:308-325` - `install_systemd_service()` installs systemd unit
+**Installer Runs as Root:**
+- ✅ Root check: `installer/core/install.sh:26-31` - `check_root()` function verifies `$EUID -ne 0`
+- ✅ Root check called: `installer/core/install.sh:777` - `check_root()` called in `main()`
+- ✅ Root required for systemd: `installer/core/install.sh:29` - Error message states "required for systemd service and user creation"
 
-**Correct Dependency Ordering:**
-- ✅ Core systemd dependencies: `installer/core/ransomeye-core.service:4` - `After=network.target postgresql.service`
-- ✅ Core systemd dependencies: `installer/core/ransomeye-core.service:5` - `Wants=postgresql.service`
-- ✅ Linux agent systemd dependencies: `installer/linux-agent/ransomeye-linux-agent.service:4` - `After=network.target`
-- ✅ Linux agent systemd dependencies: `installer/linux-agent/ransomeye-linux-agent.service:5` - `Wants=network-online.target`
-- ✅ DPI probe systemd dependencies: `installer/dpi-probe/ransomeye-dpi.service:4` - `After=network.target`
-- ✅ DPI probe systemd dependencies: `installer/dpi-probe/ransomeye-dpi.service:5` - `Wants=network-online.target`
+**Runtime Drops to Service User:**
+- ✅ Systemd unit user: `installer/core/ransomeye-core.service:9` - `User=ransomeye`
+- ✅ Systemd unit group: `installer/core/ransomeye-core.service:10` - `Group=ransomeye`
+- ✅ Service user created: `installer/core/install.sh:109-114` - `create_system_user()` function creates `ransomeye` user
+- ✅ Service user created before files: `installer/core/install.sh:792` - `create_system_user()` called before `install_python_files()`
+
+**No Privilege Escalation:**
+- ✅ NoNewPrivileges: `installer/core/ransomeye-core.service:28` - `NoNewPrivileges=true`
+- ✅ No setuid/setgid: `installer/core/install.sh:373` - `chmod +x` (no setuid/setgid bits)
+- ✅ **VERIFIED:** No privilege escalation (NoNewPrivileges=true, no setuid/setgid bits)
+
+### Verdict: **PASS**
+
+**Justification:**
+- Installer runs as root (root check enforced, root required for systemd and user creation)
+- Runtime drops to service user (systemd unit specifies User=ransomeye, Group=ransomeye, service user created before files)
+- No privilege escalation (NoNewPrivileges=true, no setuid/setgid bits)
+
+---
+
+## 4. SYSTEMD UNIT HARDENING (CAPABILITIES, SANDBOXING)
+
+### Evidence
+
+**Capabilities:**
+- ⚠️ **ISSUE:** Core systemd unit has no capabilities:
+  - `installer/core/ransomeye-core.service:1-45` - No `CapabilityBoundingSet` or `AmbientCapabilities` directives
+  - ⚠️ **ISSUE:** Core systemd unit has no capabilities (no capability restrictions)
+- ✅ DPI probe capabilities: `installer/dpi-probe/ransomeye-dpi.service:17-19` - Comments state "CAP_NET_RAW and CAP_NET_ADMIN capabilities set via setcap"
+- ⚠️ **ISSUE:** DPI probe capabilities not in systemd unit:
+  - `installer/dpi-probe/ransomeye-dpi.service:1-63` - No `CapabilityBoundingSet` or `AmbientCapabilities` directives
+  - ⚠️ **ISSUE:** DPI probe capabilities not in systemd unit (capabilities set via setcap, not systemd)
+
+**Sandboxing:**
+- ✅ NoNewPrivileges: `installer/core/ransomeye-core.service:28` - `NoNewPrivileges=true`
+- ✅ PrivateTmp: `installer/core/ransomeye-core.service:29` - `PrivateTmp=true`
+- ✅ ProtectSystem: `installer/core/ransomeye-core.service:30` - `ProtectSystem=strict`
+- ✅ ProtectHome: `installer/core/ransomeye-core.service:31` - `ProtectHome=true`
+- ✅ ReadWritePaths: `installer/core/ransomeye-core.service:32` - `ReadWritePaths=@INSTALL_ROOT@/logs @INSTALL_ROOT@/runtime`
+- ✅ Linux agent sandboxing: `installer/linux-agent/ransomeye-linux-agent.service:35-39` - Same sandboxing directives
+- ✅ DPI probe sandboxing: `installer/dpi-probe/ransomeye-dpi.service:40-44` - Same sandboxing directives
+
+**Resource Limits:**
+- ✅ LimitNOFILE: `installer/core/ransomeye-core.service:24` - `LimitNOFILE=65536`
+- ✅ LimitNPROC: `installer/core/ransomeye-core.service:25` - `LimitNPROC=4096`
+- ✅ Linux agent limits: `installer/linux-agent/ransomeye-linux-agent.service:31-32` - Same limits
+- ✅ DPI probe limits: `installer/dpi-probe/ransomeye-dpi.service:33-34` - Same limits
 
 **Restart Policies:**
-- ✅ Core restart policy: `installer/core/ransomeye-core.service:20` - `Restart=on-failure`
-- ✅ Core restart policy: `installer/core/ransomeye-core.service:21` - `RestartSec=10`
-- ✅ Linux agent restart policy: `installer/linux-agent/ransomeye-linux-agent.service:20` - `Restart=on-failure`
-- ✅ Linux agent restart policy: `installer/linux-agent/ransomeye-linux-agent.service:21` - `RestartSec=60`
-- ✅ Linux agent restart limits: `installer/linux-agent/ransomeye-linux-agent.service:26-28` - `StartLimitIntervalSec=300`, `StartLimitBurst=5`, `StartLimitAction=none`
-- ✅ DPI probe restart policy: `installer/dpi-probe/ransomeye-dpi.service:22` - `Restart=on-failure`
-- ✅ DPI probe restart policy: `installer/dpi-probe/ransomeye-dpi.service:23` - `RestartSec=60`
-- ✅ DPI probe restart limits: `installer/dpi-probe/ransomeye-dpi.service:28-30` - `StartLimitIntervalSec=300`, `StartLimitBurst=5`, `StartLimitAction=none`
-
-**Explicit Failure Handling:**
-- ✅ Core failure handling: `installer/core/ransomeye-core.service:20-21` - `Restart=on-failure`, `RestartSec=10`
-- ✅ Linux agent failure handling: `installer/linux-agent/ransomeye-linux-agent.service:20-28` - `Restart=on-failure`, `RestartSec=60`, restart limits
-- ✅ DPI probe failure handling: `installer/dpi-probe/ransomeye-dpi.service:22-30` - `Restart=on-failure`, `RestartSec=60`, restart limits
-
-**Services Start Out of Order:**
-- ✅ **VERIFIED:** Services do NOT start out of order:
-  - `installer/core/ransomeye-core.service:4-5` - `After=network.target postgresql.service`, `Wants=postgresql.service` (correct dependency ordering)
-  - `installer/linux-agent/ransomeye-linux-agent.service:4-5` - `After=network.target`, `Wants=network-online.target` (correct dependency ordering)
-  - `installer/dpi-probe/ransomeye-dpi.service:4-5` - `After=network.target`, `Wants=network-online.target` (correct dependency ordering)
-  - ✅ **VERIFIED:** Services do NOT start out of order (correct dependency ordering)
-
-**Restart Loops Hide Failure:**
-- ⚠️ **ISSUE:** Restart loops may hide failure:
+- ✅ Restart on failure: `installer/core/ransomeye-core.service:20` - `Restart=on-failure`
+- ✅ Restart delay: `installer/core/ransomeye-core.service:21` - `RestartSec=10`
+- ⚠️ **ISSUE:** Core has no restart limits:
   - `installer/core/ransomeye-core.service:20-21` - `Restart=on-failure`, `RestartSec=10` (but no restart limits found)
-  - `installer/linux-agent/ransomeye-linux-agent.service:26-28` - `StartLimitIntervalSec=300`, `StartLimitBurst=5`, `StartLimitAction=none` (restart limits exist, but `StartLimitAction=none` may allow restart loops)
-  - `installer/dpi-probe/ransomeye-dpi.service:28-30` - `StartLimitIntervalSec=300`, `StartLimitBurst=5`, `StartLimitAction=none` (restart limits exist, but `StartLimitAction=none` may allow restart loops)
-  - ⚠️ **ISSUE:** Restart loops may hide failure (Core has no restart limits, Linux agent and DPI probe have `StartLimitAction=none`)
+  - ⚠️ **ISSUE:** Core has no restart limits (may restart indefinitely)
+- ✅ Linux agent restart limits: `installer/linux-agent/ransomeye-linux-agent.service:26-28` - `StartLimitIntervalSec=300`, `StartLimitBurst=5`, `StartLimitAction=none`
+- ✅ DPI probe restart limits: `installer/dpi-probe/ransomeye-dpi.service:28-30` - `StartLimitIntervalSec=300`, `StartLimitBurst=5`, `StartLimitAction=none`
+- ⚠️ **ISSUE:** Restart limits use `StartLimitAction=none`:
+  - `installer/linux-agent/ransomeye-linux-agent.service:30` - `StartLimitAction=none` (may allow restart loops)
+  - `installer/dpi-probe/ransomeye-dpi.service:30` - `StartLimitAction=none` (may allow restart loops)
+  - ⚠️ **ISSUE:** Restart limits use `StartLimitAction=none` (may allow restart loops)
 
-**Missing Hard Dependencies:**
+**Dependency Ordering:**
+- ✅ Core dependencies: `installer/core/ransomeye-core.service:4-5` - `After=network.target postgresql.service`, `Wants=postgresql.service`
+- ✅ Linux agent dependencies: `installer/linux-agent/ransomeye-linux-agent.service:4-5` - `After=network.target`, `Wants=network-online.target`
+- ✅ DPI probe dependencies: `installer/dpi-probe/ransomeye-dpi.service:4-5` - `After=network.target`, `Wants=network-online.target`
 - ⚠️ **ISSUE:** Core has `Wants` instead of `Requires`:
   - `installer/core/ransomeye-core.service:5` - `Wants=postgresql.service` (Wants = soft dependency, not hard dependency)
   - ⚠️ **ISSUE:** Core has `Wants` instead of `Requires` (Wants = soft dependency, PostgreSQL may not be available)
@@ -271,205 +280,119 @@
 ### Verdict: **PARTIAL**
 
 **Justification:**
-- Centralized systemd units exist (Core, Linux agent, DPI probe have single systemd units)
-- Correct dependency ordering exists (After=network.target, Wants=postgresql.service/network-online.target)
+- Sandboxing exists (NoNewPrivileges=true, PrivateTmp=true, ProtectSystem=strict, ProtectHome=true, ReadWritePaths restricted)
+- Resource limits exist (LimitNOFILE=65536, LimitNPROC=4096)
 - Restart policies exist (Restart=on-failure, RestartSec=10/60)
-- Explicit failure handling exists (restart policies and restart limits)
-- Services do NOT start out of order (correct dependency ordering)
-- **ISSUE:** Restart loops may hide failure (Core has no restart limits, Linux agent and DPI probe have `StartLimitAction=none`)
+- Dependency ordering exists (After=network.target, Wants=postgresql.service/network-online.target)
+- **ISSUE:** Core systemd unit has no capabilities (no capability restrictions)
+- **ISSUE:** DPI probe capabilities not in systemd unit (capabilities set via setcap, not systemd)
+- **ISSUE:** Core has no restart limits (may restart indefinitely)
+- **ISSUE:** Restart limits use `StartLimitAction=none` (may allow restart loops)
 - **ISSUE:** Core has `Wants` instead of `Requires` (Wants = soft dependency, PostgreSQL may not be available)
 
 ---
 
-## 5. FAIL-CLOSED BOOTSTRAP BEHAVIOR
+## 5. INSTALLER VS RUNTIME PARITY
 
 ### Evidence
 
-**Behavior on Missing Env Vars:**
-- ✅ Fail-fast on errors: `installer/core/install.sh:8` - `set -euo pipefail` (fail-fast: exit on any error, undefined variable, or pipe failure)
-- ✅ Fail-fast on errors: `installer/linux-agent/install.sh:8` - `set -euo pipefail` (fail-fast: exit on any error, undefined variable, or pipe failure)
-- ✅ Fail-fast on errors: `installer/dpi-probe/install.sh:8` - `set -euo pipefail` (fail-fast: exit on any error, undefined variable, or pipe failure)
-- ⚠️ **ISSUE:** No explicit env var validation found:
-  - `installer/core/install.sh:254-310` - `generate_environment_file()` generates environment file (but no explicit env var validation found)
-  - `installer/linux-agent/install.sh:196-236` - `generate_environment_file()` generates environment file (but no explicit env var validation found)
-  - `installer/dpi-probe/install.sh:234-284` - `generate_environment_file()` generates environment file (but no explicit env var validation found)
-  - ⚠️ **ISSUE:** No explicit env var validation (environment file generated, but no explicit env var validation found)
+**Runtime Credential Validation:**
+- ✅ Runtime validates secrets: `common/security/secrets.py:32-34` - `sys.exit(1)` on missing secrets
+- ✅ Runtime validates password strength: `common/security/secrets.py:36-39` - Minimum 8 characters enforced
+- ✅ Runtime validates signing key strength: `common/security/secrets.py:98-101` - Minimum 32 characters enforced
 
-**Behavior on Invalid DB Connectivity:**
-- ✅ DB connectivity check: `installer/core/install.sh:326-343` - `check_postgresql()` tests PostgreSQL connection
-- ✅ DB connectivity check: `installer/core/install.sh:340` - `error_exit "Cannot connect to PostgreSQL"` (terminates on failure)
-- ⚠️ **ISSUE:** DB connectivity check uses hardcoded credentials:
-  - `installer/core/install.sh:336` - `export PGPASSWORD="gagan"` (uses hardcoded password)
-  - `installer/core/install.sh:337` - `psql -h localhost -U gagan -d ransomeye` (uses hardcoded user)
-  - ⚠️ **ISSUE:** DB connectivity check uses hardcoded credentials (uses hardcoded user/password "gagan")
+**Installer Credential Validation:**
+- ❌ **CRITICAL:** Installer does NOT validate credentials:
+  - `installer/core/install.sh:424-425` - Weak password `"gagan"` (4 chars, insufficient entropy) accepted without validation
+  - `installer/core/install.sh:436` - Weak default signing key accepted without validation
+  - ❌ **CRITICAL:** Installer does NOT validate credentials (weak credentials accepted without validation)
 
-**Behavior on Missing Signing Keys:**
-- ⚠️ **ISSUE:** No signing key validation found:
-  - `installer/core/install.sh:301` - `RANSOMEYE_COMMAND_SIGNING_KEY="test_signing_key_minimum_32_characters_long_for_validation_long_enough"` (hardcoded default key, no validation)
-  - `installer/linux-agent/install.sh` - No signing key found (Linux agent does not use signing key)
-  - `installer/dpi-probe/install.sh` - No signing key found (DPI probe does not use signing key)
-  - ⚠️ **ISSUE:** No signing key validation (signing key is hardcoded default, no validation)
+**Runtime Fail-Closed Behavior:**
+- ✅ Runtime terminates on missing secrets: `common/security/secrets.py:32-34` - `sys.exit(1)` with "SECURITY VIOLATION" message
+- ✅ Runtime terminates on weak secrets: `common/security/secrets.py:36-39` - Terminates if too short
 
-**Behavior on Manifest Validation Failure:**
-- ❌ **CRITICAL:** No manifest validation found:
-  - `installer/core/install.sh:364-399` - `create_manifest()` creates manifest (but no validation found)
-  - `installer/linux-agent/install.sh:279-315` - `create_manifest()` creates manifest (but no validation found)
-  - `installer/dpi-probe/install.sh:327-365` - `create_manifest()` creates manifest (but no validation found)
-  - ❌ **CRITICAL:** No manifest validation (manifest created, but no validation found)
-
-**Services Start Partially:**
-- ⚠️ **ISSUE:** Services may start partially:
-  - `installer/core/install.sh:401-453` - `validate_installation()` starts Core and performs health check (but no explicit partial startup check found)
-  - `installer/linux-agent/install.sh:317-353` - `validate_installation()` starts agent and performs validation (but no explicit partial startup check found)
-  - `installer/dpi-probe/install.sh:367-410` - `validate_installation()` starts probe and performs validation (but no explicit partial startup check found)
-  - ⚠️ **ISSUE:** Services may start partially (validation exists, but no explicit partial startup check found)
-
-**Warnings Instead of Termination:**
-- ⚠️ **ISSUE:** Warnings may be used instead of termination:
-  - `installer/core/install.sh:449` - `echo -e "${YELLOW}WARNING: Health check endpoints not accessible"` (warning, not termination)
-  - `installer/linux-agent/install.sh:341` - `echo -e "${YELLOW}WARNING:${NC} Agent exited with status"` (warning, not termination)
-  - `installer/dpi-probe/install.sh:391` - `echo -e "${YELLOW}WARNING:${NC} DPI Probe exited with status"` (warning, not termination)
-  - ⚠️ **ISSUE:** Warnings may be used instead of termination (warnings logged, but installation may continue)
-
-**Silent Skips:**
-- ⚠️ **ISSUE:** Silent skips may occur:
-  - `installer/core/install.sh:95-101` - Directory creation checks if directory exists (skips if exists, but no explicit error)
-  - `installer/core/install.sh:109-114` - User creation checks if user exists (skips if exists, but no explicit error)
-  - ⚠️ **ISSUE:** Silent skips may occur (directory and user creation skip if exists, but no explicit error)
-
-### Verdict: **PARTIAL**
-
-**Justification:**
-- Fail-fast on errors exists (`set -euo pipefail` in all installers)
-- DB connectivity check exists (tests PostgreSQL connection, terminates on failure)
-- **CRITICAL:** No manifest validation (manifest created, but no validation found)
-- **ISSUE:** No explicit env var validation (environment file generated, but no explicit env var validation found)
-- **ISSUE:** DB connectivity check uses hardcoded credentials (uses hardcoded user/password "gagan")
-- **ISSUE:** No signing key validation (signing key is hardcoded default, no validation)
-- **ISSUE:** Services may start partially (validation exists, but no explicit partial startup check found)
-- **ISSUE:** Warnings may be used instead of termination (warnings logged, but installation may continue)
-- **ISSUE:** Silent skips may occur (directory and user creation skip if exists, but no explicit error)
-
----
-
-## 6. PERMISSIONS & FILESYSTEM SAFETY
-
-### Evidence
-
-**File Ownership:**
-- ✅ Environment file ownership: `installer/core/install.sh:308` - `chown ransomeye:ransomeye "${INSTALL_ROOT}/config/environment"` (correct ownership)
-- ✅ Environment file ownership: `installer/linux-agent/install.sh:233` - `chown ransomeye-agent:ransomeye-agent "${INSTALL_ROOT}/config/environment"` (correct ownership)
-- ✅ Environment file ownership: `installer/dpi-probe/install.sh:281` - `chown ransomeye-dpi:ransomeye-dpi "${INSTALL_ROOT}/config/environment"` (correct ownership)
-- ✅ Directory ownership: `installer/core/install.sh:159-160` - `chown -R ransomeye:ransomeye "${INSTALL_ROOT}/lib"` and `chown -R ransomeye:ransomeye "${INSTALL_ROOT}/config"` (correct ownership)
-- ✅ Logs and runtime ownership: `installer/core/install.sh:318-319` - `chown -R ransomeye:ransomeye "${INSTALL_ROOT}/logs"` and `chown -R ransomeye:ransomeye "${INSTALL_ROOT}/runtime"` (correct ownership)
-
-**Permission Masks:**
-- ✅ Environment file permissions: `installer/core/install.sh:307` - `chmod 600 "${INSTALL_ROOT}/config/environment"` (600 = owner read/write only)
-- ✅ Environment file permissions: `installer/linux-agent/install.sh:232` - `chmod 600 "${INSTALL_ROOT}/config/environment"` (600 = owner read/write only)
-- ✅ Environment file permissions: `installer/dpi-probe/install.sh:280` - `chmod 600 "${INSTALL_ROOT}/config/environment"` (600 = owner read/write only)
-- ✅ Directory permissions: `installer/core/install.sh:320-321` - `chmod 755 "${INSTALL_ROOT}/logs"` and `chmod 755 "${INSTALL_ROOT}/runtime"` (755 = owner/group/others read/execute, owner/group write)
-- ✅ Manifest file permissions: `installer/core/install.sh:396` - `chmod 644 "$manifest_file"` (644 = owner/group read, world read)
-- ✅ Binary permissions: `installer/linux-agent/install.sh:156` - `chmod +x "${INSTALL_ROOT}/bin/ransomeye-linux-agent"` (executable)
-- ✅ Script permissions: `installer/core/install.sh:238` - `chmod +x "${INSTALL_ROOT}/bin/ransomeye-core"` (executable)
-
-**No World-Writable Binaries or Configs:**
-- ✅ **VERIFIED:** No world-writable binaries or configs:
-  - `installer/core/install.sh:307` - `chmod 600 "${INSTALL_ROOT}/config/environment"` (600 = owner read/write only, not world-writable)
-  - `installer/core/install.sh:238` - `chmod +x "${INSTALL_ROOT}/bin/ransomeye-core"` (executable, but no explicit world-writable check found)
-  - `installer/linux-agent/install.sh:156` - `chmod +x "${INSTALL_ROOT}/bin/ransomeye-linux-agent"` (executable, but no explicit world-writable check found)
-  - ✅ **VERIFIED:** No world-writable binaries or configs (environment files are 600, binaries are executable but not world-writable)
-
-**World-Readable Secrets:**
-- ⚠️ **ISSUE:** Manifest file is world-readable:
-  - `installer/core/install.sh:396` - `chmod 644 "$manifest_file"` (644 = world-readable)
-  - `installer/linux-agent/install.sh:311` - `chmod 644 "$manifest_file"` (644 = world-readable)
-  - `installer/dpi-probe/install.sh:361` - `chmod 644 "$manifest_file"` (644 = world-readable)
-  - ⚠️ **ISSUE:** Manifest file is world-readable (644 permissions, world-readable, but manifest may not contain secrets)
-
-**Executables Writable by Non-Root:**
-- ✅ **VERIFIED:** Executables are NOT writable by non-root:
-  - `installer/core/install.sh:238` - `chmod +x "${INSTALL_ROOT}/bin/ransomeye-core"` (executable, but no explicit world-writable check found)
-  - `installer/core/install.sh:239` - `chown ransomeye:ransomeye "${INSTALL_ROOT}/bin/ransomeye-core"` (owned by ransomeye user, not world-writable)
-  - `installer/linux-agent/install.sh:156-158` - `chmod +x` and `chown ransomeye-agent:ransomeye-agent` (executable, owned by ransomeye-agent, not world-writable)
-  - ✅ **VERIFIED:** Executables are NOT writable by non-root (executables owned by runtime user, not world-writable)
-
-**Insecure tmp Usage:**
-- ✅ **VERIFIED:** No insecure tmp usage found:
-  - `installer/core/install.sh:82-102` - `create_directory_structure()` creates directories (no insecure tmp usage found)
-  - `installer/linux-agent/install.sh:108-128` - `create_directory_structure()` creates directories (no insecure tmp usage found)
-  - `installer/dpi-probe/install.sh:99-119` - `create_directory_structure()` creates directories (no insecure tmp usage found)
-  - ✅ **VERIFIED:** No insecure tmp usage (directories created in install root, not system tmp)
-
-### Verdict: **PARTIAL**
-
-**Justification:**
-- File ownership is correct (environment files, directories, binaries owned by runtime user)
-- Permission masks are correct (600 for environment files, 755 for directories, 644 for manifests, +x for executables)
-- No world-writable binaries or configs (environment files are 600, binaries are executable but not world-writable)
-- Executables are NOT writable by non-root (executables owned by runtime user, not world-writable)
-- No insecure tmp usage (directories created in install root, not system tmp)
-- **ISSUE:** Manifest file is world-readable (644 permissions, world-readable, but manifest may not contain secrets)
-
----
-
-## 7. UPGRADE & ROLLBACK SAFETY
-
-### Evidence
-
-**Upgrade Paths:**
-- ❌ **CRITICAL:** No upgrade paths found:
-  - `installer/core/install.sh` - No upgrade logic found
-  - `installer/linux-agent/install.sh` - No upgrade logic found
-  - `installer/dpi-probe/install.sh` - No upgrade logic found
-  - ❌ **CRITICAL:** No upgrade paths (no upgrade logic found)
-
-**Rollback Behavior:**
-- ❌ **CRITICAL:** No rollback mechanism found:
-  - `installer/core/install.sh:8` - `set -euo pipefail` (fail-fast, but no rollback mechanism found)
-  - `installer/core/install.sh:21-24` - `error_exit()` exits with code 1 (but no rollback mechanism found)
-  - `installer/linux-agent/install.sh:8` - `set -euo pipefail` (fail-fast, but no rollback mechanism found)
-  - `installer/linux-agent/install.sh:21-24` - `error_exit()` exits with code 1 (but no rollback mechanism found)
-  - `installer/dpi-probe/install.sh:8` - `set -euo pipefail` (fail-fast, but no rollback mechanism found)
-  - `installer/dpi-probe/install.sh:21-24` - `error_exit()` exits with code 1 (but no rollback mechanism found)
-  - ❌ **CRITICAL:** No rollback mechanism (fail-fast exists, but no rollback mechanism found)
-
-**State Consistency Guarantees:**
-- ⚠️ **ISSUE:** No state consistency guarantees found:
-  - `installer/core/install.sh:364-399` - `create_manifest()` creates manifest (but no state consistency check found)
-  - `installer/linux-agent/install.sh:279-315` - `create_manifest()` creates manifest (but no state consistency check found)
-  - `installer/dpi-probe/install.sh:327-365` - `create_manifest()` creates manifest (but no state consistency check found)
-  - ⚠️ **ISSUE:** No state consistency guarantees (manifest created, but no state consistency check found)
-
-**In-Place Destructive Upgrades:**
-- ⚠️ **ISSUE:** No upgrade logic exists (cannot determine if upgrades are destructive):
-  - `installer/core/install.sh` - No upgrade logic found
-  - `installer/linux-agent/install.sh` - No upgrade logic found
-  - `installer/dpi-probe/install.sh` - No upgrade logic found
-  - ⚠️ **ISSUE:** No upgrade logic exists (cannot determine if upgrades are destructive)
-
-**No Rollback Path:**
-- ❌ **CRITICAL:** No rollback path found:
-  - `installer/core/install.sh:8` - `set -euo pipefail` (fail-fast, but no rollback mechanism found)
-  - `installer/core/install.sh:21-24` - `error_exit()` exits with code 1 (but no rollback mechanism found)
-  - `installer/installer-failure-policy.md:107-180` - Rollback rules defined in contract (but no implementation found)
-  - ❌ **CRITICAL:** No rollback path (rollback rules defined in contract, but no implementation found)
-
-**Mixed-Version Runtime Allowed:**
-- ⚠️ **ISSUE:** No version check found (cannot determine if mixed-version runtime is allowed):
-  - `installer/core/install.sh:364-399` - `create_manifest()` creates manifest with version (but no version check found)
-  - `installer/linux-agent/install.sh:279-315` - `create_manifest()` creates manifest with version (but no version check found)
-  - `installer/dpi-probe/install.sh:327-365` - `create_manifest()` creates manifest with version (but no version check found)
-  - ⚠️ **ISSUE:** No version check found (cannot determine if mixed-version runtime is allowed)
+**Installer Fail-Closed Behavior:**
+- ✅ Installer terminates on errors: `installer/core/install.sh:8` - `set -euo pipefail` (fail-fast)
+- ✅ Installer terminates on SBOM failure: `installer/core/install.sh:166` - `error_exit` on SBOM verification failure
+- ❌ **CRITICAL:** Installer does NOT terminate on weak credentials:
+  - `installer/core/install.sh:424-425` - Weak password `"gagan"` accepted without validation
+  - `installer/core/install.sh:436` - Weak default signing key accepted without validation
+  - ❌ **CRITICAL:** Installer does NOT terminate on weak credentials (weak credentials accepted without validation)
 
 ### Verdict: **FAIL**
 
 **Justification:**
-- **CRITICAL:** No upgrade paths (no upgrade logic found)
-- **CRITICAL:** No rollback mechanism (fail-fast exists, but no rollback mechanism found)
-- **CRITICAL:** No rollback path (rollback rules defined in contract, but no implementation found)
-- **ISSUE:** No state consistency guarantees (manifest created, but no state consistency check found)
-- **ISSUE:** No upgrade logic exists (cannot determine if upgrades are destructive)
-- **ISSUE:** No version check found (cannot determine if mixed-version runtime is allowed)
+- Runtime validates credentials (terminates on missing/weak secrets, enforces password and signing key strength)
+- Installer terminates on errors (set -euo pipefail, terminates on SBOM failure)
+- **CRITICAL:** Installer does NOT validate credentials (weak credentials accepted without validation)
+- **CRITICAL:** Installer does NOT terminate on weak credentials (weak credentials accepted without validation)
+- **CRITICAL:** Installer bypasses runtime validation by hardcoding weak defaults
+
+---
+
+## 6. RE-RUNNABILITY & IDEMPOTENCE
+
+### Evidence
+
+**Idempotent Directory Creation:**
+- ✅ Directory creation checks: `installer/core/install.sh:95-101` - Checks if directory exists before creating
+- ✅ Directory creation skips if exists: `installer/core/install.sh:97` - `mkdir -p` (idempotent)
+
+**Idempotent User Creation:**
+- ✅ User creation checks: `installer/core/install.sh:109-114` - Checks if user exists before creating
+- ✅ User creation skips if exists: `installer/core/install.sh:111` - `id -u ransomeye` check (skips if exists)
+
+**Idempotent File Installation:**
+- ✅ File installation overwrites: `installer/core/install.sh:122-161` - `cp` commands overwrite existing files
+- ✅ File installation idempotent: `installer/core/install.sh:122-161` - Same files installed on re-run
+
+**Idempotent systemd Service Installation:**
+- ✅ systemd service overwrites: `installer/core/install.sh:481-504` - `cp` command overwrites existing service file
+- ✅ systemd daemon-reload: `installer/core/install.sh:500` - `systemctl daemon-reload` called after installation
+
+**Idempotent Manifest Generation:**
+- ✅ Manifest generation overwrites: `installer/core/install.sh:505-613` - Manifest file overwritten on re-run
+- ✅ Manifest validation: `installer/core/install.sh:617-661` - `validate_manifest()` validates generated manifest
+
+### Verdict: **PASS**
+
+**Justification:**
+- Idempotent directory creation (checks if exists, skips if exists)
+- Idempotent user creation (checks if exists, skips if exists)
+- Idempotent file installation (overwrites existing files, same files installed on re-run)
+- Idempotent systemd service installation (overwrites existing service file, daemon-reload called)
+- Idempotent manifest generation (manifest file overwritten on re-run, manifest validated)
+
+---
+
+## 7. MANIFEST VALIDATION
+
+### Evidence
+
+**Manifest Validation Function:**
+- ✅ Manifest validation function: `installer/core/install.sh:617-661` - `validate_manifest()` function
+- ✅ Manifest validation called: `installer/core/install.sh:821` - `validate_manifest()` called after manifest creation
+- ✅ Schema file check: `installer/core/install.sh:628-631` - Checks if schema file exists
+- ✅ Schema validation: `installer/core/install.sh:635-654` - Validates manifest against schema using `jsonschema`
+
+**Manifest Validation Skipped:**
+- ⚠️ **ISSUE:** Manifest validation can be skipped:
+  - `installer/core/install.sh:628-631` - Skips validation if schema file not found (warning only)
+  - `installer/core/install.sh:655-657` - Skips validation if `jsonschema` not available (warning only)
+  - `installer/core/install.sh:658-660` - Skips validation if Python3 not available (warning only)
+  - ⚠️ **ISSUE:** Manifest validation can be skipped (warnings instead of termination)
+
+**Manifest Validation Failure:**
+- ✅ Validation failure terminates: `installer/core/install.sh:653` - `error_exit` on validation failure
+- ✅ **VERIFIED:** Manifest validation failure terminates (no warnings, fail-closed)
+
+### Verdict: **PARTIAL**
+
+**Justification:**
+- Manifest validation function exists (validates manifest against schema using jsonschema)
+- Manifest validation called after manifest creation
+- Manifest validation failure terminates (no warnings, fail-closed)
+- **ISSUE:** Manifest validation can be skipped (warnings instead of termination if schema file, jsonschema, or Python3 not available)
 
 ---
 
@@ -479,38 +402,35 @@
 
 **System Starts Without Validated Manifest:**
 - ⚠️ **ISSUE:** System may start without validated manifest:
-  - `installer/core/install.sh:364-399` - `create_manifest()` creates manifest (but no validation found)
-  - `installer/core/install.sh:401-453` - `validate_installation()` starts Core (but no manifest validation found)
-  - `services/ingest/app/main.py:722-729` - Has `if __name__ == "__main__"` block for standalone execution (can start without installer)
-  - ⚠️ **ISSUE:** System may start without validated manifest (manifest created, but no validation found; services can start standalone)
+  - `installer/core/install.sh:628-631` - Manifest validation skipped if schema file not found (warning only)
+  - `installer/core/install.sh:655-657` - Manifest validation skipped if `jsonschema` not available (warning only)
+  - `installer/core/install.sh:658-660` - Manifest validation skipped if Python3 not available (warning only)
+  - ⚠️ **ISSUE:** System may start without validated manifest (manifest validation can be skipped)
 
 **System Starts with Default Credentials:**
 - ❌ **CRITICAL:** System starts with default credentials:
-  - `installer/core/install.sh:289-290` - `RANSOMEYE_DB_USER="gagan"` and `RANSOMEYE_DB_PASSWORD="gagan"` (default weak credentials)
-  - `installer/core/install.sh:301` - `RANSOMEYE_COMMAND_SIGNING_KEY="test_signing_key_minimum_32_characters_long_for_validation_long_enough"` (default weak signing key)
-  - `installer/linux-agent/install.sh:228-229` - `RANSOMEYE_DB_USER="gagan"` and `RANSOMEYE_DB_PASSWORD="gagan"` (default weak credentials)
-  - `installer/dpi-probe/install.sh:276-277` - `RANSOMEYE_DB_USER="gagan"` and `RANSOMEYE_DB_PASSWORD="gagan"` (default weak credentials)
+  - `installer/core/install.sh:424-425` - `RANSOMEYE_DB_USER="gagan"` and `RANSOMEYE_DB_PASSWORD="gagan"` (default weak credentials)
+  - `installer/core/install.sh:436` - `RANSOMEYE_COMMAND_SIGNING_KEY="test_signing_key_minimum_32_characters_long_for_validation_long_enough"` (default weak signing key)
   - ❌ **CRITICAL:** System starts with default credentials (DB user/password "gagan", test signing key)
 
 **Partial Services Run Undetected:**
 - ⚠️ **ISSUE:** Partial services may run undetected:
-  - `installer/core/install.sh:401-453` - `validate_installation()` starts Core and performs health check (but no explicit partial service check found)
-  - `installer/core/install.sh:216-229` - `create_core_wrapper()` starts Ingest and UI Backend in background (but no explicit partial service check found)
-  - ⚠️ **ISSUE:** Partial services may run undetected (services started, but no explicit partial service check found)
+  - `installer/core/install.sh:823-853` - `validate_installation()` starts Core and performs health check (but no explicit partial service check found)
+  - ⚠️ **ISSUE:** Partial services may run undetected (validation exists, but no explicit partial service check found)
 
 **systemd Masks Fatal Failures:**
 - ⚠️ **ISSUE:** systemd may mask fatal failures:
   - `installer/core/ransomeye-core.service:20-21` - `Restart=on-failure`, `RestartSec=10` (but no restart limits found, may restart indefinitely)
-  - `installer/linux-agent/ransomeye-linux-agent.service:26-28` - `StartLimitIntervalSec=300`, `StartLimitBurst=5`, `StartLimitAction=none` (restart limits exist, but `StartLimitAction=none` may allow restart loops)
-  - `installer/dpi-probe/ransomeye-dpi.service:28-30` - `StartLimitIntervalSec=300`, `StartLimitBurst=5`, `StartLimitAction=none` (restart limits exist, but `StartLimitAction=none` may allow restart loops)
+  - `installer/linux-agent/ransomeye-linux-agent.service:26-30` - `StartLimitAction=none` (may allow restart loops)
+  - `installer/dpi-probe/ransomeye-dpi.service:28-30` - `StartLimitAction=none` (may allow restart loops)
   - ⚠️ **ISSUE:** systemd may mask fatal failures (Core has no restart limits, Linux agent and DPI probe have `StartLimitAction=none`)
 
 ### Verdict: **FAIL**
 
 **Justification:**
 - **CRITICAL:** System starts with default credentials (DB user/password "gagan", test signing key)
-- **ISSUE:** System may start without validated manifest (manifest created, but no validation found; services can start standalone)
-- **ISSUE:** Partial services may run undetected (services started, but no explicit partial service check found)
+- **ISSUE:** System may start without validated manifest (manifest validation can be skipped)
+- **ISSUE:** Partial services may run undetected (validation exists, but no explicit partial service check found)
 - **ISSUE:** systemd may mask fatal failures (Core has no restart limits, Linux agent and DPI probe have `StartLimitAction=none`)
 
 ---
@@ -519,105 +439,108 @@
 
 ### Section-by-Section Verdicts
 
-1. **Installer Identity & Authority:** PARTIAL
-   - Installer entry points are clearly identified (Core, Linux agent, DPI probe, Windows agent)
-   - Supported installation modes are clearly defined (Core, Linux agent, DPI probe, Windows agent)
-   - **ISSUE:** Services can start without installer (services have standalone entry points)
-   - **ISSUE:** Services can be started without installer guarantees (services have standalone entry points)
+1. **SBOM Enforcement at Install Time:** PARTIAL
+   - Core installer enforces SBOM verification before installation (manifest and signature required, verification script required, terminates on failure)
+   - SBOM verification terminates on failure (no warnings, fail-closed behavior)
+   - **CRITICAL:** SBOM verification not enforced for all installers (Linux agent, DPI probe, Windows agent installers do not verify SBOM)
 
-2. **Manifest-First Enforcement:** FAIL
-   - Install manifest schema exists (JSON Schema Draft 2020-12)
-   - Installers create manifests (Core, Linux agent, DPI probe installers create manifests)
-   - **CRITICAL:** No manifest validation (manifest created, but no validation against schema found)
-   - **CRITICAL:** No schema mismatch check (manifest created, but no schema validation found)
-   - **ISSUE:** No explicit missing component check (files copied, but no explicit missing component check found)
-
-3. **Env-Only Configuration & Credential Handling:** FAIL
+2. **Credential Handling:** FAIL
    - Environment file permissions are correct (600 = owner read/write only)
+   - Environment file ownership is correct (restricted ownership)
    - **CRITICAL:** Hardcoded weak credentials (DB user/password "gagan", test signing key)
    - **CRITICAL:** Default passwords and signing keys (DB user/password "gagan", test signing key)
-   - **CRITICAL:** Embedded credentials (DB user/password and signing key embedded in installer scripts)
-   - **CRITICAL:** Weak defaults (DB user/password "gagan", test signing key)
+   - **CRITICAL:** Installer does NOT validate credential strength (weak credentials accepted without validation)
    - **ISSUE:** Secrets are hardcoded, not from environment (DB user/password and signing key are hardcoded)
+   - **ISSUE:** Manifest file is world-readable (644 permissions, world-readable)
 
-4. **Systemd Unit Governance:** PARTIAL
-   - Centralized systemd units exist (Core, Linux agent, DPI probe have single systemd units)
-   - Correct dependency ordering exists (After=network.target, Wants=postgresql.service/network-online.target)
+3. **Privilege Model:** PASS
+   - Installer runs as root (root check enforced, root required for systemd and user creation)
+   - Runtime drops to service user (systemd unit specifies User=ransomeye, Group=ransomeye, service user created before files)
+   - No privilege escalation (NoNewPrivileges=true, no setuid/setgid bits)
+
+4. **systemd Unit Hardening:** PARTIAL
+   - Sandboxing exists (NoNewPrivileges=true, PrivateTmp=true, ProtectSystem=strict, ProtectHome=true, ReadWritePaths restricted)
+   - Resource limits exist (LimitNOFILE=65536, LimitNPROC=4096)
    - Restart policies exist (Restart=on-failure, RestartSec=10/60)
-   - **ISSUE:** Restart loops may hide failure (Core has no restart limits, Linux agent and DPI probe have `StartLimitAction=none`)
+   - Dependency ordering exists (After=network.target, Wants=postgresql.service/network-online.target)
+   - **ISSUE:** Core systemd unit has no capabilities (no capability restrictions)
+   - **ISSUE:** DPI probe capabilities not in systemd unit (capabilities set via setcap, not systemd)
+   - **ISSUE:** Core has no restart limits (may restart indefinitely)
+   - **ISSUE:** Restart limits use `StartLimitAction=none` (may allow restart loops)
    - **ISSUE:** Core has `Wants` instead of `Requires` (Wants = soft dependency, PostgreSQL may not be available)
 
-5. **Fail-Closed Bootstrap Behavior:** PARTIAL
-   - Fail-fast on errors exists (`set -euo pipefail` in all installers)
-   - DB connectivity check exists (tests PostgreSQL connection, terminates on failure)
-   - **CRITICAL:** No manifest validation (manifest created, but no validation found)
-   - **ISSUE:** No explicit env var validation (environment file generated, but no explicit env var validation found)
-   - **ISSUE:** DB connectivity check uses hardcoded credentials (uses hardcoded user/password "gagan")
-   - **ISSUE:** No signing key validation (signing key is hardcoded default, no validation)
+5. **Installer vs Runtime Parity:** FAIL
+   - Runtime validates credentials (terminates on missing/weak secrets, enforces password and signing key strength)
+   - Installer terminates on errors (set -euo pipefail, terminates on SBOM failure)
+   - **CRITICAL:** Installer does NOT validate credentials (weak credentials accepted without validation)
+   - **CRITICAL:** Installer does NOT terminate on weak credentials (weak credentials accepted without validation)
+   - **CRITICAL:** Installer bypasses runtime validation by hardcoding weak defaults
 
-6. **Permissions & Filesystem Safety:** PARTIAL
-   - File ownership is correct (environment files, directories, binaries owned by runtime user)
-   - Permission masks are correct (600 for environment files, 755 for directories, 644 for manifests, +x for executables)
-   - No world-writable binaries or configs (environment files are 600, binaries are executable but not world-writable)
-   - **ISSUE:** Manifest file is world-readable (644 permissions, world-readable, but manifest may not contain secrets)
+6. **Re-runnability & Idempotence:** PASS
+   - Idempotent directory creation (checks if exists, skips if exists)
+   - Idempotent user creation (checks if exists, skips if exists)
+   - Idempotent file installation (overwrites existing files, same files installed on re-run)
+   - Idempotent systemd service installation (overwrites existing service file, daemon-reload called)
+   - Idempotent manifest generation (manifest file overwritten on re-run, manifest validated)
 
-7. **Upgrade & Rollback Safety:** FAIL
-   - **CRITICAL:** No upgrade paths (no upgrade logic found)
-   - **CRITICAL:** No rollback mechanism (fail-fast exists, but no rollback mechanism found)
-   - **CRITICAL:** No rollback path (rollback rules defined in contract, but no implementation found)
-   - **ISSUE:** No state consistency guarantees (manifest created, but no state consistency check found)
+7. **Manifest Validation:** PARTIAL
+   - Manifest validation function exists (validates manifest against schema using jsonschema)
+   - Manifest validation called after manifest creation
+   - Manifest validation failure terminates (no warnings, fail-closed)
+   - **ISSUE:** Manifest validation can be skipped (warnings instead of termination if schema file, jsonschema, or Python3 not available)
 
 8. **Negative Validation:** FAIL
    - **CRITICAL:** System starts with default credentials (DB user/password "gagan", test signing key)
-   - **ISSUE:** System may start without validated manifest (manifest created, but no validation found; services can start standalone)
-   - **ISSUE:** Partial services may run undetected (services started, but no explicit partial service check found)
+   - **ISSUE:** System may start without validated manifest (manifest validation can be skipped)
+   - **ISSUE:** Partial services may run undetected (validation exists, but no explicit partial service check found)
    - **ISSUE:** systemd may mask fatal failures (Core has no restart limits, Linux agent and DPI probe have `StartLimitAction=none`)
 
 ### Overall Verdict: **FAIL**
 
 **Justification:**
-- **CRITICAL:** Hardcoded weak credentials (DB user/password "gagan", test signing key in Core installer)
+- **CRITICAL:** Hardcoded weak credentials (DB user/password "gagan", test signing key in all installer scripts)
 - **CRITICAL:** Default passwords and signing keys (DB user/password "gagan", test signing key)
-- **CRITICAL:** Embedded credentials (DB user/password and signing key embedded in installer scripts)
-- **CRITICAL:** Weak defaults (DB user/password "gagan", test signing key)
-- **CRITICAL:** No manifest validation (manifest created, but no validation against schema found)
-- **CRITICAL:** No schema mismatch check (manifest created, but no schema validation found)
-- **CRITICAL:** No upgrade paths (no upgrade logic found)
-- **CRITICAL:** No rollback mechanism (fail-fast exists, but no rollback mechanism found)
-- **CRITICAL:** No rollback path (rollback rules defined in contract, but no implementation found)
+- **CRITICAL:** Installer does NOT validate credential strength (weak credentials accepted without validation)
+- **CRITICAL:** Installer bypasses runtime validation by hardcoding weak defaults
 - **CRITICAL:** System starts with default credentials (DB user/password "gagan", test signing key)
-- **ISSUE:** Services can start without installer (services have standalone entry points)
+- **CRITICAL:** SBOM verification not enforced for all installers (Linux agent, DPI probe, Windows agent installers do not verify SBOM)
 - **ISSUE:** Secrets are hardcoded, not from environment (DB user/password and signing key are hardcoded)
-- **ISSUE:** No explicit missing component check (files copied, but no explicit missing component check found)
-- **ISSUE:** No version mismatch check (manifest created with version, but no version mismatch check found)
-- **ISSUE:** Installer may proceed with partial manifest (manifest created, but no validation found)
-- **ISSUE:** Restart loops may hide failure (Core has no restart limits, Linux agent and DPI probe have `StartLimitAction=none`)
+- **ISSUE:** Manifest file is world-readable (644 permissions, world-readable)
+- **ISSUE:** Manifest validation can be skipped (warnings instead of termination if schema file, jsonschema, or Python3 not available)
+- **ISSUE:** Core systemd unit has no capabilities (no capability restrictions)
+- **ISSUE:** Core has no restart limits (may restart indefinitely)
+- **ISSUE:** Restart limits use `StartLimitAction=none` (may allow restart loops)
 - **ISSUE:** Core has `Wants` instead of `Requires` (Wants = soft dependency, PostgreSQL may not be available)
-- **ISSUE:** No explicit env var validation (environment file generated, but no explicit env var validation found)
-- **ISSUE:** DB connectivity check uses hardcoded credentials (uses hardcoded user/password "gagan")
-- **ISSUE:** No signing key validation (signing key is hardcoded default, no validation)
-- **ISSUE:** Services may start partially (validation exists, but no explicit partial startup check found)
-- **ISSUE:** Warnings may be used instead of termination (warnings logged, but installation may continue)
-- **ISSUE:** Manifest file is world-readable (644 permissions, world-readable, but manifest may not contain secrets)
-- Install manifest schema exists (JSON Schema Draft 2020-12)
-- Installers create manifests (Core, Linux agent, DPI probe installers create manifests)
-- Fail-fast on errors exists (`set -euo pipefail` in all installers)
-- DB connectivity check exists (tests PostgreSQL connection, terminates on failure)
-- File ownership and permissions are correct (environment files 600, directories 755, manifests 644, executables +x)
-- Centralized systemd units exist (Core, Linux agent, DPI probe have single systemd units)
-- Correct dependency ordering exists (After=network.target, Wants=postgresql.service/network-online.target)
+- **ISSUE:** Partial services may run undetected (validation exists, but no explicit partial service check found)
+- **ISSUE:** systemd may mask fatal failures (Core has no restart limits, Linux agent and DPI probe have `StartLimitAction=none`)
+- Environment file permissions are correct (600 = owner read/write only)
+- Environment file ownership is correct (restricted ownership)
+- Installer runs as root (root check enforced, root required for systemd and user creation)
+- Runtime drops to service user (systemd unit specifies User=ransomeye, Group=ransomeye, service user created before files)
+- No privilege escalation (NoNewPrivileges=true, no setuid/setgid bits)
+- Sandboxing exists (NoNewPrivileges=true, PrivateTmp=true, ProtectSystem=strict, ProtectHome=true, ReadWritePaths restricted)
+- Resource limits exist (LimitNOFILE=65536, LimitNPROC=4096)
+- Restart policies exist (Restart=on-failure, RestartSec=10/60)
+- Dependency ordering exists (After=network.target, Wants=postgresql.service/network-online.target)
+- Idempotent directory creation (checks if exists, skips if exists)
+- Idempotent user creation (checks if exists, skips if exists)
+- Idempotent file installation (overwrites existing files, same files installed on re-run)
+- Idempotent systemd service installation (overwrites existing service file, daemon-reload called)
+- Idempotent manifest generation (manifest file overwritten on re-run, manifest validated)
+- Core installer enforces SBOM verification before installation (manifest and signature required, verification script required, terminates on failure)
+- SBOM verification terminates on failure (no warnings, fail-closed behavior)
+- Manifest validation function exists (validates manifest against schema using jsonschema)
+- Manifest validation called after manifest creation
+- Manifest validation failure terminates (no warnings, fail-closed)
 
 **Impact if Installer is Compromised:**
 - **CRITICAL:** If installer is compromised, weak default credentials can be installed (DB user/password "gagan", test signing key)
 - **CRITICAL:** If installer is compromised, system can start with default credentials (DB user/password "gagan", test signing key)
-- **CRITICAL:** If installer is compromised, invalid manifests can be installed (no manifest validation)
-- **CRITICAL:** If installer is compromised, partial installations can occur (no rollback mechanism)
-- **CRITICAL:** If installer is compromised, upgrades can be destructive (no upgrade logic)
-- **HIGH:** If installer is compromised, services can start without installer guarantees (services have standalone entry points)
+- **CRITICAL:** If installer is compromised, invalid manifests can be installed (manifest validation can be skipped)
+- **CRITICAL:** If installer is compromised, partial installations can occur (no explicit partial service check)
 - **HIGH:** If installer is compromised, systemd may mask fatal failures (Core has no restart limits, Linux agent and DPI probe have `StartLimitAction=none`)
 - **MEDIUM:** If installer is compromised, manifest file is world-readable (644 permissions, world-readable)
-- **MEDIUM:** If installer is compromised, DB connectivity check uses hardcoded credentials (uses hardcoded user/password "gagan")
-- **LOW:** If installer is compromised, file ownership and permissions remain correct (environment files 600, directories 755, manifests 644, executables +x)
+- **LOW:** If installer is compromised, file ownership and permissions remain correct (environment files 600, directories 755, executables +x)
 - **LOW:** If installer is compromised, centralized systemd units remain (Core, Linux agent, DPI probe have single systemd units)
 - **LOW:** If installer is compromised, correct dependency ordering remains (After=network.target, Wants=postgresql.service/network-online.target)
 
@@ -625,35 +548,45 @@
 - ❌ **FAIL:** Runtime guarantees do NOT remain trustworthy if installer is compromised:
   - Hardcoded weak credentials (DB user/password "gagan", test signing key)
   - Default passwords and signing keys (DB user/password "gagan", test signing key)
-  - Embedded credentials (DB user/password and signing key embedded in installer scripts)
-  - No manifest validation (manifest created, but no validation against schema found)
-  - No rollback mechanism (fail-fast exists, but no rollback mechanism found)
-  - Services can start without installer guarantees (services have standalone entry points)
+  - Installer bypasses runtime validation by hardcoding weak defaults
+  - System starts with default credentials (DB user/password "gagan", test signing key)
   - ❌ **FAIL:** Runtime guarantees do NOT remain trustworthy if installer is compromised (critical installer security issues)
 
-**Recommendations:**
-1. **CRITICAL:** Remove hardcoded weak credentials (require DB user/password and signing key from environment variables)
-2. **CRITICAL:** Remove default passwords and signing keys (require all secrets from environment variables)
-3. **CRITICAL:** Remove embedded credentials (require all secrets from environment variables, not hardcoded)
-4. **CRITICAL:** Implement manifest validation (validate generated manifest against `install.manifest.schema.json` before proceeding)
-5. **CRITICAL:** Implement schema mismatch check (validate manifest schema before proceeding)
-6. **CRITICAL:** Implement rollback mechanism (rollback all changes on installation failure)
-7. **CRITICAL:** Implement rollback path (implement rollback rules from `installer-failure-policy.json`)
-8. **CRITICAL:** Implement upgrade paths (support upgrading existing installations)
-9. **HIGH:** Prevent services from starting without installer (remove standalone entry points or enforce installer guarantees)
-10. **HIGH:** Implement explicit missing component check (check for missing components before proceeding)
-11. **HIGH:** Implement version mismatch check (check for version mismatches before proceeding)
-12. **HIGH:** Implement restart limits for Core (add `StartLimitIntervalSec` and `StartLimitBurst` to Core systemd unit)
-13. **HIGH:** Change Core systemd dependency from `Wants` to `Requires` (hard dependency on PostgreSQL)
-14. **HIGH:** Change `StartLimitAction=none` to `StartLimitAction=reboot` or `StartLimitAction=poweroff` (prevent restart loops)
-15. **MEDIUM:** Implement explicit env var validation (validate environment variables before generating environment file)
-16. **MEDIUM:** Implement signing key validation (validate signing key strength before proceeding)
-17. **MEDIUM:** Implement explicit partial service check (check for partial service startup)
-18. **MEDIUM:** Change manifest file permissions from 644 to 600 (prevent world-readable manifest)
-19. **MEDIUM:** Remove password from environment export (use PostgreSQL .pgpass file instead of `export PGPASSWORD`)
+---
+
+## UPSTREAM IMPACT STATEMENT
+
+**Binding Results from Validation Files 01-11:**
+- Validation Step 1 (`validation/01-governance-repo-level.md`): Credential governance requirements (binding)
+- Validation Step 2 (`validation/02-core-kernel-trust-root.md`): Trust root validation (binding)
+- Validation Step 3 (`validation/03-secure-bus-interservice-trust.md`): Inter-service trust (binding)
+
+**Upstream Dependencies:**
+- Installer requires SBOM manifest and signature from release bundle (upstream dependency)
+- Installer requires runtime credential validation utilities (`common/security/secrets.py`) (upstream dependency)
+- Installer requires systemd service files (upstream dependency)
+
+**Upstream Failures Impact Installer:**
+- If SBOM manifest is invalid, installer terminates (fail-closed)
+- If runtime credential validation is missing, installer bypasses validation (security gap)
+- If systemd service files are missing, installer terminates (fail-closed)
+
+---
+
+## DOWNSTREAM IMPACT STATEMENT
+
+**Downstream Dependencies:**
+- Runtime services depend on installer-generated environment file (downstream dependency)
+- Runtime services depend on installer-created system user (downstream dependency)
+- Runtime services depend on installer-installed systemd service (downstream dependency)
+
+**Installer Failures Impact Runtime:**
+- If installer generates weak credentials, runtime accepts them (security gap)
+- If installer does not create system user, runtime fails to start (fail-closed)
+- If installer does not install systemd service, runtime cannot start via systemd (fail-closed)
 
 ---
 
 **Validation Date:** 2025-01-13
 **Validator:** Lead Validator & Compliance Auditor
-**Next Step:** Validation complete (all 13 steps completed)
+**GA Verdict:** **FAIL**
