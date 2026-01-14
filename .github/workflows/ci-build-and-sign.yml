@@ -27,8 +27,7 @@ jobs:
   # PHASE 6: CI Validation (Reusable Workflow)
   ci-validation:
     name: CI Validation - PHASE 6
-    if: ${{ true }}
-    uses: ./.github/workflows/ci-validation.yml
+    uses: ./.github/workflows/ci-validation-reusable.yml
     # PHASE 6: Fail-closed - validation must pass before build and sign
 
   # PHASE 6: Build and Sign Artifacts
