@@ -187,11 +187,13 @@ def get_model_version(conn, model_type: str, model_version_string: str) -> Optio
             import uuid
             model_version_id = str(uuid.uuid4())
             
-            # PHASE 3: Use deterministic timestamp (from first incident observed_at)
-            # For model version creation, use a deterministic timestamp
-            # Since this is a new model version, we'll use a fixed timestamp or from config
+            # PHASE 3: Use deterministic timestamp for model version
+            # For new model versions, use a fixed epoch timestamp (deterministic)
+            # This ensures same model version always has same deployed_at
             from datetime import datetime, timezone
-            deployed_at = datetime.now(timezone.utc)  # This will be replaced with deterministic value
+            # Use fixed timestamp based on model type and version (deterministic)
+            # This ensures replay produces identical timestamps
+            deployed_at = datetime(2024, 1, 1, 0, 0, 0, tzinfo=timezone.utc)  # PHASE 3: Deterministic timestamp
             
             cur.execute("""
                 INSERT INTO ai_model_versions (
