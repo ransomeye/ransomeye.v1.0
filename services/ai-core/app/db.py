@@ -271,7 +271,8 @@ def store_feature_vector(conn, incident_id: str, model_version_id: str,
 
 
 def store_cluster(conn, cluster_id: str, model_version_id: str, cluster_label: str,
-                 cluster_size: int, cluster_created_at: datetime, cluster_updated_at: datetime):
+                 cluster_size: int, cluster_created_at: datetime, cluster_updated_at: datetime,
+                 training_data_hash: Optional[str] = None, model_hash: Optional[str] = None):
     """
     Store cluster metadata.
     Transaction discipline: Explicit begin, commit on success, rollback on failure.
