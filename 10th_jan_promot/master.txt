@@ -13804,4 +13804,175 @@ PROMPT END
 
 
 
+PROMPT 3 — OPERATIONAL TELEMETRY (“GLASS COCKPIT”)
+
+PROMPT START
+
+You are working on RansomEye v1.0 GA – Audit Remediation Phase.
+This is Phase D: Observability Without Compromise.
+
+🔒 GLOBAL CONSTRAINTS (MANDATORY)
+
+v1.0 GA hardening only
+
+Internal-only visibility (SRE / Admin use)
+
+NO PII
+
+NO payload data
+
+NO incident or threat details
+
+Lightweight metrics only (must not slow ingest)
+
+Fail-safe behavior required
+
+TASK 3 — IMPLEMENT /health/metrics ENDPOINT (MANDATORY GA GATE)
+Objective
+
+Provide clear operational visibility into RansomEye’s own health so operators can detect failure before security guarantees are compromised.
+
+This endpoint monitors the system, not threats.
+
+Current Gap
+
+RansomEye processes telemetry but exposes no self-health indicators:
+
+Ingest backpressure is invisible
+
+DB latency is unknown
+
+Agent connectivity loss is silent
+
+This violates enterprise SRE expectations.
+
+REQUIRED IMPLEMENTATION
+1. Endpoint
+
+Method: GET
+
+Path: /health/metrics
+
+Format: JSON
+
+Non-blocking (must never hang)
+
+2. Location
+
+Create or extend a diagnostics router, e.g.:
+
+services/ingest/app/routes/diagnostics.py
+
+
+and register it in the Ingest FastAPI app.
+
+METRICS TO EXPOSE (STRICT — NO ADDITIONS)
+{
+  "system_status": "HEALTHY | DEGRADED | CRITICAL",
+  "ingest_rate_eps": <float>,
+  "db_write_latency_ms": <float>,
+  "queue_depth": <int>,
+  "agent_heartbeat_lag_sec": <float>
+}
+
+Metric Definitions
+
+system_status
+
+HEALTHY: all metrics within expected bounds
+
+DEGRADED: elevated latency / backlog
+
+CRITICAL: DB unreachable or ingest stalled
+
+ingest_rate_eps
+
+1-minute moving average
+
+Must be computed efficiently (counter + time window)
+
+db_write_latency_ms
+
+Average of last ~100 DB writes
+
+No per-query instrumentation overhead
+
+queue_depth
+
+Current size of ingest / processing buffer
+
+agent_heartbeat_lag_sec
+
+Max time since last valid agent heartbeat
+
+Do not expose agent identity
+
+HARD SECURITY & PRIVACY RULES
+
+❌ No hostnames
+
+❌ No IP addresses
+
+❌ No tenant identifiers
+
+❌ No incident metadata
+
+❌ No file paths
+
+❌ No payload samples
+
+This endpoint is operational telemetry only.
+
+FAILURE BEHAVIOR (MANDATORY)
+
+If DB is unreachable:
+
+Return HTTP 200
+
+system_status = "CRITICAL"
+
+Do not throw exceptions
+
+Do not hang
+
+Do not retry indefinitely
+
+DELIVERABLES
+
+Metrics collection approach (lightweight, in-memory)
+
+File paths modified/added
+
+Key code excerpts
+
+Example JSON output
+
+Explicit confirmation that no PII is exposed
+
+ACCEPTANCE CRITERIA (GA BLOCKING)
+
+Endpoint returns 200 OK
+
+JSON schema matches exactly
+
+Metrics update in real time
+
+No ingest slowdown
+
+No privacy leakage
+
+Respond only with:
+
+Implementation approach
+
+File paths
+
+Key code excerpts
+
+Confirmation of privacy & security compliance
+
+PROMPT END
+
+
+
 
