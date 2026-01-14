@@ -14790,3 +14790,125 @@ If ANY hardcoded secret remains → your response is INVALID.
 Do NOT proceed beyond Phase 0.
 
 Prompt Ends
+
+
+
+Prompt Start
+
+You are fixing PHASE 1 — TRUST FOUNDATION (ZERO TRUST) for RansomEye.
+
+This phase is BLOCKING.
+Nothing else may proceed until this phase is fully PASS.
+
+OBJECTIVE
+
+Eliminate implicit trust and establish cryptographically enforced trust boundaries.
+
+After this phase:
+
+No service may talk to another without authentication
+
+Ingest must reject unauthenticated telemetry
+
+Database access must be least-privilege and scoped per service
+
+MANDATORY FIXES (ALL REQUIRED)
+1. Service-to-Service Authentication
+
+Implement authenticated service identity for all internal service calls
+
+No anonymous HTTP
+
+No trust based on network location
+
+Identity must be cryptographically verifiable
+
+You must choose one:
+
+mTLS
+
+Signed service JWTs
+
+Justify the choice.
+
+2. Ingest Telemetry Authentication (CRITICAL)
+
+Ingest MUST verify:
+
+Telemetry signature
+
+Component identity binding
+
+Unsigned or spoofed telemetry MUST be rejected
+
+Component field must NOT be trusted unless cryptographically bound
+
+3. Per-Service Database Credentials
+
+Enable schemas/08_db_users_roles.sql
+
+Create separate DB users per service
+
+Enforce least-privilege access
+
+Remove any shared DB credentials
+
+4. Credential Chain Integrity
+
+Ensure:
+
+Services cannot impersonate each other
+
+Revocation is possible (key rotation support)
+
+No credential reuse across trust domains
+
+FILES YOU MUST INSPECT & MODIFY
+
+(quote exact paths and lines)
+
+services/ingest/app/main.py
+
+services/*/app/main.py
+
+schemas/08_db_users_roles.sql
+
+DB connection config for each service
+
+Any shared auth / crypto utilities
+
+FORBIDDEN
+
+No feature additions
+
+No heuristics
+
+No “temporary bypass”
+
+No silent fallback
+
+No TODOs
+
+EVIDENCE REQUIRED IN YOUR RESPONSE
+
+You MUST provide:
+
+Exact code diffs
+
+Authentication flow diagram (textual)
+
+Before vs after trust model
+
+Rejection paths (what fails, how, and why)
+
+Explicit mapping to:
+
+Validation File 03
+
+Validation File 05
+
+Validation File 17
+
+If any service can still communicate unauthenticated → FAIL.
+
+Prompt Ends
