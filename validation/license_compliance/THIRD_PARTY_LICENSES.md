@@ -199,7 +199,7 @@ The following licenses are explicitly forbidden and must not be used in RansomEy
 - **ui-frontend:** react (MIT), react-dom (MIT), vitejs-plugin-react (MIT), vite (MIT)
 
 #### Python Dependencies (ML Training - mishka)
-- **mishka:** torch (BSD-3-Clause), transformers (Apache-2.0), peft (Apache-2.0), accelerate (Apache-2.0), bitsandbytes (MIT), datasets (Apache-2.0), pandas (BSD-3-Clause), numpy (BSD-3-Clause), jsonlines (MIT), scikit-learn (BSD-3-Clause), rouge-score (Apache-2.0), tqdm (MPL-2.0), pyyaml (MIT), python-dotenv (BSD-3-Clause), llama-cpp-python (MIT), requests (Apache-2.0), beautifulsoup4 (MIT)
+- **mishka:** torch (BSD-3-Clause primary, includes Apache-2.0 components), transformers (Apache-2.0, has transitive dependencies - all permissive), peft (Apache-2.0), accelerate (Apache-2.0), bitsandbytes (MIT, medium risk due to CUDA binary redistribution requirements), datasets (Apache-2.0), pandas (BSD-3-Clause), numpy (BSD-3-Clause), jsonlines (MIT), scikit-learn (BSD-3-Clause), rouge-score (Apache-2.0), tqdm (MPL-2.0), pyyaml (MIT), python-dotenv (BSD-3-Clause), llama-cpp-python (MIT), requests (Apache-2.0), beautifulsoup4 (MIT)
 
 ---
 
