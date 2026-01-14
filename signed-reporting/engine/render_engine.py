@@ -126,40 +126,80 @@ class RenderEngine:
         else:
             raise RenderError(f"Unsupported format: {format_type}")
     
-    def _render_pdf(self, incident_id: str, view_type: str, content_blocks: List[Dict[str, Any]]) -> bytes:
+    def _render_pdf(self, incident_id: str, view_type: str, content_blocks: List[Dict[str, Any]], 
+                   incident_snapshot_time: Optional[str] = None) -> bytes:
         """
-        Render PDF report (deterministic, no rewriting).
+        Render PDF report with branding (full report for display).
         
-        Branding is added in header/footer layer only, outside signed content hash boundary.
+        GA-BLOCKING: Branding is added in header/footer, but this method returns full report.
+        Use render_evidence_content() to get hashable content only.
         
         Args:
             incident_id: Incident identifier
             view_type: View type
             content_blocks: Sorted content blocks
+            incident_snapshot_time: RFC3339 UTC timestamp of incident snapshot (for display only)
         
         Returns:
-            PDF report as bytes
+            Full PDF report as bytes (includes branding)
         """
-        # For Phase M7, generate a structured text representation
-        # In production, this would use a PDF library (e.g., reportlab)
-        # For now, generate deterministic text that can be converted to PDF
+        # Get evidence content
+        evidence_content = self._render_pdf_evidence_only(incident_id, view_type, content_blocks, incident_snapshot_time)
         
+        # Add branding header/footer (presentation layer, outside hash domain)
         lines = []
-        
-        # Header (branding layer - outside signed content)
         lines.append("=" * 80)
         lines.append(f"{Branding.get_product_name()} — Evidence Report")
         lines.append("=" * 80)
         lines.append("")
         
-        # Signed content (deterministic, hashable)
+        # Evidence content (deterministic, hashable)
+        lines.append(evidence_content.decode('utf-8'))
+        
+        # Footer (branding layer - outside signed content)
+        lines.append("")
+        lines.append("=" * 80)
+        lines.append(f"{Branding.get_evidence_notice()}")
+        lines.append("=" * 80)
+        
+        return '\n'.join(lines).encode('utf-8')
+    
+    def _render_pdf_evidence_only(self, incident_id: str, view_type: str, content_blocks: List[Dict[str, Any]],
+                                  incident_snapshot_time: Optional[str] = None) -> bytes:
+        """
+        GA-BLOCKING: Render evidence content only (no branding, hashable).
+        
+        This is the content that is hashed. Branding is excluded.
+        All timestamps use incident_snapshot_time (not system time).
+        
+        Args:
+            incident_id: Incident identifier
+            view_type: View type
+            content_blocks: Sorted content blocks
+            incident_snapshot_time: RFC3339 UTC timestamp of incident snapshot (deterministic)
+        
+        Returns:
+            Evidence content as bytes (no branding, deterministic)
+        """
+        lines = []
+        
+        # Evidence content (deterministic, hashable)
         lines.append(f"RANSOMEYE SIGNED REPORT")
         lines.append(f"Incident ID: {incident_id}")
         lines.append(f"View Type: {view_type}")
+        
+        # GA-BLOCKING: Use incident snapshot time (not system time)
+        if incident_snapshot_time:
+            lines.append(f"Incident Snapshot Time: {incident_snapshot_time}")
+        else:
+            # Fallback: Use empty string (deterministic)
+            lines.append(f"Incident Snapshot Time: N/A")
+        
         lines.append("")
         lines.append("CONTENT BLOCKS:")
         lines.append("")
         
+        # Stable field ordering (deterministic)
         for block in content_blocks:
             lines.append(f"Block ID: {block.get('block_id', '')}")
             lines.append(f"Source Type: {block.get('source_type', '')}")
@@ -169,16 +209,11 @@ class RenderEngine:
             lines.append(f"Display Order: {block.get('display_order', 0)}")
             lines.append("")
         
-        # Footer (branding layer - outside signed content)
-        lines.append("=" * 80)
-        lines.append(f"{Branding.get_evidence_notice()}")
-        lines.append("=" * 80)
-        
         # Convert to bytes (deterministic)
-        # Note: Header/footer branding does NOT affect content hash
         return '\n'.join(lines).encode('utf-8')
     
-    def _render_html(self, incident_id: str, view_type: str, content_blocks: List[Dict[str, Any]]) -> bytes:
+    def _render_html(self, incident_id: str, view_type: str, content_blocks: List[Dict[str, Any]],
+                    incident_snapshot_time: Optional[str] = None) -> bytes:
         """
         Render HTML report (deterministic, no rewriting).
         
