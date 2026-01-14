@@ -306,13 +306,42 @@ def verify_sbom_integrity(
     # Check 3: SBOM signature verifies
     if _release_available and sbom_signature_path.exists():
         try:
+            # Try to find public key for SBOM verification
+            sbom_public_key_path = None
+            sbom_key_dir = None
+            sbom_signing_key_id = None
+            
+            if public_key_path and public_key_path.exists():
+                sbom_public_key_path = public_key_path
+            elif key_dir:
+                sbom_key_dir = Path(key_dir)
+                sbom_signing_key_id = signing_key_id
+            else:
+                # Try to find public key in release root
+                pub_key_paths = [
+                    release_root / 'public_key.pem',
+                    release_root / 'keys' / f'{signing_key_id}.pub',
+                    release_root / 'keys' / 'public_key.pem'
+                ]
+                for pub_key_path in pub_key_paths:
+                    if pub_key_path.exists():
+                        sbom_public_key_path = pub_key_path
+                        break
+                
+                if not sbom_public_key_path:
+                    # Try key_dir in release root
+                    release_key_dir = release_root / 'keys'
+                    if release_key_dir.exists():
+                        sbom_key_dir = release_key_dir
+                        sbom_signing_key_id = signing_key_id
+            
             verify_sbom(
                 release_root=release_root,
                 manifest_path=sbom_manifest_path,
                 signature_path=sbom_signature_path,
-                key_dir=key_dir,
-                signing_key_id=signing_key_id,
-                public_key_path=public_key_path
+                key_dir=sbom_key_dir,
+                signing_key_id=sbom_signing_key_id,
+                public_key_path=sbom_public_key_path
             )
             results['sbom_status']['checks'].append({
                 'name': 'sbom_signature_verify',
@@ -344,6 +373,9 @@ def verify_sbom_integrity(
                 'message': '',
                 'error': 'SBOM verification module not available (release/verify_sbom.py)'
             })
+            all_passed = False
+        elif not sbom_signature_path.exists():
+            # Already reported in check 2
             all_passed = False
     
     # Check 4: SBOM references all artifacts exactly once
