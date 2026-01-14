@@ -357,13 +357,22 @@ class PhaseCExecutor:
         """
         Execute a validation track.
         
+        GA-BLOCKING: Validates track-OS compatibility before execution.
+        Blocks invalid track execution with fail-closed behavior.
+        
         Args:
             track_name: Track name (e.g., "TRACK_1_DETERMINISM")
             track_executor: Track executor function
             
         Returns:
             Track execution results
+            
+        Raises:
+            SystemExit: If track is incompatible with host OS (fail-closed)
         """
+        # GA-BLOCKING: Validate track-OS compatibility before execution
+        self._validate_track_os_compatibility(track_name)
+        
         print(f"\n{'='*80}")
         print(f"Executing {track_name}")
         print(f"{'='*80}")
