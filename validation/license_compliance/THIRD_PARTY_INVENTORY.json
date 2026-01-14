@@ -21,7 +21,7 @@
     "static_or_dynamic": "dynamic",
     "distribution_scope": "core",
     "risk_level": "low",
-    "notes": "Hugging Face Transformers library"
+    "notes": "Hugging Face Transformers library. Has transitive dependencies (filelock, huggingface-hub, numpy, packaging, pyyaml, regex, requests, tokenizers, safetensors, tqdm) - all permissively licensed (Apache-2.0, MIT, BSD-3-Clause, PSF). Transitive dependencies are not individually inventoried per policy."
   },
   {
     "name": "peft",
@@ -56,8 +56,8 @@
     "license_type": "permissive",
     "static_or_dynamic": "dynamic",
     "distribution_scope": "core",
-    "risk_level": "low",
-    "notes": "Quantization library for QLoRA"
+    "risk_level": "medium",
+    "notes": "Quantization library for QLoRA. MIT license allows redistribution, but includes CUDA binaries subject to NVIDIA CUDA Toolkit EULA. Binary redistribution requires compliance with NVIDIA EULA terms. Source code redistribution under MIT is unrestricted."
   },
   {
     "name": "datasets",
