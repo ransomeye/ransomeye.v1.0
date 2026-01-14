@@ -309,6 +309,31 @@ except ImportError:
 app = FastAPI(title="RansomEye Ingest Service", version="1.0.0")
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
+# PHASE 1: Service-to-service authentication middleware
+if _service_auth_available:
+    try:
+        key_dir = os.getenv('RANSOMEYE_SERVICE_KEY_DIR')
+        app.add_middleware(ServiceAuthMiddleware, service_name="ingest", key_dir=key_dir)
+        logger.startup("Service authentication middleware enabled")
+    except Exception as e:
+        logger.fatal(f"Failed to initialize service authentication: {e}")
+        exit_startup_error(f"Service authentication initialization failed: {e}")
+
+# PHASE 1: Telemetry signature verifier
+telemetry_verifier = None
+if _telemetry_verification_available:
+    try:
+        key_dir = os.getenv('RANSOMEYE_COMPONENT_KEY_DIR')
+        if key_dir:
+            from pathlib import Path
+            telemetry_verifier = TelemetryVerifier(public_key_dir=Path(key_dir))
+        else:
+            telemetry_verifier = TelemetryVerifier()
+        logger.startup("Telemetry signature verification enabled")
+    except Exception as e:
+        logger.fatal(f"Failed to initialize telemetry verifier: {e}")
+        exit_startup_error(f"Telemetry verification initialization failed: {e}")
+
 # GA-BLOCKING: Register diagnostics router for /health/metrics endpoint
 try:
     from services.ingest.app.routes.diagnostics import router as diagnostics_router
