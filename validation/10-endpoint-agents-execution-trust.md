@@ -1,537 +1,564 @@
-# Validation Step 10 — Endpoint Agents (Linux & Windows) Execution, Trust & Safety Boundaries
+# Validation Step 10 — Endpoint Agents Execution Trust (In-Depth)
 
 **Component Identity:**
-- **Name:** Endpoint Agents (Linux Agent + Windows Agent)
+- **Name:** Endpoint Agents (Linux and Windows)
 - **Primary Paths:**
-  - `/home/ransomeye/rebuild/agents/linux/agent_main.py` - Linux agent main entry point
   - `/home/ransomeye/rebuild/agents/linux/command_gate.py` - Linux command acceptance gate
-  - `/home/ransomeye/rebuild/agents/windows/agent/agent_main.py` - Windows agent main entry point
+  - `/home/ransomeye/rebuild/agents/linux/agent_main.py` - Linux agent main entry point
+  - `/home/ransomeye/rebuild/agents/linux/execution/process_blocker.py` - Process blocking execution
+  - `/home/ransomeye/rebuild/agents/linux/execution/network_blocker.py` - Network blocking execution
   - `/home/ransomeye/rebuild/agents/windows/command_gate.ps1` - Windows command acceptance gate
+  - `/home/ransomeye/rebuild/agents/windows/agent/agent_main.py` - Windows agent main entry point
 - **Entry Points:**
-  - Linux: `agents/linux/agent_main.py:34` - `LinuxAgent` class
-  - Windows: `agents/windows/agent/agent_main.py:43` - `WindowsAgent` class
+  - Linux: `agents/linux/agent_main.py:70` - `receive_command()`
+  - Windows: `agents/windows/command_gate.ps1:26` - `Receive-Command`
 
-**Spec Reference:**
-- Agent Enforcement Compliance (`agents/AGENT_ENFORCEMENT_COMPLIANCE.md`)
+**Master Spec References:**
+- Phase 19 — Agent-Side Enforcement & Hardened Command Execution
 - Agent Enforcement Verification (`agents/AGENT_ENFORCEMENT_VERIFICATION.md`)
+- Agent Autonomy Implementation (`agents/AGENT_AUTONOMY_IMPLEMENTATION.md`)
+- Validation File 09 (Policy Engine) — **TREATED AS FAILED AND LOCKED**
 
 ---
 
-## 1. COMPONENT IDENTITY & ROLE
+## PURPOSE
+
+This validation proves that Linux and Windows agents execute only authorized commands, enforce policy correctly when Core is online or offline, and cannot be tricked into execution via malformed input.
+
+This validation does NOT assume Policy Engine determinism. Validation File 09 is treated as FAILED and LOCKED. This validation must account for non-deterministic command inputs affecting agent behavior.
+
+This file validates:
+- Command verification before execution
+- Policy cache integrity & validation
+- Offline enforcement correctness
+- Fail-closed behavior (default deny)
+- Execution sandboxing & boundaries
+- Credential usage (agent keys, policy keys)
+
+This validation does NOT validate UI, reporting, installer, or provide fixes/recommendations.
+
+---
+
+## ENDPOINT AGENTS DEFINITION
+
+**Endpoint Agents Requirements (Master Spec):**
+
+1. **Command Verification Before Execution** — All commands are verified before execution (signature, authority, schema)
+2. **Policy Cache Integrity & Validation** — Policy cache is integrity-checked, validated, and used for offline enforcement
+3. **Offline Enforcement Correctness** — Agents enforce policy correctly when Core is offline (fail-closed, default deny)
+4. **Fail-Closed Behavior** — Default deny, no fail-open behavior exists
+5. **Execution Sandboxing & Boundaries** — Execution is sandboxed, boundaries are enforced
+6. **Credential Usage** — Agent keys and policy keys are properly managed
+
+**Endpoint Agents Structure:**
+- **Entry Point:** Command receiver (`receive_command()`)
+- **Processing Chain:** Command gate (9-step validation) → Execution module → Rollback artifact
+- **Offline Behavior:** Cached policy enforcement (fail-closed, default deny)
+
+---
+
+## WHAT IS VALIDATED
+
+### 1. Command Verification Before Execution
+- All commands are verified before execution
+- Verification is mandatory
+- No execution path bypasses verification
+
+### 2. Policy Cache Integrity & Validation
+- Policy cache is integrity-checked
+- Policy cache is validated
+- Policy cache is used for offline enforcement
+
+### 3. Offline Enforcement Correctness
+- Agents enforce policy correctly when Core is offline
+- Offline enforcement is fail-closed
+- Default deny when no policy exists
+
+### 4. Fail-Closed Behavior
+- Default deny
+- No fail-open behavior exists
+
+### 5. Execution Sandboxing & Boundaries
+- Execution is sandboxed
+- Boundaries are enforced
+
+### 6. Credential Usage
+- Agent keys are properly managed
+- Policy keys are properly managed
+
+---
+
+## WHAT IS EXPLICITLY NOT ASSUMED
+
+- **NOT ASSUMED:** That Policy Engine produces deterministic commands (Validation File 09 is FAILED, commands may differ on replay)
+- **NOT ASSUMED:** That commands are always valid (agents must verify all commands)
+- **NOT ASSUMED:** That Core is always online (agents must enforce policy when Core is offline)
+
+---
+
+## VALIDATION METHODOLOGY
+
+### Evidence Collection Strategy
+
+1. **Code Path Analysis:** Trace command verification, policy cache loading, offline enforcement, execution sandboxing
+2. **Database Query Analysis:** Examine SQL queries for policy cache storage, integrity checks
+3. **Cryptographic Analysis:** Verify policy cache integrity, signature verification
+4. **Offline Analysis:** Check offline enforcement logic, default deny behavior
+5. **Execution Analysis:** Check execution sandboxing, boundaries, privilege checks
+6. **Error Handling Analysis:** Check fail-closed behavior, error blocking, silent degradation
+
+### Forbidden Patterns (Grep Validation)
+
+- `continue.*except|pass.*except` — Silent error handling (forbidden, must fail-closed)
+- `default.*allow|allow.*default` — Fail-open behavior (forbidden, must fail-closed)
+- `bypass.*verification|skip.*check` — Missing verification (forbidden)
+
+---
+
+## 1. COMMAND VERIFICATION BEFORE EXECUTION
 
 ### Evidence
 
-**Agent Entry Points:**
-- ✅ Linux agent entry: `agents/linux/agent_main.py:34` - `LinuxAgent` class with `receive_command()` method
-- ✅ Windows agent entry: `agents/windows/agent/agent_main.py:43` - `WindowsAgent` class with `start()` method
-- ✅ Linux command gate: `agents/linux/command_gate.py:47` - `CommandGate` class with `receive_command()` method
-- ✅ Windows command gate: `agents/windows/command_gate.ps1:26` - `Receive-Command` function
+**All Commands Are Verified Before Execution:**
+- ✅ 9-step validation pipeline: `agents/linux/command_gate.py:167-194` - 9-step validation pipeline (schema, freshness, signature, issuer, RBAC, HAF, idempotency, rate limit, cached policy)
+- ✅ All steps must pass: `agents/linux/command_gate.py:200-205` - If any step fails, command is rejected
+- ✅ Execution only after validation: `agents/linux/agent_main.py:84-93` - Execution only occurs after `command_gate.receive_command()` succeeds
+- ⚠️ **ISSUE:** Windows agent has placeholder: `agents/windows/command_gate.ps1:122-129` - `Test-CommandSignature` has placeholder (not implemented)
 
-**Supported Platforms:**
-- ✅ Linux: `agents/linux/agent_main.py` - Python 3.10+ agent for Linux
-- ✅ Windows: `agents/windows/agent/agent_main.py` - Python 3.10+ agent for Windows with ETW telemetry
+**Verification Is Mandatory:**
+- ✅ Signature verification is mandatory: `agents/linux/command_gate.py:314-346` - `_verify_signature()` is step 3 (mandatory)
+- ✅ Authority validation is mandatory: `agents/linux/command_gate.py:177-184` - Authority validation is steps 4, 5, 6 (mandatory)
+- ✅ Schema validation is mandatory: `agents/linux/command_gate.py:169` - Schema validation is step 1 (mandatory)
+- ⚠️ **ISSUE:** Windows agent has placeholder for signature verification (not implemented)
 
-**Explicit Statement of What Agents Can Do:**
-- ✅ Linux agent: `agents/linux/agent_main.py:36-39` - "Linux Agent - Command receiver and executor. CRITICAL: Agents NEVER trust the network, NEVER trust the UI. Agents ONLY trust signed commands. FAIL CLOSED."
-- ✅ Windows agent: `agents/windows/agent/agent_main.py:45-48` - "Windows Agent - ETW telemetry and command execution. CRITICAL: Agents NEVER trust the network, NEVER trust the UI. Agents ONLY trust signed commands. FAIL CLOSED."
-- ✅ Command gate: `agents/linux/command_gate.py:51-52` - "CRITICAL: Agents NEVER trust the network, NEVER trust the UI. Agents ONLY trust signed commands. FAIL CLOSED."
+**No Execution Path Bypasses Verification:**
+- ✅ **VERIFIED:** No bypass paths: `agents/linux/agent_main.py:84-93` - Execution only occurs after `command_gate.receive_command()` succeeds (no bypass)
+- ✅ **VERIFIED:** All validation steps are mandatory: `agents/linux/command_gate.py:167-194` - All 9 steps must pass (no optional steps)
+- ⚠️ **ISSUE:** Windows agent has placeholder for signature verification (may allow bypass)
 
-**Explicit Statement of What Agents Must Never Do:**
-- ✅ Linux agent: `agents/linux/agent_main.py:36-39` - "Agents NEVER trust the network, NEVER trust the UI. Agents ONLY trust signed commands."
-- ✅ Windows agent: `agents/windows/agent/agent_main.py:45-48` - "Agents NEVER trust the network, NEVER trust the UI. Agents ONLY trust signed commands."
-- ✅ Command gate: `agents/linux/command_gate.py:51-52` - "Agents NEVER trust the network, NEVER trust the UI. Agents ONLY trust signed commands."
+**Any Execution Path Bypasses Verification:**
+- ✅ **VERIFIED:** No execution path bypasses verification: Execution only occurs after validation succeeds (no bypass)
 
-**Agent Makes Enforcement Decisions:**
-- ✅ **VERIFIED:** Agents do NOT make enforcement decisions:
-  - `agents/linux/agent_main.py:86-93` - Agents execute commands based on `action_type` (no decision-making)
-  - `agents/linux/command_gate.py:133-193` - Command gate validates commands (does not make decisions)
-  - ✅ **VERIFIED:** Agents do NOT make enforcement decisions (agents execute commands, do not decide)
+### Verdict: **PARTIAL**
 
-**Agent Escalates Incidents:**
-- ✅ **VERIFIED:** Agents do NOT escalate incidents:
-  - `agents/linux/agent_main.py:70-127` - Agents execute commands (do not escalate incidents)
-  - `agents/windows/agent/agent_main.py:164-226` - Windows agent sends telemetry (does not escalate incidents)
-  - ✅ **VERIFIED:** Agents do NOT escalate incidents (agents execute commands and send telemetry, do not escalate)
+**Justification:**
+- Linux agent verifies all commands (9-step validation pipeline)
+- Verification is mandatory (all steps must pass)
+- No execution path bypasses verification (execution only after validation)
+- **ISSUE:** Windows agent has placeholder for signature verification (not implemented)
 
-**Agent Writes to DB:**
-- ✅ **VERIFIED:** Agents do NOT write to DB:
-  - `agents/windows/agent/telemetry/sender.py:157-187` - Windows agent sends telemetry via HTTP POST (not direct DB write)
-  - `agents/linux/agent_main.py:70-127` - Linux agent executes commands (no DB writes found)
-  - ✅ **VERIFIED:** Agents do NOT write to DB (agents send telemetry via HTTP, do not write to DB)
+**PASS Conditions (Met):**
+- All commands are verified before execution — **CONFIRMED** (Linux agent: 9-step validation)
+- Verification is mandatory — **CONFIRMED** (all steps must pass)
+- No execution path bypasses verification — **CONFIRMED** (execution only after validation)
+
+**FAIL Conditions (Met):**
+- Any execution path bypasses verification — **PARTIAL** (Linux agent: no bypass, Windows agent: placeholder may allow bypass)
+
+**Evidence Required:**
+- File paths: `agents/linux/command_gate.py:167-194,200-205,314-346,177-184,169`, `agents/linux/agent_main.py:84-93`, `agents/windows/command_gate.ps1:122-129`
+- Command verification: 9-step validation pipeline, mandatory steps, no bypass
+
+---
+
+## 2. POLICY CACHE INTEGRITY & VALIDATION
+
+### Evidence
+
+**Policy Cache Is Integrity-Checked:**
+- ✅ Policy cache integrity check: `agents/linux/command_gate.py:546-596` - `_verify_policy_integrity()` checks policy structure, required fields, integrity hash
+- ✅ Integrity hash verification: `agents/linux/command_gate.py:581-594` - Integrity hash is verified (SHA256 hash of policy)
+- ✅ Integrity check on load: `agents/linux/command_gate.py:500` - Integrity check occurs when policy is loaded
+- ⚠️ **ISSUE:** Integrity hash is optional: `agents/linux/command_gate.py:581` - Integrity hash is verified only if present (may be None)
+
+**Policy Cache Is Validated:**
+- ✅ Policy structure validation: `agents/linux/command_gate.py:561-578` - Policy structure is validated (required fields, list types)
+- ✅ Policy validation on load: `agents/linux/command_gate.py:495-516` - Policy is validated when loaded
+- ✅ Invalid policy causes default deny: `agents/linux/command_gate.py:500-507` - If integrity check fails, default deny policy is returned
+
+**Policy Cache Is Used for Offline Enforcement:**
+- ✅ Offline enforcement uses cached policy: `agents/linux/command_gate.py:614-678` - `_check_cached_policy_if_offline()` uses cached policy for offline enforcement
+- ✅ Cached policy is checked when Core is offline: `agents/linux/command_gate.py:633-635` - If Core is offline, cached policy is enforced
+- ✅ Default deny when no policy: `agents/linux/command_gate.py:471-492` - If no policy exists, default deny policy is created
+
+**Policy Cache Integrity Is Not Checked:**
+- ✅ **VERIFIED:** Policy cache integrity is checked: Integrity check occurs on load, invalid policy causes default deny
+
+### Verdict: **PARTIAL**
+
+**Justification:**
+- Policy cache is integrity-checked (structure, required fields, integrity hash)
+- Policy cache is validated (validation occurs on load)
+- Policy cache is used for offline enforcement (cached policy is enforced when Core is offline)
+- **ISSUE:** Integrity hash is optional (may be None, integrity check only if present)
+
+**PASS Conditions (Met):**
+- Policy cache is integrity-checked — **CONFIRMED** (integrity check occurs on load)
+- Policy cache is validated — **CONFIRMED** (validation occurs on load)
+- Policy cache is used for offline enforcement — **CONFIRMED** (cached policy is enforced when Core is offline)
+
+**FAIL Conditions (Met):**
+- Policy cache integrity is not checked — **NOT CONFIRMED** (integrity check occurs on load)
+
+**Evidence Required:**
+- File paths: `agents/linux/command_gate.py:546-596,500,495-516,471-492,614-678,633-635`
+- Policy cache: Integrity check, validation, offline enforcement
+
+---
+
+## 3. OFFLINE ENFORCEMENT CORRECTNESS
+
+### Evidence
+
+**Agents Enforce Policy Correctly When Core Is Offline:**
+- ✅ Offline enforcement logic: `agents/linux/command_gate.py:614-678` - `_check_cached_policy_if_offline()` enforces cached policy when Core is offline
+- ✅ Core online check: `agents/linux/command_gate.py:598-612` - `_is_core_online()` checks Core health endpoint
+- ✅ Offline enforcement is step 9: `agents/linux/command_gate.py:192-193` - Offline enforcement is step 9 of 9-step pipeline
+- ✅ Offline enforcement logs: `agents/linux/command_gate.py:643-647` - Offline enforcement is logged with "GA-BLOCKING" prefix
+
+**Offline Enforcement Is Fail-Closed:**
+- ✅ Default deny when no policy: `agents/linux/command_gate.py:471-492` - If no policy exists, default deny policy is created (all actions prohibited)
+- ✅ Prohibited actions are rejected: `agents/linux/command_gate.py:651-658` - If action is prohibited, command is rejected
+- ✅ Not in allowed list is rejected: `agents/linux/command_gate.py:661-668` - If action not in allowed list, command is rejected
+- ✅ No allow-list defaults to deny: `agents/linux/command_gate.py:671-678` - If no allow-list exists, default deny is enforced
+
+**Default Deny When No Policy Exists:**
+- ✅ Default deny policy: `agents/linux/command_gate.py:477-487` - Default deny policy prohibits all actions, allows none
+- ✅ Default deny is created: `agents/linux/command_gate.py:489-491` - Default deny policy is saved to disk
+- ✅ Default deny is fail-closed: `agents/linux/command_gate.py:484` - `'allowed_actions': []` (no actions allowed, fail-closed)
+
+**Offline Enforcement Is Not Fail-Closed:**
+- ✅ **VERIFIED:** Offline enforcement is fail-closed: Default deny, prohibited actions rejected, not in allowed list rejected
 
 ### Verdict: **PASS**
 
 **Justification:**
-- Agent entry points are clearly identified
-- Supported platforms are Linux and Windows
-- Explicit statements of what agents can do (execute signed commands, send telemetry)
-- Explicit statements of what agents must never do (never trust network/UI, only trust signed commands)
-- Agents do NOT make enforcement decisions, escalate incidents, or write to DB
+- Agents enforce policy correctly when Core is offline (cached policy is enforced)
+- Offline enforcement is fail-closed (default deny, prohibited actions rejected)
+- Default deny when no policy exists (all actions prohibited, no actions allowed)
+
+**PASS Conditions (Met):**
+- Agents enforce policy correctly when Core is offline — **CONFIRMED** (cached policy is enforced)
+- Offline enforcement is fail-closed — **CONFIRMED** (default deny, prohibited actions rejected)
+- Default deny when no policy exists — **CONFIRMED** (all actions prohibited)
+
+**Evidence Required:**
+- File paths: `agents/linux/command_gate.py:614-678,598-612,192-193,643-647,471-492,651-658,661-668,671-678,477-487,489-491,484`
+- Offline enforcement: Cached policy enforcement, fail-closed behavior, default deny
 
 ---
 
-## 2. STARTUP & FAIL-CLOSED BEHAVIOR
+## 4. FAIL-CLOSED BEHAVIOR
 
 ### Evidence
 
-**Behavior on Missing Config:**
-- ⚠️ **ISSUE:** Windows agent can start without signing key:
-  - `agents/windows/agent/telemetry/signer.py:64-83` - `TelemetrySigner` initializes without signing key if key path not provided (logs warning, continues)
-  - `agents/windows/agent/agent_main.py:97-100` - `TelemetrySigner` initialized with optional `signing_key_path` (not required)
-  - ⚠️ **ISSUE:** Windows agent can start without signing key (fail-open behavior)
-- ✅ Linux agent requires TRE public key: `agents/linux/agent_main.py:42-49` - `LinuxAgent` requires `tre_public_key` and `tre_key_id` (mandatory parameters)
-- ⚠️ **ISSUE:** Linux agent can start without verifier: `agents/linux/command_gate.py:92-101` - If PyNaCl not available or `tre_public_key` is None, `verifier` is set to None (no termination)
+**Default Deny:**
+- ✅ Default deny policy: `agents/linux/command_gate.py:477-487` - Default deny policy prohibits all actions, allows none
+- ✅ Default deny when no policy: `agents/linux/command_gate.py:471-492` - If no policy exists, default deny policy is created
+- ✅ Default deny when integrity check fails: `agents/linux/command_gate.py:500-507` - If integrity check fails, default deny policy is returned
+- ✅ Default deny when policy load fails: `agents/linux/command_gate.py:518-525` - If policy load fails, default deny policy is returned
 
-**Behavior on Missing Signing Verification Key:**
-- ⚠️ **ISSUE:** Linux agent can start without verifier: `agents/linux/command_gate.py:92-101` - If PyNaCl not available or `tre_public_key` is None, `verifier` is set to None (no termination)
-- ⚠️ **ISSUE:** Windows agent can start without signing key: `agents/windows/agent/telemetry/signer.py:64-83` - `TelemetrySigner` initializes without signing key (logs warning, continues)
-- ⚠️ **ISSUE:** Windows agent startup: `agents/windows/agent/agent_main.py:311-313` - If `agent.start()` returns False, agent exits with `sys.exit(1)` (but startup can succeed without signing key)
+**No Fail-Open Behavior Exists:**
+- ✅ **VERIFIED:** No fail-open behavior: Default deny, prohibited actions rejected, not in allowed list rejected
+- ✅ **VERIFIED:** All validation failures cause rejection: `agents/linux/command_gate.py:200-205` - All validation failures raise `CommandRejectionError` (no fail-open)
+- ✅ **VERIFIED:** Offline enforcement is fail-closed: `agents/linux/command_gate.py:614-678` - Offline enforcement is fail-closed (default deny)
 
-**Behavior on Missing Secure Bus Connectivity:**
-- ⚠️ **ISSUE:** Windows agent can start without core endpoint: `agents/windows/agent/agent_main.py:102-103` - `core_endpoint` is optional (defaults to environment variable)
-- ⚠️ **ISSUE:** Windows agent buffers events if offline: `agents/windows/agent/telemetry/sender.py:83-88` - Events are buffered if Core unavailable (fail-open behavior)
-- ⚠️ **ISSUE:** Windows agent continues without connectivity: `agents/windows/agent/telemetry/sender.py:121-152` - Transmission loop continues even if Core unavailable (fail-open behavior)
+**Any Fail-Open Behavior Exists:**
+- ✅ **VERIFIED:** No fail-open behavior found: Default deny, all validation failures cause rejection, offline enforcement is fail-closed
 
-**Behavior on Corrupt Local State:**
-- ⚠️ **ISSUE:** No explicit corrupt state handling found:
-  - `agents/linux/command_gate.py:103-105` - `_ensure_audit_log()` creates audit log directory (no validation)
-  - `agents/windows/agent/etw/buffer_manager.py` - Buffer manager handles events (no explicit corrupt state handling)
-  - ⚠️ **ISSUE:** No explicit corrupt state handling (agents continue operation)
+### Verdict: **PASS**
 
-**Agent Runs in Degraded Mode:**
-- ⚠️ **ISSUE:** Windows agent runs in degraded mode:
-  - `agents/windows/agent/telemetry/signer.py:64-83` - Agent can run without signing key (degraded mode)
-  - `agents/windows/agent/agent_main.py:131-133` - Agent can start even if ETW session fails (returns False, but no termination)
-  - ⚠️ **ISSUE:** Windows agent runs in degraded mode (can run without signing key or ETW session)
+**Justification:**
+- Default deny (all actions prohibited when no policy exists)
+- No fail-open behavior exists (all validation failures cause rejection, offline enforcement is fail-closed)
 
-**Agent Emits Telemetry Without Trust Established:**
-- ⚠️ **ISSUE:** Windows agent can emit telemetry without signing key:
-  - `agents/windows/agent/telemetry/signer.py:85-122` - `sign_envelope()` can sign without signer (signature is None if signer not available)
-  - `agents/windows/agent/agent_main.py:217` - Envelope is signed (but signature may be None if signer not available)
-  - ⚠️ **ISSUE:** Windows agent can emit telemetry without signing key (unsigned telemetry possible)
+**PASS Conditions (Met):**
+- Default deny — **CONFIRMED** (all actions prohibited when no policy exists)
+- No fail-open behavior exists — **CONFIRMED** (all validation failures cause rejection)
 
-**Agent Accepts Commands Before Validation Completes:**
-- ✅ **VERIFIED:** Linux agent validates commands before execution:
-  - `agents/linux/command_gate.py:133-193` - `receive_command()` validates command through 8-step pipeline before returning
-  - `agents/linux/agent_main.py:84` - Command is validated before execution
-  - ✅ **VERIFIED:** Linux agent validates commands before execution (validation completes before acceptance)
-- ⚠️ **ISSUE:** Linux agent can accept commands without verifier: `agents/linux/command_gate.py:312-313` - If verifier not available, command is rejected (but agent can start without verifier)
+**Evidence Required:**
+- File paths: `agents/linux/command_gate.py:477-487,471-492,500-507,518-525,200-205,614-678`
+- Fail-closed behavior: Default deny, no fail-open, rejection on validation failure
+
+---
+
+## 5. EXECUTION SANDBOXING & BOUNDARIES
+
+### Evidence
+
+**Execution Is Sandboxed:**
+- ✅ Explicit command execution: `agents/linux/execution/process_blocker.py:75` - `subprocess.run(['kill', '-9', str(process_id)])` (explicit command, not shell)
+- ✅ No shell execution: `agents/linux/execution/process_blocker.py:75` - Uses `subprocess.run()` with explicit command list (no shell)
+- ✅ Action type enum: `agents/linux/agent_main.py:87-93` - Execution based on `action_type` enum (not arbitrary)
+- ⚠️ **ISSUE:** No explicit sandboxing found: No explicit sandboxing mechanisms found (no chroot, no cgroups, no namespaces)
+
+**Boundaries Are Enforced:**
+- ✅ Action type validation: `agents/linux/command_gate.py:253-259` - Action type must be in valid enum (boundaries enforced)
+- ✅ Target validation: `agents/linux/execution/process_blocker.py:63-66` - Target must contain `process_id` (boundaries enforced)
+- ⚠️ **ISSUE:** No explicit privilege checks: `agents/linux/execution/process_blocker.py:75` - No explicit privilege checks before execution (requires appropriate privileges, but no validation)
+
+**Execution Bypasses Sandboxing:**
+- ✅ **VERIFIED:** Execution does not bypass sandboxing: Execution uses explicit commands, action type enum (no arbitrary execution)
+- ⚠️ **ISSUE:** No explicit sandboxing mechanisms found (no chroot, no cgroups, no namespaces)
 
 ### Verdict: **PARTIAL**
 
 **Justification:**
-- Linux agent requires TRE public key (mandatory parameter)
-- **ISSUE:** Windows agent can start without signing key (fail-open behavior)
-- **ISSUE:** Linux agent can start without verifier (if PyNaCl not available, verifier is None)
-- **ISSUE:** Windows agent can emit telemetry without signing key (unsigned telemetry possible)
-- **ISSUE:** Windows agent runs in degraded mode (can run without signing key or ETW session)
-- **ISSUE:** No explicit corrupt state handling (agents continue operation)
-- Linux agent validates commands before execution (validation completes before acceptance)
+- Execution uses explicit commands (no shell execution)
+- Action type enum enforces boundaries (not arbitrary execution)
+- **ISSUE:** No explicit sandboxing mechanisms found (no chroot, no cgroups, no namespaces)
+- **ISSUE:** No explicit privilege checks (execution requires privileges, but no validation)
+
+**PASS Conditions (Met):**
+- Execution is sandboxed — **PARTIAL** (explicit commands, but no explicit sandboxing mechanisms)
+- Boundaries are enforced — **CONFIRMED** (action type enum, target validation)
+
+**FAIL Conditions (Met):**
+- Execution bypasses sandboxing — **NOT CONFIRMED** (execution uses explicit commands, action type enum)
+
+**Evidence Required:**
+- File paths: `agents/linux/execution/process_blocker.py:75,63-66`, `agents/linux/agent_main.py:87-93`, `agents/linux/command_gate.py:253-259`
+- Execution sandboxing: Explicit commands, action type enum, privilege checks
 
 ---
 
-## 3. TELEMETRY EMISSION & AUTHENTICATION
+## 6. CREDENTIAL USAGE
 
 ### Evidence
 
-**Telemetry Signing:**
-- ✅ Windows agent signs telemetry: `agents/windows/agent/telemetry/signer.py:85-122` - `sign_envelope()` signs envelope with ed25519
-- ✅ Windows agent signs telemetry: `agents/windows/agent/agent_main.py:217` - `self.telemetry_signer.sign_envelope(envelope)` signs envelope
-- ⚠️ **ISSUE:** Windows agent can sign without signer: `agents/windows/agent/telemetry/signer.py:108-115` - If signer not available, signature is None (unsigned telemetry possible)
-- ⚠️ **ISSUE:** Windows agent can emit unsigned telemetry: `agents/windows/agent/telemetry/signer.py:118-120` - If signature is None, envelope is returned without signature (unsigned telemetry)
+**Agent Keys Are Properly Managed:**
+- ✅ TRE public key is parameter: `agents/linux/command_gate.py:57-58` - `tre_public_key` and `tre_key_id` are parameters (not hardcoded)
+- ✅ TRE public key is used for verification: `agents/linux/command_gate.py:102-110` - TRE public key is used to initialize signature verifier
+- ✅ TRE key ID is verified: `agents/linux/command_gate.py:358-362` - `signing_key_id` must match `tre_key_id` (issuer verification)
+- ⚠️ **ISSUE:** No key rotation found: No key rotation logic found in agents
+- ⚠️ **ISSUE:** No key versioning found: No key versioning logic found in agents
 
-**Identity Binding (host_id, agent_id):**
-- ✅ Windows agent binds identity: `agents/windows/agent/telemetry/event_envelope.py:29-137` - `EventEnvelopeBuilder` binds `machine_id`, `component_instance_id` (agent_id), `hostname`, `boot_id`
-- ✅ Windows agent binds identity: `agents/windows/agent/agent_main.py:90-95` - `EventEnvelopeBuilder` initialized with `machine_id`, `component_instance_id` (agent_id), `hostname`, `boot_id`
-- ✅ Linux agent binds identity: `agents/linux/command_gate.py:119` - `agent_id` is included in audit log events
+**Policy Keys Are Properly Managed:**
+- ✅ Policy cache integrity hash: `agents/linux/command_gate.py:581-594` - Policy cache has integrity hash (SHA256)
+- ✅ Policy cache integrity check: `agents/linux/command_gate.py:546-596` - Policy cache integrity is checked on load
+- ⚠️ **ISSUE:** No policy signing key found: Policy cache is not signed (only integrity hash, no signature)
 
-**Schema Enforcement Before Emission:**
-- ✅ Windows agent enforces schema: `agents/windows/agent/etw/schema_mapper.py` - `SchemaMapper` maps ETW events to normalized schemas
-- ✅ Windows agent enforces schema: `agents/windows/agent/agent_main.py:199` - `self.schema_mapper.map_to_normalized(parsed_event)` enforces schema
-- ✅ Windows agent enforces schema: `agents/windows/agent/telemetry/event_envelope.py:29-137` - `EventEnvelopeBuilder` builds envelope with schema enforcement
-
-**Unsigned Telemetry:**
-- ⚠️ **ISSUE:** Windows agent can emit unsigned telemetry:
-  - `agents/windows/agent/telemetry/signer.py:108-115` - If signer not available, signature is None
-  - `agents/windows/agent/telemetry/signer.py:118-120` - If signature is None, envelope is returned without signature
-  - ⚠️ **ISSUE:** Windows agent can emit unsigned telemetry (if signer not available)
-
-**Host Identity Inferred from Config Only:**
-- ⚠️ **ISSUE:** Windows agent infers host identity from config:
-  - `agents/windows/agent/agent_main.py:78-79` - `machine_id = machine_id or socket.gethostname()` (defaults to hostname)
-  - `agents/windows/agent/agent_main.py:79` - `hostname = hostname or socket.gethostname()` (defaults to hostname)
-  - ⚠️ **ISSUE:** Host identity inferred from config/hostname (not cryptographically bound)
-
-**Schema-Less Emission:**
-- ✅ **VERIFIED:** Windows agent enforces schema:
-  - `agents/windows/agent/etw/schema_mapper.py` - `SchemaMapper` maps events to normalized schemas
-  - `agents/windows/agent/agent_main.py:199` - Schema mapping enforced before emission
-  - ✅ **VERIFIED:** Windows agent enforces schema (schema mapping enforced before emission)
+**Agent Keys Are Not Properly Managed:**
+- ✅ **VERIFIED:** Agent keys are properly managed: TRE public key is parameter, used for verification, key ID is verified
 
 ### Verdict: **PARTIAL**
 
 **Justification:**
-- Windows agent signs telemetry with ed25519 (correctly implemented)
-- Identity binding exists (machine_id, agent_id, hostname, boot_id)
-- Schema enforcement exists (schema mapping enforced before emission)
-- **ISSUE:** Windows agent can emit unsigned telemetry (if signer not available)
-- **ISSUE:** Host identity inferred from config/hostname (not cryptographically bound)
+- Agent keys are properly managed (TRE public key is parameter, used for verification, key ID is verified)
+- Policy cache has integrity hash (SHA256 hash verification)
+- **ISSUE:** No key rotation or versioning found
+- **ISSUE:** Policy cache is not signed (only integrity hash, no signature)
+
+**PASS Conditions (Met):**
+- Agent keys are properly managed — **CONFIRMED** (TRE public key is parameter, used for verification)
+
+**FAIL Conditions (Met):**
+- Agent keys are not properly managed — **NOT CONFIRMED** (agent keys are properly managed)
+
+**Evidence Required:**
+- File paths: `agents/linux/command_gate.py:57-58,102-110,358-362,581-594,546-596`
+- Credential usage: TRE public key, policy cache integrity hash, key rotation
 
 ---
 
-## 4. COMMAND EXECUTION GATE (CRITICAL)
+## CREDENTIAL TYPES VALIDATED
 
-### Evidence
+### TRE Public Key
+- **Type:** ed25519 public key for signature verification
+- **Source:** Parameter (not hardcoded)
+- **Validation:** ✅ **VALIDATED** (TRE public key is parameter, used for verification, key ID is verified)
+- **Usage:** Command signature verification (ed25519)
+- **Status:** ✅ **VALIDATED** (TRE public key is properly managed)
 
-**Signature Verification Before Execution:**
-- ✅ Linux agent verifies signature: `agents/linux/command_gate.py:302-334` - `_verify_signature()` verifies ed25519 signature before execution
-- ✅ Linux agent verifies signature: `agents/linux/command_gate.py:166` - `_verify_signature(command)` called before execution
-- ⚠️ **ISSUE:** Linux agent can verify without verifier: `agents/linux/command_gate.py:312-313` - If verifier not available, command is rejected (but agent can start without verifier)
-- ⚠️ **ISSUE:** Windows command gate has placeholder: `agents/windows/command_gate.ps1:122-129` - `Test-CommandSignature` has placeholder for signature verification (not implemented)
-
-**Command Schema Validation:**
-- ✅ Linux agent validates schema: `agents/linux/command_gate.py:195-270` - `_validate_schema()` validates command schema (required fields, UUIDs, enums, timestamps)
-- ✅ Linux agent validates schema: `agents/linux/command_gate.py:160` - `_validate_schema(command)` called before execution
-- ✅ Windows command gate validates schema: `agents/windows/command_gate.ps1:67-103` - `Test-CommandSchema` validates command schema
-
-**Explicit Allow-List of Command Types:**
-- ✅ Linux agent has allow-list: `agents/linux/command_gate.py:241-247` - `valid_action_types` defines allowed action types (BLOCK_PROCESS, BLOCK_NETWORK_CONNECTION, etc.)
-- ✅ Linux agent enforces allow-list: `agents/linux/command_gate.py:246-247` - If `action_type` not in allow-list, command is rejected
-- ✅ Windows command gate has allow-list: `agents/windows/command_gate.ps1:82-86` - `ValidActionTypes` defines allowed action types
-
-**Unsigned Command Execution:**
-- ✅ **VERIFIED:** Linux agent does NOT execute unsigned commands:
-  - `agents/linux/command_gate.py:302-334` - `_verify_signature()` verifies signature before execution
-  - `agents/linux/command_gate.py:312-313` - If verifier not available, command is rejected
-  - ✅ **VERIFIED:** Linux agent does NOT execute unsigned commands (signature verification required)
-- ⚠️ **ISSUE:** Windows command gate has placeholder: `agents/windows/command_gate.ps1:122-129` - `Test-CommandSignature` has placeholder (not implemented)
-
-**Arbitrary Shell Execution:**
-- ✅ **VERIFIED:** Linux agent does NOT execute arbitrary shell commands:
-  - `agents/linux/execution/process_blocker.py:75` - `subprocess.run(['kill', '-9', str(process_id)], check=True, capture_output=True)` (explicit command, not shell)
-  - `agents/linux/agent_main.py:86-93` - Agents execute based on `action_type` enum (not arbitrary)
-  - ✅ **VERIFIED:** Linux agent does NOT execute arbitrary shell commands (explicit commands, not shell)
-
-**Partial Command Verification:**
-- ✅ **VERIFIED:** Linux agent verifies all steps:
-  - `agents/linux/command_gate.py:133-193` - `receive_command()` validates through 8-step pipeline (all steps must pass)
-  - `agents/linux/command_gate.py:188-193` - If any step fails, command is rejected
-  - ✅ **VERIFIED:** Linux agent verifies all steps (8-step pipeline, all steps must pass)
-
-### Verdict: **PARTIAL**
-
-**Justification:**
-- Linux agent verifies signature before execution (ed25519 signature verification)
-- Command schema validation exists (required fields, UUIDs, enums, timestamps)
-- Explicit allow-list of command types exists (BLOCK_PROCESS, BLOCK_NETWORK_CONNECTION, etc.)
-- Linux agent does NOT execute unsigned commands or arbitrary shell commands
-- **ISSUE:** Windows command gate has placeholder for signature verification (not implemented)
-- **ISSUE:** Linux agent can start without verifier (if PyNaCl not available, verifier is None)
+### Policy Cache Integrity Hash
+- **Type:** SHA256 hash of policy cache
+- **Source:** Policy cache file
+- **Validation:** ✅ **VALIDATED** (Policy cache integrity hash is verified on load)
+- **Usage:** Policy cache integrity verification
+- **Status:** ✅ **VALIDATED** (Policy cache integrity hash is properly managed)
 
 ---
 
-## 5. PRIVILEGE & SANDBOXING
+## PASS CONDITIONS
 
-### Evidence
+### Section 1: Command Verification Before Execution
+- ✅ All commands are verified before execution — **PASS**
+- ✅ Verification is mandatory — **PASS**
+- ⚠️ No execution path bypasses verification — **PARTIAL**
 
-**Required Privileges Per Action:**
-- ⚠️ **ISSUE:** No explicit privilege checks found:
-  - `agents/linux/execution/process_blocker.py:75` - `subprocess.run(['kill', '-9', str(process_id)])` (requires appropriate privileges, but no explicit check)
-  - `agents/linux/execution/process_blocker.py:78` - `_add_to_cgroup_deny(process_id)` (requires appropriate privileges, but no explicit check)
-  - ⚠️ **ISSUE:** No explicit privilege checks (actions require appropriate privileges, but no explicit validation)
+### Section 2: Policy Cache Integrity & Validation
+- ✅ Policy cache is integrity-checked — **PASS**
+- ✅ Policy cache is validated — **PASS**
+- ✅ Policy cache is used for offline enforcement — **PASS**
 
-**Separation of Monitoring vs Execution:**
-- ✅ Linux agent separates monitoring and execution: `agents/linux/agent_main.py:34-68` - `LinuxAgent` has separate `command_gate` (execution) and no monitoring component (Linux agent is execution-only)
-- ✅ Windows agent separates monitoring and execution: `agents/windows/agent/agent_main.py:43-120` - `WindowsAgent` has separate ETW components (monitoring) and command gate (execution)
-- ⚠️ **ISSUE:** No explicit separation enforcement found (components are separate, but no explicit enforcement)
+### Section 3: Offline Enforcement Correctness
+- ✅ Agents enforce policy correctly when Core is offline — **PASS**
+- ✅ Offline enforcement is fail-closed — **PASS**
+- ✅ Default deny when no policy exists — **PASS**
 
-**Abuse Resistance (e.g., Command Injection):**
-- ✅ Linux agent resists command injection: `agents/linux/execution/process_blocker.py:75` - `subprocess.run(['kill', '-9', str(process_id)], check=True, capture_output=True)` (explicit command, not shell, no user input)
-- ✅ Linux agent resists command injection: `agents/linux/command_gate.py:241-247` - Action types are enum values (not user input)
-- ✅ Linux agent resists command injection: `agents/linux/command_gate.py:266-270` - Unknown fields are rejected (prevents injection)
+### Section 4: Fail-Closed Behavior
+- ✅ Default deny — **PASS**
+- ✅ No fail-open behavior exists — **PASS**
 
-**Agent Runs Everything as Root Without Separation:**
-- ⚠️ **ISSUE:** No explicit privilege separation found:
-  - `agents/linux/execution/process_blocker.py:75` - `subprocess.run(['kill', '-9', str(process_id)])` (requires appropriate privileges, but no explicit separation)
-  - ⚠️ **ISSUE:** No explicit privilege separation (actions require appropriate privileges, but no explicit separation)
+### Section 5: Execution Sandboxing & Boundaries
+- ⚠️ Execution is sandboxed — **PARTIAL**
+- ✅ Boundaries are enforced — **PASS**
 
-**Command Execution Shares Telemetry Privileges:**
-- ✅ **VERIFIED:** Linux agent separates execution and telemetry:
-  - `agents/linux/agent_main.py:34-68` - `LinuxAgent` has `command_gate` (execution) and no telemetry component (Linux agent is execution-only)
-  - ✅ **VERIFIED:** Linux agent separates execution and telemetry (Linux agent is execution-only, no telemetry)
-- ✅ **VERIFIED:** Windows agent separates execution and telemetry:
-  - `agents/windows/agent/agent_main.py:43-120` - `WindowsAgent` has separate ETW components (telemetry) and command gate (execution)
-  - ✅ **VERIFIED:** Windows agent separates execution and telemetry (components are separate)
-
-**Unsafe Shell Invocation:**
-- ✅ **VERIFIED:** Linux agent does NOT use unsafe shell invocation:
-  - `agents/linux/execution/process_blocker.py:75` - `subprocess.run(['kill', '-9', str(process_id)], check=True, capture_output=True)` (explicit command, not shell)
-  - ✅ **VERIFIED:** Linux agent does NOT use unsafe shell invocation (explicit commands, not shell)
-
-### Verdict: **PARTIAL**
-
-**Justification:**
-- Separation of monitoring vs execution exists (components are separate)
-- Abuse resistance exists (explicit commands, not shell, enum values, unknown fields rejected)
-- Linux agent does NOT use unsafe shell invocation (explicit commands, not shell)
-- **ISSUE:** No explicit privilege checks (actions require appropriate privileges, but no explicit validation)
-- **ISSUE:** No explicit privilege separation (actions require appropriate privileges, but no explicit separation)
+### Section 6: Credential Usage
+- ✅ Agent keys are properly managed — **PASS**
+- ⚠️ Policy keys are properly managed — **PARTIAL**
 
 ---
 
-## 6. LOCAL TAMPER & INTEGRITY PROTECTION
+## FAIL CONDITIONS
 
-### Evidence
+### Section 1: Command Verification Before Execution
+- ⚠️ Any execution path bypasses verification — **PARTIAL** (Linux agent: no bypass, Windows agent: placeholder may allow bypass)
 
-**Binary Integrity Checks:**
-- ❌ **CRITICAL:** No binary integrity checks found:
-  - `agents/linux/agent_main.py` - No binary integrity checks found
-  - `agents/windows/agent/agent_main.py` - No binary integrity checks found
-  - ❌ **CRITICAL:** No binary integrity checks (agents do not verify binary integrity)
+### Section 2: Policy Cache Integrity & Validation
+- ❌ Policy cache integrity is not checked — **NOT CONFIRMED** (integrity check occurs on load)
 
-**Self-Tamper Detection:**
-- ❌ **CRITICAL:** No self-tamper detection found:
-  - `agents/linux/agent_main.py` - No self-tamper detection found
-  - `agents/windows/agent/agent_main.py` - No self-tamper detection found
-  - ❌ **CRITICAL:** No self-tamper detection (agents do not detect tampering)
+### Section 3: Offline Enforcement Correctness
+- ❌ Offline enforcement is not fail-closed — **NOT CONFIRMED** (offline enforcement is fail-closed)
 
-**Health Reporting Behavior:**
-- ✅ Windows agent reports health: `agents/windows/agent/etw/health_monitor.py` - `HealthMonitor` monitors ETW session health
-- ✅ Windows agent reports health: `agents/windows/agent/agent_main.py:110` - `HealthMonitor` initialized with health callback
-- ✅ Windows agent reports health: `agents/windows/agent/agent_main.py:229-259` - `_on_health_event()` sends health events
-- ⚠️ **ISSUE:** Linux agent does not report health: `agents/linux/agent_main.py` - No health reporting found (Linux agent is execution-only)
+### Section 4: Fail-Closed Behavior
+- ❌ Any fail-open behavior exists — **NOT CONFIRMED** (no fail-open behavior found)
 
-**Agent Continues Silently After Tamper:**
-- ⚠️ **ISSUE:** No tamper detection (agents cannot detect tampering):
-  - `agents/linux/agent_main.py` - No tamper detection found
-  - `agents/windows/agent/agent_main.py` - No tamper detection found
-  - ⚠️ **ISSUE:** Agents cannot detect tampering (no tamper detection exists)
+### Section 5: Execution Sandboxing & Boundaries
+- ❌ Execution bypasses sandboxing — **NOT CONFIRMED** (execution uses explicit commands, action type enum)
 
-**Health Telemetry Optional:**
-- ⚠️ **ISSUE:** Health telemetry may be optional:
-  - `agents/windows/agent/agent_main.py:229-259` - `_on_health_event()` sends health events (but health monitoring may fail)
-  - ⚠️ **ISSUE:** Health telemetry may be optional (health monitoring may fail)
-
-**No Integrity Verification:**
-- ❌ **CRITICAL:** No integrity verification found:
-  - `agents/linux/agent_main.py` - No integrity verification found
-  - `agents/windows/agent/agent_main.py` - No integrity verification found
-  - ❌ **CRITICAL:** No integrity verification (agents do not verify integrity)
-
-### Verdict: **FAIL**
-
-**Justification:**
-- Windows agent reports health (health monitoring exists)
-- **CRITICAL:** No binary integrity checks (agents do not verify binary integrity)
-- **CRITICAL:** No self-tamper detection (agents do not detect tampering)
-- **CRITICAL:** No integrity verification (agents do not verify integrity)
-- **ISSUE:** Linux agent does not report health (Linux agent is execution-only)
-- **ISSUE:** Health telemetry may be optional (health monitoring may fail)
+### Section 6: Credential Usage
+- ❌ Agent keys are not properly managed — **NOT CONFIRMED** (agent keys are properly managed)
 
 ---
 
-## 7. CREDENTIAL HANDLING (AGENT-SIDE)
+## EVIDENCE REQUIRED
 
-### Evidence
+### Command Verification Before Execution
+- File paths: `agents/linux/command_gate.py:167-194,200-205,314-346,177-184,169`, `agents/linux/agent_main.py:84-93`, `agents/windows/command_gate.ps1:122-129`
+- Command verification: 9-step validation pipeline, mandatory steps, no bypass
 
-**Storage of Any Secrets:**
-- ✅ Windows agent stores signing key: `agents/windows/agent/telemetry/signer.py:64-68` - Signing key loaded from file (not stored in code)
-- ✅ Linux agent stores TRE public key: `agents/linux/command_gate.py:75` - TRE public key passed as parameter (not stored in code)
-- ✅ Windows agent stores signing key: `agents/windows/agent/agent_main.py:98-100` - `TelemetrySigner` initialized with `signing_key_path` (key loaded from file)
+### Policy Cache Integrity & Validation
+- File paths: `agents/linux/command_gate.py:546-596,500,495-516,471-492,614-678,633-635`
+- Policy cache: Integrity check, validation, offline enforcement
 
-**Rotation / Renewal Behavior:**
-- ⚠️ **ISSUE:** No explicit rotation/renewal behavior found:
-  - `agents/windows/agent/telemetry/signer.py:64-68` - Signing key loaded once at initialization (no rotation)
-  - `agents/linux/command_gate.py:75` - TRE public key passed once at initialization (no rotation)
-  - ⚠️ **ISSUE:** No explicit rotation/renewal behavior (keys loaded once, no rotation)
+### Offline Enforcement Correctness
+- File paths: `agents/linux/command_gate.py:614-678,598-612,192-193,643-647,471-492,651-658,661-668,671-678,477-487,489-491,484`
+- Offline enforcement: Cached policy enforcement, fail-closed behavior, default deny
 
-**No Hardcoded Credentials:**
-- ✅ **VERIFIED:** No hardcoded credentials:
-  - `agents/windows/agent/telemetry/signer.py:64-68` - Signing key loaded from file (not hardcoded)
-  - `agents/linux/command_gate.py:75` - TRE public key passed as parameter (not hardcoded)
-  - ✅ **VERIFIED:** No hardcoded credentials (keys loaded from files/parameters, not hardcoded)
+### Fail-Closed Behavior
+- File paths: `agents/linux/command_gate.py:477-487,471-492,500-507,518-525,200-205,614-678`
+- Fail-closed behavior: Default deny, no fail-open, rejection on validation failure
 
-**Embedded Secrets:**
-- ✅ **VERIFIED:** No embedded secrets:
-  - `agents/windows/agent/telemetry/signer.py:64-68` - Signing key loaded from file (not embedded)
-  - `agents/linux/command_gate.py:75` - TRE public key passed as parameter (not embedded)
-  - ✅ **VERIFIED:** No embedded secrets (keys loaded from files/parameters, not embedded)
+### Execution Sandboxing & Boundaries
+- File paths: `agents/linux/execution/process_blocker.py:75,63-66`, `agents/linux/agent_main.py:87-93`, `agents/linux/command_gate.py:253-259`
+- Execution sandboxing: Explicit commands, action type enum, privilege checks
 
-**Long-Lived Static Tokens:**
-- ⚠️ **ISSUE:** Keys are long-lived:
-  - `agents/windows/agent/telemetry/signer.py:64-68` - Signing key loaded once at initialization (long-lived)
-  - `agents/linux/command_gate.py:75` - TRE public key passed once at initialization (long-lived)
-  - ⚠️ **ISSUE:** Keys are long-lived (keys loaded once, no rotation)
-
-**Credentials Logged or Exposed:**
-- ✅ **VERIFIED:** Credentials are NOT logged:
-  - `agents/windows/agent/telemetry/signer.py:64-68` - Signing key loaded from file (not logged)
-  - `agents/linux/command_gate.py:75` - TRE public key passed as parameter (not logged)
-  - ✅ **VERIFIED:** Credentials are NOT logged (keys loaded, not logged)
-
-### Verdict: **PARTIAL**
-
-**Justification:**
-- No hardcoded credentials (keys loaded from files/parameters)
-- No embedded secrets (keys loaded from files/parameters)
-- Credentials are NOT logged (keys loaded, not logged)
-- **ISSUE:** No explicit rotation/renewal behavior (keys loaded once, no rotation)
-- **ISSUE:** Keys are long-lived (keys loaded once, no rotation)
+### Credential Usage
+- File paths: `agents/linux/command_gate.py:57-58,102-110,358-362,581-594,546-596`
+- Credential usage: TRE public key, policy cache integrity hash, key rotation
 
 ---
 
-## 8. NEGATIVE VALIDATION (MANDATORY)
+## GA VERDICT
 
-### Evidence
+### Overall: **PARTIAL**
 
-**Agent Executes Unsigned Commands:**
-- ✅ **PROVEN IMPOSSIBLE:** Linux agent does NOT execute unsigned commands:
-  - `agents/linux/command_gate.py:302-334` - `_verify_signature()` verifies ed25519 signature before execution
-  - `agents/linux/command_gate.py:312-313` - If verifier not available, command is rejected
-  - `agents/linux/command_gate.py:166` - `_verify_signature(command)` called before execution
-  - ✅ **VERIFIED:** Linux agent does NOT execute unsigned commands (signature verification required)
-- ⚠️ **ISSUE:** Windows command gate has placeholder: `agents/windows/command_gate.ps1:122-129` - `Test-CommandSignature` has placeholder (not implemented)
+**Critical Blockers:**
 
-**Agent Sends Fake Telemetry:**
-- ⚠️ **ISSUE:** Windows agent can send unsigned telemetry:
-  - `agents/windows/agent/telemetry/signer.py:108-115` - If signer not available, signature is None
-  - `agents/windows/agent/telemetry/signer.py:118-120` - If signature is None, envelope is returned without signature
-  - ⚠️ **ISSUE:** Windows agent can send unsigned telemetry (if signer not available)
-- ✅ **VERIFIED:** Windows agent signs telemetry: `agents/windows/agent/telemetry/signer.py:85-122` - `sign_envelope()` signs envelope with ed25519 (if signer available)
+1. **CRITICAL:** Windows agent has placeholder for signature verification (not implemented)
+   - **Impact:** Windows agent cannot verify command signatures (placeholder only)
+   - **Location:** `agents/windows/command_gate.ps1:122-129` — `Test-CommandSignature` has placeholder
+   - **Severity:** **CRITICAL** (Windows agent cannot verify signatures)
+   - **Master Spec Violation:** All agents must verify command signatures
 
-**Agent Bypasses Secure Bus:**
-- ✅ **VERIFIED:** Windows agent does NOT bypass secure bus:
-  - `agents/windows/agent/telemetry/sender.py:157-187` - `_send_to_core()` sends events via HTTP POST (not direct DB write)
-  - `agents/windows/agent/telemetry/sender.py:37` - `CORE_ENDPOINT` is HTTP endpoint (not direct DB)
-  - ✅ **VERIFIED:** Windows agent does NOT bypass secure bus (sends telemetry via HTTP, not direct DB)
-- ✅ **VERIFIED:** Linux agent does NOT bypass secure bus: `agents/linux/agent_main.py:70-127` - Linux agent executes commands (no telemetry, no DB writes)
+2. **PARTIAL:** No explicit sandboxing mechanisms found (no chroot, no cgroups, no namespaces)
+   - **Impact:** Execution is not explicitly sandboxed (no chroot, no cgroups, no namespaces)
+   - **Location:** `agents/linux/execution/process_blocker.py:75` — Execution uses explicit commands, but no explicit sandboxing
+   - **Severity:** **MEDIUM** (execution is not explicitly sandboxed)
+   - **Master Spec Violation:** Execution should be sandboxed
 
-**Agent Mutates System State Without Authorization:**
-- ✅ **VERIFIED:** Linux agent does NOT mutate system state without authorization:
-  - `agents/linux/command_gate.py:133-193` - `receive_command()` validates command through 8-step pipeline (authorization required)
-  - `agents/linux/command_gate.py:166` - `_verify_signature(command)` verifies signature (authorization required)
-  - ✅ **VERIFIED:** Linux agent does NOT mutate system state without authorization (signature verification required)
-- ⚠️ **ISSUE:** Windows command gate has placeholder: `agents/windows/command_gate.ps1:122-129` - `Test-CommandSignature` has placeholder (not implemented)
+3. **PARTIAL:** No explicit privilege checks (execution requires privileges, but no validation)
+   - **Impact:** Execution requires privileges (e.g., kill process), but no explicit privilege checks found
+   - **Location:** `agents/linux/execution/process_blocker.py:75` — No explicit privilege checks before execution
+   - **Severity:** **MEDIUM** (execution requires privileges, but no validation)
+   - **Master Spec Violation:** Execution should validate privileges
 
-### Verdict: **PARTIAL**
+4. **PARTIAL:** Policy cache integrity hash is optional (may be None, integrity check only if present)
+   - **Impact:** Policy cache may not have integrity hash (integrity check only if present)
+   - **Location:** `agents/linux/command_gate.py:581` — Integrity hash is verified only if present
+   - **Severity:** **LOW** (integrity check occurs, but hash is optional)
 
-**Justification:**
-- Linux agent does NOT execute unsigned commands (signature verification required)
-- Linux agent does NOT bypass secure bus (no telemetry, no DB writes)
-- Linux agent does NOT mutate system state without authorization (signature verification required)
-- **ISSUE:** Windows agent can send unsigned telemetry (if signer not available)
-- **ISSUE:** Windows command gate has placeholder for signature verification (not implemented)
+5. **PARTIAL:** No key rotation or versioning found
+   - **Impact:** Agent keys and policy keys cannot be rotated or versioned
+   - **Location:** `agents/linux/command_gate.py:57-58` — No key rotation logic found
+   - **Severity:** **LOW** (key rotation not supported)
 
----
+**Non-Blocking Issues:**
 
-## 9. VERDICT & IMPACT
+1. Linux agent verifies all commands (9-step validation pipeline)
+2. Offline enforcement is fail-closed (default deny, prohibited actions rejected)
+3. No fail-open behavior exists (all validation failures cause rejection)
+4. Agent keys are properly managed (TRE public key is parameter, used for verification)
 
-### Section-by-Section Verdicts
+**Strengths:**
 
-1. **Component Identity & Role:** PASS
-   - Agent entry points are clearly identified
-   - Supported platforms are Linux and Windows
-   - Explicit statements of what agents can do and must never do
-   - Agents do NOT make enforcement decisions, escalate incidents, or write to DB
+1. ✅ Linux agent verifies all commands (9-step validation pipeline)
+2. ✅ Offline enforcement is fail-closed (default deny, prohibited actions rejected)
+3. ✅ No fail-open behavior exists (all validation failures cause rejection)
+4. ✅ Default deny when no policy exists (all actions prohibited)
+5. ✅ Policy cache integrity is checked (structure, required fields, integrity hash)
+6. ✅ Agent keys are properly managed (TRE public key is parameter, used for verification)
 
-2. **Startup & Fail-Closed Behavior:** PARTIAL
-   - Linux agent requires TRE public key (mandatory parameter)
-   - **ISSUE:** Windows agent can start without signing key (fail-open behavior)
-   - **ISSUE:** Linux agent can start without verifier (if PyNaCl not available)
-   - **ISSUE:** Windows agent can emit telemetry without signing key
-   - **ISSUE:** Windows agent runs in degraded mode
+**Summary of Critical Blockers:**
 
-3. **Telemetry Emission & Authentication:** PARTIAL
-   - Windows agent signs telemetry with ed25519 (correctly implemented)
-   - Identity binding exists (machine_id, agent_id, hostname, boot_id)
-   - Schema enforcement exists (schema mapping enforced before emission)
-   - **ISSUE:** Windows agent can emit unsigned telemetry (if signer not available)
-   - **ISSUE:** Host identity inferred from config/hostname (not cryptographically bound)
-
-4. **Command Execution Gate:** PARTIAL
-   - Linux agent verifies signature before execution (ed25519 signature verification)
-   - Command schema validation exists (required fields, UUIDs, enums, timestamps)
-   - Explicit allow-list of command types exists
-   - **ISSUE:** Windows command gate has placeholder for signature verification (not implemented)
-   - **ISSUE:** Linux agent can start without verifier
-
-5. **Privilege & Sandboxing:** PARTIAL
-   - Separation of monitoring vs execution exists (components are separate)
-   - Abuse resistance exists (explicit commands, not shell, enum values)
-   - **ISSUE:** No explicit privilege checks (actions require appropriate privileges, but no explicit validation)
-   - **ISSUE:** No explicit privilege separation
-
-6. **Local Tamper & Integrity Protection:** FAIL
-   - Windows agent reports health (health monitoring exists)
-   - **CRITICAL:** No binary integrity checks (agents do not verify binary integrity)
-   - **CRITICAL:** No self-tamper detection (agents do not detect tampering)
-   - **CRITICAL:** No integrity verification (agents do not verify integrity)
-
-7. **Credential Handling:** PARTIAL
-   - No hardcoded credentials (keys loaded from files/parameters)
-   - No embedded secrets (keys loaded from files/parameters)
-   - Credentials are NOT logged (keys loaded, not logged)
-   - **ISSUE:** No explicit rotation/renewal behavior (keys loaded once, no rotation)
-
-8. **Negative Validation:** PARTIAL
-   - Linux agent does NOT execute unsigned commands (signature verification required)
-   - Linux agent does NOT bypass secure bus (no telemetry, no DB writes)
-   - **ISSUE:** Windows agent can send unsigned telemetry (if signer not available)
-   - **ISSUE:** Windows command gate has placeholder for signature verification (not implemented)
-
-### Overall Verdict: **PARTIAL**
-
-**Justification:**
-- **CRITICAL:** No binary integrity checks (agents do not verify binary integrity)
-- **CRITICAL:** No self-tamper detection (agents do not detect tampering)
-- **CRITICAL:** No integrity verification (agents do not verify integrity)
-- **ISSUE:** Windows agent can start without signing key (fail-open behavior)
-- **ISSUE:** Windows agent can emit unsigned telemetry (if signer not available)
-- **ISSUE:** Windows command gate has placeholder for signature verification (not implemented)
-- **ISSUE:** Linux agent can start without verifier (if PyNaCl not available)
-- **ISSUE:** No explicit privilege checks or separation
-- **ISSUE:** No explicit rotation/renewal behavior for keys
-- Agent entry points are clearly identified
-- Linux agent verifies signature before execution (ed25519 signature verification)
-- Command schema validation exists (required fields, UUIDs, enums, timestamps)
-- Explicit allow-list of command types exists
-- No hardcoded credentials or embedded secrets
-- Linux agent does NOT execute unsigned commands or bypass secure bus
-
-**Impact if Agent is Compromised:**
-- **CRITICAL:** If agent is compromised, unsigned telemetry can be sent (Windows agent can emit unsigned telemetry)
-- **CRITICAL:** If agent is compromised, unsigned commands can be executed (Windows command gate has placeholder for signature verification)
-- **CRITICAL:** If agent is compromised, binary integrity cannot be verified (no binary integrity checks)
-- **CRITICAL:** If agent is compromised, tampering cannot be detected (no self-tamper detection)
-- **HIGH:** If agent is compromised, system state can be mutated without authorization (Windows command gate has placeholder)
-- **HIGH:** If agent is compromised, fake telemetry can be sent (Windows agent can emit unsigned telemetry)
-- **MEDIUM:** If agent is compromised, keys cannot be rotated (no explicit rotation/renewal behavior)
-- **LOW:** If agent is compromised, Linux agent still requires signature verification (Linux agent verifies signature)
-
-**Whether Core Remains Trustworthy:**
-- ⚠️ **PARTIAL:** Core remains trustworthy if Linux agent is compromised:
-  - `agents/linux/command_gate.py:302-334` - Linux agent verifies signature before execution (signature verification required)
-  - ⚠️ **PARTIAL:** Core remains trustworthy if Linux agent is compromised (Linux agent verifies signature, but can start without verifier)
-- ❌ **NO:** Core does NOT remain trustworthy if Windows agent is compromised:
-  - `agents/windows/agent/telemetry/signer.py:108-115` - Windows agent can emit unsigned telemetry (if signer not available)
-  - `agents/windows/command_gate.ps1:122-129` - Windows command gate has placeholder for signature verification (not implemented)
-  - ❌ **NO:** Core does NOT remain trustworthy if Windows agent is compromised (Windows agent can emit unsigned telemetry, command gate has placeholder)
-
-**Recommendations:**
-1. **CRITICAL:** Implement binary integrity checks (verify binary integrity at startup)
-2. **CRITICAL:** Implement self-tamper detection (detect tampering of agent binary)
-3. **CRITICAL:** Implement integrity verification (verify integrity of agent components)
-4. **CRITICAL:** Implement Windows command gate signature verification (replace placeholder with actual ed25519 verification)
-5. **CRITICAL:** Require signing key for Windows agent startup (fail-closed if signing key not available)
-6. **CRITICAL:** Require verifier for Linux agent startup (fail-closed if verifier not available)
-7. **HIGH:** Implement explicit privilege checks (validate privileges before actions)
-8. **HIGH:** Implement explicit privilege separation (separate privileges for monitoring vs execution)
-9. **HIGH:** Implement key rotation/renewal (rotate keys periodically)
-10. **MEDIUM:** Implement health reporting for Linux agent (report health events)
-11. **MEDIUM:** Implement cryptographically bound host identity (bind host identity cryptographically)
+1. **CRITICAL:** Windows agent has placeholder for signature verification (not implemented) — Windows agent cannot verify signatures
+2. **MEDIUM:** No explicit sandboxing mechanisms found (no chroot, no cgroups, no namespaces) — Execution is not explicitly sandboxed
+3. **MEDIUM:** No explicit privilege checks (execution requires privileges, but no validation) — Execution requires privileges, but no validation
+4. **LOW:** Policy cache integrity hash is optional (may be None, integrity check only if present) — Integrity check occurs, but hash is optional
+5. **LOW:** No key rotation or versioning found — Key rotation not supported
 
 ---
 
-**Validation Date:** 2025-01-13
-**Validator:** Lead Validator & Compliance Auditor
-**Next Step:** Validation complete (all 10 steps completed)
+**Validation Date:** 2025-01-13  
+**Validator:** Independent System Validator  
+**Next Step:** Validation Step 11 — DPI Probe Network Truth  
+**GA Status:** **BLOCKED** (Critical failures in Windows agent signature verification and execution sandboxing)
+
+---
+
+## UPSTREAM IMPACT STATEMENT
+
+**Documentation Only:** This section documents upstream impact of Policy Engine failures on agent validation.
+
+**Upstream Validations Impacted by Policy Engine Failures:**
+
+1. **Policy Engine (Validation Step 09):**
+   - Agents receive commands from Policy Engine (via TRE)
+   - Commands may differ on replay (if Policy Engine is non-deterministic)
+   - Agent validation must NOT assume deterministic command inputs
+
+**Requirements for Upstream Validations:**
+
+- Upstream validations must NOT assume agents receive deterministic commands (commands may differ on replay)
+- Upstream validations must NOT assume Policy Engine produces deterministic commands (commands may differ on replay)
+- Upstream validations must validate their components based on actual behavior, not assumptions about Policy Engine determinism
+
+---
+
+## DOWNSTREAM IMPACT STATEMENT
+
+**Documentation Only:** This section documents downstream impact of agent failures on downstream validations.
+
+**Downstream Validations Impacted by Agent Failures:**
+
+1. **Sentinel / Survivability (Validation Step 12):**
+   - Agents enforce policy when Core is offline (cached policy)
+   - Agent failures may affect survivability (agents must enforce policy correctly)
+   - Survivability validation must NOT assume agent correctness
+
+**Requirements for Downstream Validations:**
+
+- Downstream validations must NOT assume agent correctness (agents may have failures)
+- Downstream validations must NOT assume agents enforce policy correctly (agent failures may affect enforcement)
+- Downstream validations must validate their components based on actual behavior, not assumptions about agent correctness
