@@ -227,6 +227,10 @@ class RenderEngine:
         Returns:
             HTML report as bytes
         """
+        # Get evidence content
+        evidence_content = self._render_html_evidence_only(incident_id, view_type, content_blocks, incident_snapshot_time)
+        
+        # Add branding header/footer (presentation layer, outside hash domain)
         html_lines = []
         html_lines.append('<!DOCTYPE html>')
         html_lines.append('<html>')
@@ -244,14 +248,52 @@ class RenderEngine:
         html_lines.append(f'<h1>{Branding.get_product_name()} — Evidence Report</h1>')
         html_lines.append('</header>')
         
-        # Signed content (deterministic, hashable)
+        # Evidence content (deterministic, hashable)
+        html_lines.append(evidence_content.decode('utf-8'))
+        
+        # Footer (branding layer - outside signed content)
+        html_lines.append('<footer>')
+        html_lines.append(f'<p><em>{Branding.get_evidence_notice()}</em></p>')
+        html_lines.append('</footer>')
+        
+        html_lines.append('</body>')
+        html_lines.append('</html>')
+        
+        return '\n'.join(html_lines).encode('utf-8')
+    
+    def _render_html_evidence_only(self, incident_id: str, view_type: str, content_blocks: List[Dict[str, Any]],
+                                   incident_snapshot_time: Optional[str] = None) -> bytes:
+        """
+        GA-BLOCKING: Render evidence content only (no branding, hashable).
+        
+        This is the content that is hashed. Branding is excluded.
+        All timestamps use incident_snapshot_time (not system time).
+        
+        Args:
+            incident_id: Incident identifier
+            view_type: View type
+            content_blocks: Sorted content blocks
+            incident_snapshot_time: RFC3339 UTC timestamp of incident snapshot (deterministic)
+        
+        Returns:
+            Evidence content as bytes (no branding, deterministic)
+        """
+        html_lines = []
+        
+        # Evidence content (deterministic, hashable)
         html_lines.append('<main>')
         html_lines.append(f'<p><strong>Incident ID:</strong> {incident_id}</p>')
         html_lines.append(f'<p><strong>View Type:</strong> {view_type}</p>')
+        
+        # GA-BLOCKING: Use incident snapshot time (not system time)
+        if incident_snapshot_time:
+            html_lines.append(f'<p><strong>Incident Snapshot Time:</strong> {incident_snapshot_time}</p>')
+        
         html_lines.append('<h2>Content Blocks</h2>')
         html_lines.append('<table border="1">')
         html_lines.append('<tr><th>Block ID</th><th>Source Type</th><th>Source ID</th><th>Content Type</th><th>Content Reference</th><th>Display Order</th></tr>')
         
+        # Stable field ordering (deterministic)
         for block in content_blocks:
             html_lines.append('<tr>')
             html_lines.append(f'<td>{block.get("block_id", "")}</td>')
@@ -264,14 +306,6 @@ class RenderEngine:
         
         html_lines.append('</table>')
         html_lines.append('</main>')
-        
-        # Footer (branding layer - outside signed content)
-        html_lines.append('<footer>')
-        html_lines.append(f'<p><em>{Branding.get_evidence_notice()}</em></p>')
-        html_lines.append('</footer>')
-        
-        html_lines.append('</body>')
-        html_lines.append('</html>')
         
         return '\n'.join(html_lines).encode('utf-8')
     
