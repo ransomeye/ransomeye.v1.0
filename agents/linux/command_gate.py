@@ -231,10 +231,12 @@ class CommandGate:
         Raises:
             CommandRejectionError: If schema validation fails
         """
+        # PHASE 4: Required fields (including policy authority binding)
         required_fields = [
             'command_id', 'action_type', 'target', 'incident_id',
             'tre_mode', 'issued_by_user_id', 'issued_by_role',
-            'issued_at', 'expires_at', 'rollback_token', 'signature'
+            'issued_at', 'expires_at', 'rollback_token', 'signature',
+            'policy_id', 'policy_version', 'issuing_authority'  # PHASE 4: Policy authority binding
         ]
         
         for field in required_fields:
