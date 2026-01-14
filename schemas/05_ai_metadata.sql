@@ -290,7 +290,8 @@ CREATE TABLE novelty_scores (
     -- NULL if percentile not computed
     -- INTEGER sufficient for percentile ranks (0 to 100)
     
-    computed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    computed_at TIMESTAMPTZ NOT NULL,
+    -- PHASE 3: Deterministic timestamp - must be provided explicitly
     -- When novelty score was computed
     
     created_at TIMESTAMPTZ NOT NULL,
