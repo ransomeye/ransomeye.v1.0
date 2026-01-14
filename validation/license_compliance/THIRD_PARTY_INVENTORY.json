@@ -309,7 +309,7 @@
     "static_or_dynamic": "dynamic",
     "distribution_scope": "core",
     "risk_level": "low",
-    "notes": "UUID generation"
+    "notes": "Python UUID generation library (distinct from Rust uuid crate)"
   },
   {
     "name": "jsonschema",
