@@ -189,8 +189,10 @@ echo Generating configuration file...
     echo RANSOMEYE_INGEST_URL=!INGEST_URL!
     echo.
     echo # Database credentials (if agent needs direct DB access in future)
-    echo RANSOMEYE_DB_USER=gagan
-    echo RANSOMEYE_DB_PASSWORD=gagan
+    echo # NOTE: These are optional for agents - only required if agent needs direct DB access
+    echo # If not needed, these can be left empty or removed
+    REM echo RANSOMEYE_DB_USER=
+    REM echo RANSOMEYE_DB_PASSWORD=
 ) > "!INSTALL_ROOT!\config\environment.txt"
 
 REM Set filesystem permissions (minimal access)
