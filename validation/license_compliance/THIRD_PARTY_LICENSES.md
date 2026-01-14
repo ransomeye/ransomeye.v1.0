@@ -104,8 +104,8 @@ The following licenses are explicitly forbidden and must not be used in RansomEy
 ### GNU Lesser General Public License (LGPL-3.0)
 - **Status:** ⚠️ CONDITIONAL - Dynamic Linking Only
 - **Dependency:** psycopg2-binary (PostgreSQL adapter)
-- **Condition:** Must be used via dynamic linking only. Static linking is FORBIDDEN.
-- **Rationale:** LGPL allows dynamic linking without copyleft contamination. The library is used as a dynamically linked Python extension, which is explicitly allowed under LGPL-3.0.
+- **Condition:** Must be used via dynamic linking only. **Static bundling is FORBIDDEN.**
+- **Rationale:** LGPL-3.0 allows dynamic linking without copyleft contamination. The library is used as a dynamically linked Python extension, which is explicitly allowed under LGPL-3.0.
 - **Verification:** CI validates that psycopg2-binary is used as a dynamically linked library only (standard Python package installation method).
 
 **Legal Analysis:**
@@ -113,6 +113,7 @@ The following licenses are explicitly forbidden and must not be used in RansomEy
 - Python's import mechanism uses dynamic linking
 - No static linking occurs
 - RansomEye code is not a derivative work of psycopg2-binary
+- **CRITICAL:** Static bundling (including psycopg2-binary in a single executable) would violate LGPL-3.0 and is explicitly prohibited
 
 ---
 
