@@ -139,10 +139,8 @@ def process_event(conn, event: Dict[str, Any]) -> bool:
         if existing_incident_id:
             # GA-BLOCKING: Add evidence to existing incident
             # Check for contradiction
-            from db import get_incident_evidence
             try:
-                # Get existing evidence (simplified - just check if we should apply decay)
-                # In production, this would query evidence table
+                # GA-BLOCKING: Detect contradiction (simplified - check event payload)
                 is_contradiction = detect_contradiction(event, [])
                 
                 if is_contradiction:
