@@ -442,12 +442,26 @@ def _core_startup_validation():
     # This prevents opaque startup crashes caused by PostgreSQL authentication misconfiguration
     try:
         from core.diagnostics.db_bootstrap_validator import validate_db_bootstrap
+        
+        # Get credentials from config (must be provided, no defaults)
+        db_host = config.get('RANSOMEYE_DB_HOST')
+        db_port = config.get('RANSOMEYE_DB_PORT')
+        db_name = config.get('RANSOMEYE_DB_NAME')
+        db_user = config.get('RANSOMEYE_DB_USER')
+        db_password = config.get('RANSOMEYE_DB_PASSWORD')
+        
+        # Validate credentials are present (fail-closed)
+        if not db_user:
+            exit_config_error("RANSOMEYE_DB_USER is required (no default allowed)")
+        if not db_password:
+            exit_config_error("RANSOMEYE_DB_PASSWORD is required (no default allowed)")
+        
         validate_db_bootstrap(
-            host=config.get('RANSOMEYE_DB_HOST', 'localhost'),
-            port=config.get('RANSOMEYE_DB_PORT', 5432),
-            database=config.get('RANSOMEYE_DB_NAME', 'ransomeye'),
-            user=config.get('RANSOMEYE_DB_USER', 'gagan'),
-            password=config.get('RANSOMEYE_DB_PASSWORD', 'gagan'),
+            host=db_host or 'localhost',
+            port=db_port or 5432,
+            database=db_name or 'ransomeye',
+            user=db_user,
+            password=db_password,
             logger=logger
         )
     except ImportError:
