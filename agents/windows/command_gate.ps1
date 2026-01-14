@@ -122,10 +122,55 @@ function Test-CommandFreshness {
 function Test-CommandSignature {
     param([hashtable]$Command, [string]$PublicKeyPath)
     
-    # Signature verification using ed25519
-    # This is a placeholder - actual implementation requires ed25519 library for PowerShell
-    # For production, use a proper ed25519 library or call Python script
-    Write-Warning "Signature verification placeholder - requires ed25519 library"
+    # PHASE 4: Real ed25519 signature verification (replaces placeholder)
+    # Use Python helper script for ed25519 verification
+    
+    # Extract signature
+    $Signature = $Command.signature
+    if (-not $Signature) {
+        throw "Missing signature field"
+    }
+    
+    # Create command payload copy without signature fields (for verification)
+    $CommandCopy = $Command.Clone()
+    $CommandCopy.Remove('signature')
+    $CommandCopy.Remove('signing_key_id')
+    $CommandCopy.Remove('signing_algorithm')
+    $CommandCopy.Remove('signed_at')
+    
+    # Serialize command payload to JSON
+    $CommandPayloadJson = $CommandCopy | ConvertTo-Json -Compress -Depth 10
+    
+    # Find Python verifier script (in same directory as this script)
+    $ScriptDir = Split-Path -Parent $MyInvocation.PSCommandPath
+    $VerifierScript = Join-Path $ScriptDir "verify_signature.py"
+    
+    if (-not (Test-Path $VerifierScript)) {
+        throw "PHASE 4: Signature verifier script not found: $VerifierScript"
+    }
+    
+    # Call Python verifier script
+    $PythonArgs = @(
+        $VerifierScript,
+        "--command-payload", $CommandPayloadJson,
+        "--signature", $Signature,
+        "--public-key-path", $PublicKeyPath
+    )
+    
+    try {
+        $Result = & python $PythonArgs 2>&1
+        $ExitCode = $LASTEXITCODE
+        
+        if ($ExitCode -ne 0) {
+            throw "PHASE 4: Signature verification failed: $Result"
+        }
+        
+        if ($Result -ne "SUCCESS") {
+            throw "PHASE 4: Signature verification failed: $Result"
+        }
+    } catch {
+        throw "PHASE 4: Signature verification error: $_"
+    }
 }
 
 function Test-CommandIssuer {
