@@ -97,7 +97,8 @@ CREATE TABLE incidents (
     -- NULL if not resolved or resolution is automated
     -- VARCHAR(255) sufficient for user identifiers
     
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMPTZ NOT NULL,
+    -- PHASE 3: Deterministic timestamp - must be provided explicitly (use event observed_at)
     -- Schema-level timestamp (immutable)
     -- When incident was created
     
@@ -140,7 +141,8 @@ CREATE TABLE incident_stages (
     to_stage incident_stage NOT NULL,
     -- New stage (transition target)
     
-    transitioned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    transitioned_at TIMESTAMPTZ NOT NULL,
+    -- PHASE 3: Deterministic timestamp - must be provided explicitly (use event observed_at)
     -- When stage transition occurred
     
     transitioned_by VARCHAR(255),
