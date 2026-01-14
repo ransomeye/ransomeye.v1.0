@@ -330,14 +330,14 @@ def add_evidence_to_incident(conn, incident_id: str, event: Dict[str, Any],
             else:
                 confidence_level = 'LOW'
             
-            # Add evidence
+            # PHASE 3: Add evidence with deterministic timestamp
             cur.execute("""
                 INSERT INTO evidence (
                     incident_id, event_id, evidence_type, confidence_level, confidence_score,
-                    observed_at
+                    observed_at, created_at
                 )
-                VALUES (%s, %s, %s, %s, %s, %s)
-            """, (incident_id, event_id, evidence_type, confidence_level, confidence_score, observed_at))
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """, (incident_id, event_id, evidence_type, confidence_level, confidence_score, observed_at, observed_at))
             
             # Update incident
             # PHASE 2: Use deterministic timestamp from event (observed_at)
