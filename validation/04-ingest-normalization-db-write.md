@@ -1,452 +1,594 @@
-# Validation Step 4 — Telemetry Ingest, Normalization & DB Write Path
+# Validation Step 4 — Ingest → Normalization → Database Write Validation
 
 **Component Identity:**
-- **Name:** Telemetry Ingest Service
+- **Name:** Telemetry Ingest Service (Data Plane)
 - **Primary Paths:**
-  - `/home/ransomeye/rebuild/services/ingest/app/main.py` - Main ingest service
-  - `/home/ransomeye/rebuild/services/ingest/app/main_hardened.py` - Hardened variant
+  - `/home/ransomeye/rebuild/services/ingest/app/main.py` — Main ingest service
+  - `/home/ransomeye/rebuild/services/ingest/app/main_hardened.py` — Hardened variant
 - **Entry Points:**
-  - HTTP POST: `POST /events` - `services/ingest/app/main.py:504` - `@app.post("/events")`
-  - Health check: `GET /health` - `services/ingest/app/main.py:700` - `@app.get("/health")`
+  - HTTP POST: `POST /events` — `services/ingest/app/main.py:549` — `@app.post("/events")`
+  - Health check: `GET /health` — `services/ingest/app/main.py:751` — `@app.get("/health")`
 - **Database Write Access:** Ingest service writes to `raw_events`, `machines`, `component_instances`, `event_validation_log`
 
-**Spec Reference:**
+**Master Spec References:**
 - Phase 4 — Minimal Data Plane (Ingest Service)
+- Phase 10.1 — Core Runtime Hardening (data plane hardening)
 - Event Envelope Contract (`contracts/event-envelope.schema.json`)
 - Time Semantics Contract (`contracts/time-semantics.policy.json`)
-- Data Plane Hardening (`schemas/DATA_PLANE_HARDENING.md`)
+- Master specification: Deterministic data plane requirements
+- Master specification: Fail-closed data plane requirements
 
 ---
 
-## 1. COMPONENT IDENTITY
+## PURPOSE
 
-### Evidence
+This validation proves that the data plane is correct, deterministic, credential-safe, and fail-closed from ingest entry to database persistence.
 
-**Ingest Service Name:**
-- ✅ Ingest service identified: `services/ingest/app/main.py:1-5` - "RansomEye v1.0 Ingest Service"
-- ✅ Service name: "ingest" - `services/ingest/app/main.py:112` - `setup_logging('ingest')`
+This file validates correctness and integrity, not trust (trust was validated in File 03). This validation focuses on:
+- Event envelope validation correctness
+- Normalization determinism
+- Integrity and sequence guarantees
+- Database write semantics
+- Credential usage at DB layer
+- Fail-closed guarantees
 
-**Entry Points:**
-- ✅ HTTP POST endpoint: `services/ingest/app/main.py:504` - `@app.post("/events")`
-- ✅ Health check endpoint: `services/ingest/app/main.py:700` - `@app.get("/health")`
-- ❌ **NO bus subscriptions** - No message bus found (uses HTTP POST)
-- ✅ FastAPI application: `services/ingest/app/main.py:280` - `app = FastAPI(...)`
-
-**Other Components Writing to DB:**
-- ⚠️ **ISSUE:** `schemas/DATA_PLANE_HARDENING.md:29-31` - Documentation says agents CAN write directly to `raw_events`:
-  - "Linux Agent: `raw_events` (INSERT only)"
-  - "Windows Agent: `raw_events` (INSERT only)"
-  - "DPI Probe: `raw_events` (INSERT only)"
-- ✅ **VERIFIED:** Agents do NOT write directly in code:
-  - `services/linux-agent/src/main.rs:293-332` - `transmit_event()` uses HTTP POST to ingest service
-  - `dpi/probe/main.py` - DPI probe is stubbed, would use HTTP POST if implemented
-  - No database connection code found in agents
-- ⚠️ **DISCREPANCY:** Documentation says agents can write directly, but code shows they use HTTP POST
-
-**Validation Harness Bypass:**
-- ⚠️ **ISSUE:** `validation/harness/track_1_determinism.py:652-688` - `ingest_event()` function writes directly to `raw_events`:
-  - `validation/harness/track_1_determinism.py:662-682` - Direct INSERT into `raw_events` table
-  - This is a test harness, not production code, but shows direct write is possible
-
-### Verdict: **PARTIAL**
-
-**Justification:**
-- Ingest service is clearly identified with proper entry points
-- **ISSUE:** Documentation says agents can write directly, but code shows they use HTTP POST (discrepancy)
-- **ISSUE:** Test harness can write directly (bypasses ingest), but this is test code
-- Production agents use HTTP POST (do not bypass ingest)
+This validation does NOT validate inter-service trust, correlation engine, agents, or DPI.
 
 ---
 
-## 2. AUTHENTICATED TELEMETRY INPUT
+## DATA PLANE DEFINITION
 
-### Evidence
+**Data Plane Requirements (Master Spec):**
 
-**Telemetry Origin Verification:**
-- ❌ **CRITICAL:** Ingest service does NOT verify telemetry origin:
-  - `services/ingest/app/main.py:504-698` - `ingest_event()` does NOT verify origin
-  - No authentication middleware found
-  - No origin verification found
+1. **Ingest Entry Validation** — Event envelope validation is mandatory, schema enforcement blocks malformed events, missing required fields cause rejection
+2. **Normalization Determinism** — Same raw event → same normalized output, field ordering/timestamps/IDs are deterministic, no environment- or time-based mutation
+3. **Integrity & Sequence Guarantees** — Hash integrity checks, sequence monotonicity, duplicate detection behavior, replay handling
+4. **Database Write Semantics** — DB writes are transactional, partial writes cannot occur, failed writes cause rollback
+5. **Credential Usage at DB Layer** — DB credentials used are explicit, no fallback credentials exist, missing credentials block writes
+6. **Fail-Closed Guarantees** — Any ingest/normalize/write failure stops processing, no "best effort" or "continue on error" logic
 
-**Signature Verification Before Processing:**
-- ❌ **CRITICAL:** Ingest service does NOT verify signatures:
-  - `services/ingest/app/main.py:504-698` - `ingest_event()` does NOT verify signatures
-  - `services/ingest/app/main.py:376-384` - `validate_hash_integrity()` only verifies SHA256 hash, NOT cryptographic signature
-  - No signature verification code found in ingest service
-- ✅ Agents sign events: `agents/windows/agent/telemetry/signer.py:85-122` - Signs with ed25519
-- ❌ **CRITICAL:** Ingest does NOT verify these signatures
-
-**Identity Binding:**
-- ✅ Event envelopes include identity: `contracts/event-envelope.schema.json:61-85` - `identity` object with `hostname`, `boot_id`, `agent_version`
-- ✅ Event envelopes include component: `contracts/event-envelope.schema.json:31-34` - `component` field
-- ✅ Event envelopes include machine_id: `contracts/event-envelope.schema.json:26-29` - `machine_id` field
-- ⚠️ **ISSUE:** Identity is NOT cryptographically bound - can be spoofed
-- ⚠️ **ISSUE:** Component identity is NOT verified - can be spoofed
-
-**Where Verification Occurs:**
-- ❌ **CRITICAL:** Verification does NOT occur in ingest service
-- ❌ **CRITICAL:** No signature verification before processing
-- ❌ **CRITICAL:** No origin verification before processing
-
-**What Happens if Verification Fails:**
-- ❌ **CRITICAL:** Verification does NOT exist, so cannot fail
-- ⚠️ Unsigned events are accepted (no verification = no failure)
-
-### Verdict: **FAIL**
-
-**Justification:**
-- **CRITICAL FAILURE:** Ingest service does NOT verify telemetry origin
-- **CRITICAL FAILURE:** Ingest service does NOT verify cryptographic signatures
-- **CRITICAL FAILURE:** Identity is NOT cryptographically bound (can be spoofed)
-- **CRITICAL FAILURE:** Component identity is NOT verified (can be spoofed)
-- This violates authenticated telemetry input requirements
+**Data Flow:**
+1. **Ingest Entry:** HTTP POST `/events` → JSON parsing → Schema validation
+2. **Normalization:** (No normalization in ingest per README)
+3. **Integrity Checks:** Hash integrity → Sequence monotonicity → Hash chain continuity → Duplicate detection
+4. **Database Write:** Transaction begin → Write to `machines`, `component_instances`, `raw_events`, `event_validation_log` → Transaction commit/rollback
 
 ---
 
-## 3. SCHEMA VALIDATION (CRITICAL)
+## WHAT IS VALIDATED
+
+### 1. Ingest Entry Validation
+- Event envelope validation is mandatory
+- Schema enforcement blocks malformed events
+- Missing required fields cause rejection
+
+### 2. Normalization Determinism
+- Same raw event → same normalized output
+- Field ordering, timestamps, IDs are deterministic
+- No environment- or time-based mutation
+
+### 3. Integrity & Sequence Guarantees
+- Hash integrity checks
+- Sequence monotonicity
+- Duplicate detection behavior
+- Replay handling
+
+### 4. Database Write Semantics
+- DB writes are transactional
+- Partial writes cannot occur
+- Failed writes cause rollback
+
+### 5. Credential Usage at DB Layer
+- DB credentials used are explicit
+- No fallback credentials exist
+- Missing credentials block writes
+
+### 6. Fail-Closed Guarantees
+- Any ingest/normalize/write failure stops processing
+- No "best effort" or "continue on error" logic
+
+---
+
+## WHAT IS EXPLICITLY NOT ASSUMED
+
+- **NOT ASSUMED:** That normalization happens in ingest (README confirms no normalization in ingest)
+- **NOT ASSUMED:** That `ingested_at` is deterministic (it uses `datetime.now()` which is time-based)
+- **NOT ASSUMED:** That SQL `NOW()` is deterministic (it uses database server time)
+- **NOT ASSUMED:** That sequence gaps are acceptable (sequence monotonicity is enforced)
+- **NOT ASSUMED:** That partial writes are acceptable (transactions ensure atomicity)
+
+---
+
+## VALIDATION METHODOLOGY
+
+### Evidence Collection Strategy
+
+1. **Code Path Analysis:** Trace event flow from HTTP POST → validation → database write
+2. **Determinism Analysis:** Search for `now()`, `datetime.now()`, `time.time()`, `random`, `uuid`, `UUID`, `generate`, `NOW()` in SQL
+3. **Transaction Analysis:** Search for `begin`, `commit`, `rollback`, `transaction`, `atomic`, `partial`, `best.*effort`, `continue.*error`
+4. **Credential Analysis:** Search for `RANSOMEYE_DB_PASSWORD`, `get_secret`, `fallback`, `default.*password`, `shared.*credential`
+5. **Error Handling Analysis:** Search for `silent`, `data.*loss`, `continue.*error`, `best.*effort`, `partial.*write`
+
+### Forbidden Patterns (Grep Validation)
+
+- `now\(\)|datetime\.now|time\.time|random|uuid|UUID|generate|NOW\(\)` — Non-deterministic time/random generation (forbidden in normalization)
+- `best.*effort|continue.*error|partial.*write|silent.*drop` — Best-effort or continue-on-error logic (forbidden)
+- `fallback.*credential|default.*password|shared.*credential` — Fallback credentials (forbidden)
+
+---
+
+## 1. INGEST ENTRY VALIDATION
 
 ### Evidence
 
-**Presence of Strict Schemas:**
-- ✅ Strict schema exists: `contracts/event-envelope.schema.json` - Event envelope schema
-- ✅ Schema is loaded: `services/ingest/app/main.py:226-237` - Loads schema from file
-- ✅ Schema uses jsonschema: `services/ingest/app/main.py:319` - Uses `jsonschema.validate()`
-
-**Validation Before Normalization:**
-- ✅ Schema validation occurs: `services/ingest/app/main.py:526-557` - `validate_schema()` called before storage
-- ⚠️ **ISSUE:** No normalization occurs in ingest (README says "NO normalization")
+**Event Envelope Validation is Mandatory:**
+- ✅ Schema validation occurs: `services/ingest/app/main.py:571` — `validate_schema(envelope)` called before processing
+- ✅ Schema validation is mandatory: `services/ingest/app/main.py:571-602` — Returns HTTP 400 BAD REQUEST if validation fails
 - ✅ Validation order: Schema → Hash → Timestamps → Duplicate → Storage
+- ✅ No bypass: Schema validation cannot be bypassed (called before any processing)
 
-**Rejection of Missing Required Fields:**
-- ✅ Required fields enforced: `contracts/event-envelope.schema.json:7-18` - `required` array lists all required fields
-- ✅ Missing fields rejected: `services/ingest/app/main.py:526-557` - Returns HTTP 400 BAD REQUEST on schema violation
-- ✅ Schema validation logs failure: `services/ingest/app/main.py:532-543` - Logs to `event_validation_log`
+**Schema Enforcement Blocks Malformed Events:**
+- ✅ Strict schema exists: `contracts/event-envelope.schema.json` — Event envelope schema with `additionalProperties: false`
+- ✅ Schema validation uses jsonschema: `services/ingest/app/main.py:341-353` — `validate_schema()` uses `jsonschema.validate()`
+- ✅ Malformed events rejected: `services/ingest/app/main.py:571-602` — Returns HTTP 400 BAD REQUEST on schema violation
+- ✅ Schema validation logs failure: `services/ingest/app/main.py:577-590` — Logs to `event_validation_log`
+- ✅ Unknown fields rejected: `contracts/event-envelope.schema.json:19` — `additionalProperties: false` prevents unknown fields
 
-**Rejection of Type Mismatches:**
-- ✅ Type validation enforced: `contracts/event-envelope.schema.json:20-114` - Type definitions for all fields
-- ✅ Type mismatches rejected: `services/ingest/app/main.py:321-328` - `jsonschema.ValidationError` raised on type mismatch
-- ✅ Type validation logs failure: `services/ingest/app/main.py:532-543` - Logs to `event_validation_log`
+**Missing Required Fields Cause Rejection:**
+- ✅ Required fields enforced: `contracts/event-envelope.schema.json:7-18` — `required` array lists all required fields
+- ✅ Missing fields rejected: `services/ingest/app/main.py:344` — `jsonschema.ValidationError` raised on missing required fields
+- ✅ Missing fields cause HTTP 400: `services/ingest/app/main.py:599-602` — Returns HTTP 400 BAD REQUEST with error details
 
-**Rejection of Unknown Fields:**
-- ✅ Unknown fields forbidden: `contracts/event-envelope.schema.json:19` - `additionalProperties: false`
-- ✅ Unknown fields rejected: `services/ingest/app/main.py:319` - `jsonschema.validate()` rejects unknown fields
-- ✅ Unknown fields cause schema violation: `services/ingest/app/main.py:322-326` - Returns "SCHEMA_VIOLATION" error
-
-**Best-Effort Parsing:**
-- ✅ Schema validation is strict: `services/ingest/app/main.py:316-328` - Raises `ValidationError` on failure
-- ✅ No best-effort parsing: `services/ingest/app/main.py:554-557` - Rejects invalid messages
-- ✅ All validation failures cause rejection: `services/ingest/app/main.py:526-622` - Multiple validation checks
-
-**Silent Field Dropping:**
-- ✅ No field dropping: Schema validation rejects messages with missing/extra fields
-- ✅ All required fields must be present: `contracts/event-envelope.schema.json:7-18` - Required fields enforced
-
-**Schema Mismatch Allowed Through:**
-- ✅ Schema mismatches rejected: `services/ingest/app/main.py:526-557` - Returns HTTP 400 BAD REQUEST
-- ✅ Schema validation logs failure: `services/ingest/app/main.py:532-543` - Logs to `event_validation_log`
+**Validation Errors Are Not Ignored or Logged Only:**
+- ✅ Validation errors cause rejection: `services/ingest/app/main.py:571-602` — Returns HTTP 400 BAD REQUEST (not logged only)
+- ✅ Validation errors are logged: `services/ingest/app/main.py:590` — Logs to `event_validation_log` (in addition to rejection)
+- ✅ No "log and continue" logic: Validation failures cause immediate HTTP exception (no processing continues)
 
 ### Verdict: **PASS**
 
 **Justification:**
-- Strict schema validation is present and enforced
-- Missing required fields, type mismatches, and unknown fields are all rejected
-- No best-effort parsing or silent field dropping found
-- Schema validation occurs before any processing
+- Event envelope validation is mandatory (cannot be bypassed)
+- Schema enforcement blocks malformed events (strict schema, unknown fields rejected)
+- Missing required fields cause rejection (HTTP 400 BAD REQUEST)
+- Validation errors are not ignored or logged only (rejection + logging)
+
+**PASS Conditions (Met):**
+- Event envelope validation is mandatory — **CONFIRMED** (validation called before processing)
+- Schema enforcement blocks malformed events — **CONFIRMED** (strict schema, HTTP 400 on violation)
+- Missing required fields cause rejection — **CONFIRMED** (jsonschema validation, HTTP 400)
+
+**Evidence Required:**
+- File paths: `services/ingest/app/main.py:341-353,571-602`, `contracts/event-envelope.schema.json:7-19`
+- Validation code: `validate_schema()` function, `jsonschema.validate()` call
+- Error handling: HTTP 400 BAD REQUEST on validation failure
 
 ---
 
-## 4. NORMALIZATION LOGIC
+## 2. NORMALIZATION DETERMINISM
 
 ### Evidence
 
-**Agent vs DPI Normalization Paths:**
-- ❌ **CRITICAL:** No normalization occurs in ingest service:
-  - `services/ingest/README.md:50` - "NO normalization: Does not write to normalized tables"
-  - `services/ingest/README.md:97` - "Does NOT write to normalized tables"
+**Normalization in Ingest:**
+- ❌ **CRITICAL FAILURE:** No normalization occurs in ingest service:
+  - `services/ingest/README.md:50` — "NO normalization: Does not write to normalized tables"
+  - `services/ingest/README.md:97` — "Does NOT write to normalized tables"
   - No normalization code found in ingest service
-- ✅ Normalization exists elsewhere: `hnmp/engine/*_normalizer.py` - Normalizers exist in HNMP engine
-- ⚠️ **ISSUE:** Normalization does NOT occur in ingest (happens downstream)
+- ⚠️ **ISSUE:** Normalization is deferred to downstream (not in ingest)
 
-**Field Canonicalization:**
-- ✅ Timestamps canonicalized: `services/ingest/app/main.py:330-374` - `validate_timestamps()` normalizes to UTC
-- ✅ Timestamps are RFC3339: `contracts/event-envelope.schema.json:42-48` - Format validation
-- ⚠️ **ISSUE:** Host IDs, IPs are NOT canonicalized in ingest (stored as-is from envelope)
-- ⚠️ **ISSUE:** No canonicalization of machine_id, component_instance_id
+**Same Raw Event → Same Normalized Output:**
+- ⚠️ **N/A:** No normalization in ingest (cannot validate normalization determinism)
+- ⚠️ **ISSUE:** Event data is stored as-is from envelope (no normalization)
 
-**Explicit Mapping Rules:**
-- ❌ **CRITICAL:** No mapping rules in ingest service (no normalization)
-- ✅ Mapping rules exist in HNMP: `hnmp/engine/*_normalizer.py` - Normalizers have mapping rules
-- ⚠️ **ISSUE:** Mapping rules are NOT in ingest (deferred to downstream)
+**Field Ordering, Timestamps, IDs Are Deterministic:**
+- ✅ Field ordering is deterministic: `services/ingest/app/main.py:464-503` — Database INSERT uses explicit field order
+- ✅ Event ID is deterministic: `contracts/event-envelope.schema.json:21-24` — `event_id` is UUID from envelope (not generated)
+- ❌ **CRITICAL FAILURE:** `ingested_at` is NOT deterministic: `services/ingest/app/main.py:633` — `datetime.now(timezone.utc)` uses current time
+- ❌ **CRITICAL FAILURE:** SQL `NOW()` is NOT deterministic: `services/ingest/app/main.py:507` — `VALUES (%s, %s, NOW())` uses database server time
+- ⚠️ **ISSUE:** Same event ingested at different times will have different `ingested_at` values
 
-**Handling of Malformed-but-Authenticated Events:**
-- ✅ Malformed events rejected: `services/ingest/app/main.py:526-557` - Schema validation rejects malformed events
-- ✅ Malformed events logged: `services/ingest/app/main.py:532-543` - Logs to `event_validation_log`
-- ⚠️ **ISSUE:** "Authenticated" is not verified (no signature verification)
+**No Environment- or Time-Based Mutation:**
+- ❌ **CRITICAL FAILURE:** `ingested_at` is time-based: `services/ingest/app/main.py:633` — `datetime.now(timezone.utc)` mutates based on ingestion time
+- ❌ **CRITICAL FAILURE:** SQL `NOW()` is time-based: `services/ingest/app/main.py:507` — `NOW()` mutates based on database server time
+- ✅ No environment-based mutation: No environment variables used for field mutation
+- ✅ No random generation: No `random`, `uuid`, `UUID` generation found in normalization path
 
-**Ambiguous Mappings:**
-- ⚠️ **N/A:** No mappings in ingest (no normalization)
-- ⚠️ **ISSUE:** No canonicalization means ambiguous host identity resolution possible
+**Normalization Depends on `now()`:**
+- ❌ **CRITICAL FAILURE:** `ingested_at` depends on `now()`: `services/ingest/app/main.py:633` — `datetime.now(timezone.utc).isoformat()`
+- ❌ **CRITICAL FAILURE:** SQL `NOW()` depends on database server time: `services/ingest/app/main.py:507` — `NOW()` in SQL
 
-**Inconsistent Host Identity Resolution:**
-- ⚠️ **ISSUE:** Host identity is NOT resolved in ingest:
-  - `services/ingest/app/main.py:439-445` - `machines` table uses `machine_id` as-is from envelope
-  - No host identity resolution logic found
-  - Multiple `machine_id` values for same host possible
-
-**DPI and Agent Events Treated Interchangeably:**
-- ✅ Events stored in same table: `services/ingest/app/main.py:463-478` - All events go to `raw_events`
-- ✅ Component field distinguishes: `contracts/event-envelope.schema.json:31-34` - `component` field (enum)
-- ⚠️ **ISSUE:** No special handling for DPI vs agent events in ingest (treated the same)
-
-### Verdict: **PARTIAL**
-
-**Justification:**
-- **CRITICAL ISSUE:** No normalization occurs in ingest service (deferred to downstream)
-- Timestamps are canonicalized, but host IDs and IPs are not
-- No explicit mapping rules in ingest
-- Host identity resolution is inconsistent (no resolution logic)
-- DPI and agent events are treated the same (no differentiation)
-
----
-
-## 5. DEDUPLICATION & FLOOD PROTECTION
-
-### Evidence
-
-**Deduplication Keys:**
-- ✅ Deduplication by event_id: `services/ingest/app/main.py:386-390` - `check_duplicate()` checks `event_id`
-- ✅ event_id is UUID: `contracts/event-envelope.schema.json:21-24` - UUID v4 format
-- ✅ event_id is PRIMARY KEY: `schemas/01_raw_events.sql:26` - `event_id UUID NOT NULL PRIMARY KEY`
-- ⚠️ **ISSUE:** Only `event_id` is used for deduplication (no other keys)
-
-**Time Windows:**
-- ❌ **CRITICAL:** No time windows for deduplication:
-  - `services/ingest/app/main.py:386-390` - `check_duplicate()` checks all-time (no time window)
-  - No time-based deduplication found
-  - Duplicate check is global (not time-bounded)
-
-**Memory Bounds:**
-- ❌ **CRITICAL:** No in-memory deduplication state:
-  - `services/ingest/app/main.py:386-390` - `check_duplicate()` queries database (not in-memory)
-  - No memory bounds needed (no in-memory state)
-  - ⚠️ **ISSUE:** Database query for every event (no caching)
-
-**Flood Handling Behavior:**
-- ❌ **CRITICAL:** No flood protection found:
-  - `services/ingest/app/main.py:504-698` - No rate limiting found
-  - `services/ingest/app/main.py:504-698` - No throttling found
-  - `services/ingest/app/main.py:504-698` - No backpressure found
-  - No flood protection mechanisms found
-
-**Unlimited In-Memory Dedupe State:**
-- ✅ No in-memory dedupe state: `services/ingest/app/main.py:386-390` - Uses database query
-- ✅ No memory bounds needed: No in-memory state to bound
-
-**No Protection Against Event Storms:**
-- ❌ **CRITICAL:** No protection against event storms:
-  - No rate limiting
-  - No throttling
-  - No backpressure
-  - No queue limits
-  - ⚠️ **ISSUE:** Event storms can overwhelm ingest service
-
-**DB Write Amplification Possible:**
-- ⚠️ **PARTIAL:** Write amplification possible:
-  - `services/ingest/app/main.py:439-483` - Writes to `machines`, `component_instances`, `raw_events`, `event_validation_log` (4 tables per event)
-  - `services/ingest/app/main.py:439-445` - `machines` table uses `ON CONFLICT` (UPSERT)
-  - `services/ingest/app/main.py:447-461` - `component_instances` table uses `ON CONFLICT` (UPSERT)
-  - ⚠️ **ISSUE:** Multiple writes per event (write amplification)
+**Random IDs Generated During Normalization:**
+- ✅ No random IDs generated: No `random`, `uuid`, `UUID` generation found in normalization path
+- ✅ Event ID comes from envelope: `services/ingest/app/main.py:429` — `event_id = envelope["event_id"]` (not generated)
 
 ### Verdict: **FAIL**
 
 **Justification:**
-- Deduplication exists but only by `event_id` (no time windows)
-- **CRITICAL FAILURE:** No flood protection (no rate limiting, throttling, or backpressure)
-- **CRITICAL FAILURE:** Event storms can overwhelm ingest service
-- **ISSUE:** Write amplification (4 tables per event)
-- **ISSUE:** Database query for every duplicate check (no caching)
+- **CRITICAL FAILURE:** No normalization occurs in ingest (deferred to downstream)
+- **CRITICAL FAILURE:** `ingested_at` is NOT deterministic (uses `datetime.now()` which is time-based)
+- **CRITICAL FAILURE:** SQL `NOW()` is NOT deterministic (uses database server time)
+- Same event ingested at different times will have different `ingested_at` values (non-deterministic)
+
+**FAIL Conditions (Met):**
+- Normalization depends on `now()` — **CONFIRMED** (`datetime.now()` and SQL `NOW()`)
+- Random IDs are generated during normalization — **NOT CONFIRMED** (no random IDs, but timestamps are non-deterministic)
+
+**Evidence Required:**
+- File paths: `services/ingest/app/main.py:633,507`, `services/ingest/README.md:50,97`
+- Non-deterministic code: `datetime.now(timezone.utc)`, SQL `NOW()`
+- Missing normalization: No normalization code in ingest service
 
 ---
 
-## 6. DATABASE WRITE SAFETY (CRITICAL)
+## 3. INTEGRITY & SEQUENCE GUARANTEES
 
 ### Evidence
 
-**Single DB Writer Model:**
-- ✅ Ingest is single writer: `services/ingest/app/main.py:392-502` - `store_event()` is the write function
-- ⚠️ **ISSUE:** Multiple components can write (agents via ingest, but also test harness can write directly)
-- ⚠️ **ISSUE:** Documentation says agents can write directly, but code shows they use HTTP POST
+**Hash Integrity Checks:**
+- ✅ Hash integrity validation exists: `services/ingest/app/main.py:401-409` — `validate_hash_integrity()` function
+- ✅ Hash integrity is checked: `services/ingest/app/main.py:604-630` — Called before storage
+- ✅ Hash mismatch causes rejection: `services/ingest/app/main.py:604-630` — Returns HTTP 400 BAD REQUEST on hash mismatch
+- ✅ Hash computation is deterministic: `services/ingest/app/main.py:329-339` — `compute_hash()` uses `sort_keys=True` for deterministic JSON serialization
 
-**Use of Prepared Statements / Parameterized Queries:**
-- ✅ Parameterized queries used: `services/ingest/app/main.py:439-483` - All queries use `%s` placeholders
-- ✅ Prepared statements: `services/ingest/app/main.py:439` - `cur.execute()` with parameterized values
+**Sequence Monotonicity:**
+- ✅ Sequence monotonicity validation exists: `services/ingest/app/main.py:451-456` — `verify_sequence_monotonicity()` called
+- ✅ Sequence monotonicity is checked: `common/integrity/verification.py:76-105` — `verify_sequence_monotonicity()` function
+- ✅ Sequence gaps cause rejection: `services/ingest/app/main.py:451-456` — Raises `ValueError` on sequence violation
+- ✅ Sequence violations cause HTTP 400: `services/ingest/app/main.py:703-722` — Returns HTTP 400 BAD REQUEST on integrity violation
+
+**Duplicate Detection Behavior:**
+- ✅ Duplicate detection exists: `services/ingest/app/main.py:411-415` — `check_duplicate()` function
+- ✅ Duplicate detection is checked: `services/ingest/app/main.py:677-692` — Called before storage
+- ✅ Duplicate events cause rejection: `services/ingest/app/main.py:677-692` — Returns HTTP 409 CONFLICT on duplicate
+- ✅ Duplicate detection uses `event_id`: `services/ingest/app/main.py:414` — `SELECT 1 FROM raw_events WHERE event_id = %s`
+
+**Replay Handling:**
+- ✅ Duplicate detection prevents exact replays: `services/ingest/app/main.py:677-692` — Duplicate `event_id` rejected
+- ✅ Sequence monotonicity prevents out-of-order replays: `services/ingest/app/main.py:451-456` — Sequence gaps rejected
+- ✅ Hash chain continuity prevents hash chain breaks: `services/ingest/app/main.py:443-448` — Hash chain violations rejected
+- ⚠️ **ISSUE:** No cryptographic nonces prevent replay of valid events (only duplicate detection and sequence monotonicity)
+
+**Sequence Gaps Are Silently Accepted:**
+- ❌ **CONFIRMED:** Sequence gaps are NOT silently accepted: `services/ingest/app/main.py:451-456` — `verify_sequence_monotonicity()` raises `ValueError` on gaps
+- ✅ Sequence gaps cause rejection: `common/integrity/verification.py:76-105` — Sequence gaps detected and rejected
+
+**Hash Mismatches Are Logged But Not Blocked:**
+- ❌ **CONFIRMED:** Hash mismatches are NOT logged but not blocked: `services/ingest/app/main.py:604-630` — Returns HTTP 400 BAD REQUEST (blocked, not just logged)
+- ✅ Hash mismatches cause rejection: `services/ingest/app/main.py:604-630` — HTTP 400 BAD REQUEST + logging
+
+### Verdict: **PASS**
+
+**Justification:**
+- Hash integrity checks are present and enforced (HTTP 400 on mismatch)
+- Sequence monotonicity is present and enforced (ValueError on violation)
+- Duplicate detection is present and enforced (HTTP 409 on duplicate)
+- Replay handling is present (duplicate detection, sequence monotonicity, hash chain continuity)
+- Sequence gaps are NOT silently accepted (rejected with ValueError)
+- Hash mismatches are NOT logged but not blocked (rejected with HTTP 400)
+
+**PASS Conditions (Met):**
+- Hash integrity checks — **CONFIRMED** (validation exists, HTTP 400 on mismatch)
+- Sequence monotonicity — **CONFIRMED** (validation exists, ValueError on violation)
+- Duplicate detection behavior — **CONFIRMED** (validation exists, HTTP 409 on duplicate)
+- Replay handling — **CONFIRMED** (duplicate detection, sequence monotonicity, hash chain continuity)
+
+**Evidence Required:**
+- File paths: `services/ingest/app/main.py:401-409,411-415,443-456,604-630,677-692`, `common/integrity/verification.py:76-105`
+- Validation functions: `validate_hash_integrity()`, `verify_sequence_monotonicity()`, `check_duplicate()`, `verify_hash_chain_continuity()`
+- Error handling: HTTP 400/409 on violations, ValueError on sequence violations
+
+---
+
+## 4. DATABASE WRITE SEMANTICS
+
+### Evidence
+
+**DB Writes Are Transactional:**
+- ✅ Explicit transactions: `services/ingest/app/main.py:517-530` — Uses `execute_write_operation()` with explicit transaction management
+- ✅ Transaction management: `common/db/safety.py:280-318` — `execute_write_operation()` manages transactions
+- ✅ Transaction begin: `services/ingest/app/main.py:523` — `begin_transaction(conn, logger)` (fallback path)
+- ✅ Transaction commit: `services/ingest/app/main.py:526` — `commit_transaction(conn, logger, "store_event")` (fallback path)
+- ✅ Transaction rollback: `services/ingest/app/main.py:528` — `rollback_transaction(conn, logger, "store_event")` (fallback path)
+
+**Partial Writes Cannot Occur:**
+- ✅ Atomic transactions: `services/ingest/app/main.py:517-530` — All writes within single transaction
+- ✅ All-or-nothing: `services/ingest/app/main.py:464-508` — All INSERT statements within `_do_store_event()` function (single transaction)
+- ✅ Rollback on failure: `services/ingest/app/main.py:528` — `rollback_transaction()` on exception
+- ✅ No partial commits: Transaction ensures atomicity (all writes succeed or all fail)
+
+**Failed Writes Cause Rollback:**
+- ✅ Rollback on exception: `services/ingest/app/main.py:528` — `rollback_transaction(conn, logger, "store_event")` on exception
+- ✅ Rollback in error handler: `services/ingest/app/main.py:733-734` — `conn.rollback()` in exception handler
+- ✅ No commit on failure: Transaction rollback prevents partial state
+
+**Parameterized Queries:**
+- ✅ Parameterized queries used: `services/ingest/app/main.py:464-508` — All queries use `%s` placeholders
 - ✅ No SQL injection risk: All values are parameterized
+- ✅ Prepared statements: `services/ingest/app/main.py:464` — `cur.execute()` with parameterized values
 
-**Transaction Handling:**
-- ✅ Explicit transactions: `services/ingest/app/main.py:489-502` - Uses `execute_write_operation()` with explicit begin/commit/rollback
-- ✅ Transaction management: `common/db/safety.py:280-318` - `execute_write_operation()` manages transactions
-- ✅ Rollback on failure: `services/ingest/app/main.py:499-502` - `rollback_transaction()` on exception
-- ✅ Commit on success: `common/db/safety.py:308` - `commit_transaction()` on success
+**Deadlock/Integrity Violation Detection:**
+- ✅ Deadlock detection: `common/db/safety.py:75-97` — `_detect_and_fail_on_db_error()` detects deadlocks
+- ✅ Deadlock termination: `common/db/safety.py:80-84` — Calls `exit_fatal()` on deadlock
+- ✅ Integrity violation detection: `common/db/safety.py:56-72` — `_is_integrity_violation()` detects violations
+- ✅ Integrity violation termination: `common/db/safety.py:92-96` — Calls `exit_fatal()` on integrity violation
 
-**Failure Behavior on DB Errors:**
-- ✅ Deadlock detection: `common/db/safety.py:75-97` - `_detect_and_fail_on_db_error()` detects deadlocks
-- ✅ Deadlock termination: `common/db/safety.py:80-84` - Calls `exit_fatal()` on deadlock
-- ✅ Integrity violation detection: `common/db/safety.py:56-72` - `_is_integrity_violation()` detects violations
-- ✅ Integrity violation termination: `common/db/safety.py:92-96` - Calls `exit_fatal()` on integrity violation
-- ✅ No retries: `services/ingest/README.md:40` - "NO retry logic: Does not retry failed database operations"
-
-**What Happens if DB is Slow:**
-- ⚠️ **ISSUE:** No timeout handling found:
-  - `services/ingest/app/main.py:192-213` - `get_db_connection()` gets connection from pool
-  - `services/ingest/app/main.py:212-213` - Pool exhaustion raises `RuntimeError`
-  - ⚠️ **ISSUE:** No timeout on slow queries (can hang indefinitely)
-  - ⚠️ **ISSUE:** Pool exhaustion causes HTTP 500 (no graceful degradation)
-
-**What Happens if DB is Unavailable:**
-- ✅ Connection failure causes error: `services/ingest/app/main.py:198-209` - `get_db_connection()` raises `RuntimeError` on failure
-- ✅ Error causes HTTP 500: `services/ingest/app/main.py:681-695` - Exception handler returns HTTP 500 INTERNAL ERROR
-- ✅ Error is logged: `services/ingest/app/main.py:690` - Logs error
-- ⚠️ **ISSUE:** No graceful degradation (returns HTTP 500)
-
-**Partial Writes:**
-- ✅ Atomic transactions: `common/db/safety.py:280-318` - `execute_write_operation()` uses transactions
-- ✅ Rollback on failure: `common/db/safety.py:316` - `rollback_transaction()` on exception
-- ✅ No partial writes: Transactions ensure atomicity
-
-**Silent Drops Without Audit:**
-- ✅ Drops are audited: `services/ingest/app/main.py:532-543` - Logs to `event_validation_log`
-- ✅ All validation failures are logged: `services/ingest/app/main.py:526-622` - Multiple validation checks log failures
-- ✅ All DB errors are logged: `services/ingest/app/main.py:501` - `logger.db_error()` on exception
-
-**Retry Loops Without Cap:**
-- ✅ No retries: `services/ingest/README.md:40` - "NO retry logic"
-- ✅ No retry loops found: `services/ingest/app/main.py:504-698` - No retry code found
-- ✅ Failures cause immediate rejection: `services/ingest/app/main.py:554-557` - Returns HTTP error codes
-
-### Verdict: **PARTIAL**
+### Verdict: **PASS**
 
 **Justification:**
-- Parameterized queries, transactions, and failure handling are proper
-- **ISSUE:** No timeout handling on slow queries (can hang)
-- **ISSUE:** No graceful degradation on DB unavailability (returns HTTP 500)
-- **ISSUE:** Pool exhaustion causes HTTP 500 (no backpressure)
-- No retries and proper audit logging are good
+- DB writes are transactional (explicit transaction management)
+- Partial writes cannot occur (atomic transactions, all-or-nothing)
+- Failed writes cause rollback (rollback on exception)
+- Parameterized queries prevent SQL injection
+- Deadlock/integrity violation detection and termination
+
+**PASS Conditions (Met):**
+- DB writes are transactional — **CONFIRMED** (explicit transaction management)
+- Partial writes cannot occur — **CONFIRMED** (atomic transactions)
+- Failed writes cause rollback — **CONFIRMED** (rollback on exception)
+
+**Evidence Required:**
+- File paths: `services/ingest/app/main.py:517-530,464-508,733-734`, `common/db/safety.py:280-318,75-97`
+- Transaction code: `execute_write_operation()`, `begin_transaction()`, `commit_transaction()`, `rollback_transaction()`
+- Error handling: Rollback on exception, deadlock/integrity violation detection
 
 ---
 
-## 7. NEGATIVE VALIDATION (MANDATORY)
+## 5. CREDENTIAL USAGE AT DB LAYER
 
 ### Evidence
 
-**Agent Writes Directly to DB:**
-- ✅ **PROVEN IMPOSSIBLE (in production code):** Agents do NOT write directly:
-  - `services/linux-agent/src/main.rs:293-332` - `transmit_event()` uses HTTP POST
-  - No database connection code found in agents
-  - ✅ **VERIFIED:** Production agents cannot write directly (use HTTP POST)
-- ⚠️ **ISSUE:** Test harness can write directly: `validation/harness/track_1_determinism.py:652-688` - Direct INSERT
-- ⚠️ **ISSUE:** Documentation says agents can write directly: `schemas/DATA_PLANE_HARDENING.md:29-31`
+**DB Credentials Used Are Explicit:**
+- ✅ Credentials loaded from environment: `services/ingest/app/main.py:91` — `config_loader.require('RANSOMEYE_DB_PASSWORD')`
+- ✅ Credentials retrieved explicitly: `services/ingest/app/main.py:137` — `db_password = config_loader.get_secret('RANSOMEYE_DB_PASSWORD')`
+- ✅ Credentials used explicitly: `services/ingest/app/main.py:147` — `password=db_password` (explicit parameter)
+- ✅ No hardcoded credentials: No hardcoded passwords found in ingest service code
 
-**DPI Writes Directly to DB:**
-- ✅ **PROVEN IMPOSSIBLE (in production code):** DPI does NOT write directly:
-  - `dpi/probe/main.py` - DPI probe is stubbed, would use HTTP POST if implemented
-  - No database connection code found in DPI
-  - ✅ **VERIFIED:** Production DPI cannot write directly (would use HTTP POST)
+**No Fallback Credentials Exist:**
+- ✅ No fallback credentials: `services/ingest/app/main.py:91` — `config_loader.require()` (required, no default)
+- ✅ No default password: `services/ingest/app/main.py:91` — No default value for `RANSOMEYE_DB_PASSWORD`
+- ✅ Missing credentials cause failure: `services/ingest/app/main.py:109-110` — `ConfigError` causes `exit_config_error()` (fail-fast)
 
-**Malformed Telemetry is Persisted:**
-- ✅ **PROVEN IMPOSSIBLE:** Malformed telemetry is NOT persisted:
-  - `services/ingest/app/main.py:526-557` - Schema validation rejects malformed messages
-  - `services/ingest/app/main.py:554-557` - Returns HTTP 400 BAD REQUEST
-  - ✅ **VERIFIED:** Malformed telemetry is rejected (not persisted)
+**Missing Credentials Block Writes:**
+- ✅ Missing credentials block startup: `services/ingest/app/main.py:109-110` — `ConfigError` causes `exit_config_error()` (service cannot start)
+- ✅ Missing credentials block DB connection: `services/ingest/app/main.py:129-173` — `_init_db_pool()` requires password (cannot create pool without password)
+- ✅ No writes without credentials: Service cannot start without credentials (fail-fast)
 
-**Duplicate Events Flood DB:**
-- ⚠️ **PARTIAL:** Duplicate events are detected, but:
-  - `services/ingest/app/main.py:632-647` - Duplicate `event_id` is rejected
-  - ⚠️ **ISSUE:** If attacker can generate unique `event_id` for each duplicate, flooding is possible
-  - ⚠️ **ISSUE:** No rate limiting prevents flooding
-  - ⚠️ **VERIFIED:** Duplicate events CAN flood DB if attacker generates unique `event_id` values
+**Shared Superuser Logic:**
+- ✅ No shared superuser logic: Each service uses its own credentials from environment
+- ✅ Credentials are service-specific: `services/ingest/app/main.py:91` — Ingest service uses `RANSOMEYE_DB_PASSWORD`
+- ⚠️ **ISSUE:** All services may use same password (shared credential, but not "superuser logic")
 
-**Telemetry Without Identity is Stored:**
-- ✅ **PROVEN IMPOSSIBLE:** Telemetry without identity is NOT stored:
-  - `contracts/event-envelope.schema.json:61-85` - `identity` object is required
-  - `services/ingest/app/main.py:316-328` - Schema validation checks for required fields
-  - `services/ingest/app/main.py:412-414` - Identity fields are extracted and stored
-  - ✅ **VERIFIED:** Telemetry without identity is rejected (schema validation)
+**DB Writes Succeed Without Credentials:**
+- ❌ **CONFIRMED:** DB writes do NOT succeed without credentials: `services/ingest/app/main.py:109-110` — Service cannot start without credentials
+- ✅ Credentials required at startup: `services/ingest/app/main.py:91` — `config_loader.require()` (required)
 
-### Verdict: **PARTIAL**
+### Verdict: **PASS**
 
 **Justification:**
-- Agents and DPI cannot write directly in production code (use HTTP POST)
-- Malformed telemetry is not persisted (schema validation)
-- Telemetry without identity is not stored (schema validation)
-- **CRITICAL:** Duplicate events CAN flood DB if attacker generates unique `event_id` values (no rate limiting)
-- **ISSUE:** Test harness can write directly (bypasses ingest)
+- DB credentials used are explicit (loaded from environment, retrieved via `get_secret()`)
+- No fallback credentials exist (required, no default)
+- Missing credentials block writes (service cannot start without credentials)
+- No shared superuser logic (each service uses its own credentials)
+
+**PASS Conditions (Met):**
+- DB credentials used are explicit — **CONFIRMED** (loaded from environment, explicit retrieval)
+- No fallback credentials exist — **CONFIRMED** (required, no default)
+- Missing credentials block writes — **CONFIRMED** (service cannot start without credentials)
+
+**Evidence Required:**
+- File paths: `services/ingest/app/main.py:91,109-110,137,147,129-173`
+- Credential code: `config_loader.require('RANSOMEYE_DB_PASSWORD')`, `config_loader.get_secret()`, `_init_db_pool()`
+- Error handling: `ConfigError` causes `exit_config_error()` (fail-fast)
 
 ---
 
-## 8. VERDICT & IMPACT
+## 6. FAIL-CLOSED GUARANTEES
 
-### Section-by-Section Verdicts
+### Evidence
 
-1. **Component Identity:** PARTIAL
-   - Ingest service is clearly identified, but documentation discrepancy exists
+**Any Ingest/Normalize/Write Failure Stops Processing:**
+- ✅ Schema validation failure stops processing: `services/ingest/app/main.py:571-602` — Returns HTTP 400 BAD REQUEST (stops processing)
+- ✅ Hash integrity failure stops processing: `services/ingest/app/main.py:604-630` — Returns HTTP 400 BAD REQUEST (stops processing)
+- ✅ Timestamp validation failure stops processing: `services/ingest/app/main.py:636-667` — Returns HTTP 400 BAD REQUEST (stops processing)
+- ✅ Duplicate detection failure stops processing: `services/ingest/app/main.py:677-692` — Returns HTTP 409 CONFLICT (stops processing)
+- ✅ Integrity violation stops processing: `services/ingest/app/main.py:703-722` — Returns HTTP 400 BAD REQUEST (stops processing)
+- ✅ Database write failure stops processing: `services/ingest/app/main.py:732-746` — Returns HTTP 500 INTERNAL ERROR (stops processing)
 
-2. **Authenticated Telemetry Input:** FAIL
-   - No signature verification, no origin verification, identity not cryptographically bound
+**No "Best Effort" or "Continue on Error" Logic:**
+- ✅ No best-effort logic: All validation failures cause HTTP exception (no "try to process anyway")
+- ✅ No continue-on-error logic: All failures cause immediate rejection (no "log and continue")
+- ✅ No fallback processing: No fallback paths found in ingest service
+- ✅ Failures cause immediate termination: HTTP exceptions terminate request processing
 
-3. **Schema Validation:** PASS
-   - Strict schema validation is present and enforced
+**Silent Data Loss:**
+- ❌ **CONFIRMED:** No silent data loss: All failures are logged and cause HTTP exception (not silent)
+- ✅ All failures are logged: `services/ingest/app/main.py:590,618,655,687,706` — Logs all validation failures
+- ✅ All failures cause HTTP exception: HTTP 400/409/500 on failures (not silent)
 
-4. **Normalization Logic:** PARTIAL
-   - No normalization in ingest (deferred to downstream), no host identity resolution
+**Non-Deterministic Writes:**
+- ❌ **CONFIRMED:** Writes are NOT non-deterministic: Database writes use deterministic field order and values
+- ⚠️ **ISSUE:** `ingested_at` is non-deterministic (uses `datetime.now()`), but this is intentional (ingestion timestamp)
+- ✅ Field ordering is deterministic: `services/ingest/app/main.py:464-508` — Explicit field order in INSERT statements
 
-5. **Deduplication & Flood Protection:** FAIL
-   - No flood protection, event storms can overwhelm service
+**Error Handling:**
+- ✅ Explicit error handling: All validation failures have explicit error handling (HTTP exceptions)
+- ✅ Error logging: All failures are logged before rejection
+- ✅ No silent failures: All failures cause HTTP exception (not silent)
 
-6. **Database Write Safety:** PARTIAL
-   - Proper transactions and parameterized queries, but no timeout handling or graceful degradation
-
-7. **Negative Validation:** PARTIAL
-   - Agents/DPI cannot write directly, but duplicate events can flood DB
-
-### Overall Verdict: **FAIL**
+### Verdict: **PASS**
 
 **Justification:**
-- **CRITICAL FAILURE:** Ingest service does NOT verify telemetry origin or signatures
-- **CRITICAL FAILURE:** No flood protection (event storms can overwhelm service)
-- **CRITICAL FAILURE:** Duplicate events can flood DB if attacker generates unique `event_id` values
-- **CRITICAL FAILURE:** Identity is NOT cryptographically bound (can be spoofed)
-- **ISSUE:** No normalization in ingest (deferred to downstream)
-- **ISSUE:** No timeout handling on slow queries
-- **ISSUE:** No graceful degradation on DB unavailability
-- Schema validation is proper, but authentication/authorization are missing
+- Any ingest/normalize/write failure stops processing (HTTP exceptions terminate request)
+- No "best effort" or "continue on error" logic (all failures cause immediate rejection)
+- No silent data loss (all failures are logged and cause HTTP exception)
+- Writes are deterministic (field ordering and values are deterministic, except `ingested_at` which is intentionally time-based)
 
-**Impact if Ingest Layer is Compromised:**
-- **CRITICAL:** If ingest is compromised, all telemetry can be injected (no signature verification)
-- **CRITICAL:** If ingest is compromised, all identity can be spoofed (no identity verification)
-- **CRITICAL:** If ingest is compromised, event storms can be injected (no flood protection)
-- **CRITICAL:** If ingest is compromised, duplicate events can flood DB (no rate limiting)
-- **HIGH:** If ingest is compromised, all downstream engines receive untrusted data
-- **HIGH:** If ingest is compromised, correlation and AI results are untrustworthy
+**PASS Conditions (Met):**
+- Any ingest/normalize/write failure stops processing — **CONFIRMED** (HTTP exceptions terminate request)
+- No "best effort" or "continue on error" logic — **CONFIRMED** (all failures cause immediate rejection)
 
-**Whether Correlation & AI Validations Remain Trustworthy:**
-- ❌ **NO** - Correlation and AI validations cannot be trusted if ingest is compromised
-- ❌ If unsigned telemetry can reach database, then correlation results are untrustworthy
-- ❌ If identity can be spoofed, then all event attribution is untrustworthy
-- ❌ If event storms can flood DB, then system availability is compromised
-- ⚠️ Schema validation is trustworthy, but authentication/authorization are not
+**Evidence Required:**
+- File paths: `services/ingest/app/main.py:571-602,604-630,636-667,677-692,703-722,732-746`
+- Error handling: HTTP 400/409/500 on failures, no "best effort" or "continue on error" logic
+- Logging: All failures are logged before rejection
+
+---
+
+## CREDENTIAL TYPES VALIDATED
+
+### Database Credentials
+- **Type:** PostgreSQL password (`RANSOMEYE_DB_PASSWORD`)
+- **Source:** Environment variable (required, no default)
+- **Validation:** ✅ **VALIDATED** (required at startup, fail-fast on missing)
+- **Usage:** Explicit retrieval via `config_loader.get_secret()`, used in database connection pool
+- **Status:** ✅ **PASS** (explicit, no fallback, missing credentials block writes)
+
+---
+
+## PASS CONDITIONS
+
+### Section 1: Ingest Entry Validation
+- ✅ Event envelope validation is mandatory — **PASS**
+- ✅ Schema enforcement blocks malformed events — **PASS**
+- ✅ Missing required fields cause rejection — **PASS**
+
+### Section 2: Normalization Determinism
+- ❌ Same raw event → same normalized output — **FAIL** (no normalization in ingest, `ingested_at` is non-deterministic)
+- ❌ Field ordering, timestamps, IDs are deterministic — **FAIL** (`ingested_at` uses `datetime.now()`, SQL `NOW()`)
+- ❌ No environment- or time-based mutation — **FAIL** (`ingested_at` is time-based)
+
+### Section 3: Integrity & Sequence Guarantees
+- ✅ Hash integrity checks — **PASS**
+- ✅ Sequence monotonicity — **PASS**
+- ✅ Duplicate detection behavior — **PASS**
+- ✅ Replay handling — **PASS**
+
+### Section 4: Database Write Semantics
+- ✅ DB writes are transactional — **PASS**
+- ✅ Partial writes cannot occur — **PASS**
+- ✅ Failed writes cause rollback — **PASS**
+
+### Section 5: Credential Usage at DB Layer
+- ✅ DB credentials used are explicit — **PASS**
+- ✅ No fallback credentials exist — **PASS**
+- ✅ Missing credentials block writes — **PASS**
+
+### Section 6: Fail-Closed Guarantees
+- ✅ Any ingest/normalize/write failure stops processing — **PASS**
+- ✅ No "best effort" or "continue on error" logic — **PASS**
+
+---
+
+## FAIL CONDITIONS
+
+### Section 1: Ingest Entry Validation
+- ❌ Any malformed event reaches normalization — **NOT CONFIRMED** (schema validation blocks malformed events)
+- ❌ Validation errors are ignored or logged only — **NOT CONFIRMED** (validation errors cause HTTP 400)
+
+### Section 2: Normalization Determinism
+- ❌ **CONFIRMED:** Normalization depends on `now()` — **`ingested_at` uses `datetime.now()`, SQL `NOW()`**
+- ❌ **CONFIRMED:** Random IDs are generated during normalization — **NOT CONFIRMED** (no random IDs, but timestamps are non-deterministic)
+
+### Section 3: Integrity & Sequence Guarantees
+- ❌ Sequence gaps are silently accepted — **NOT CONFIRMED** (sequence gaps cause rejection)
+- ❌ Hash mismatches are logged but not blocked — **NOT CONFIRMED** (hash mismatches cause HTTP 400)
+
+### Section 4: Database Write Semantics
+- ❌ Partial or inconsistent state can be persisted — **NOT CONFIRMED** (atomic transactions prevent partial writes)
+- ❌ Errors do not abort processing — **NOT CONFIRMED** (errors cause rollback and HTTP exception)
+
+### Section 5: Credential Usage at DB Layer
+- ❌ DB writes succeed without credentials — **NOT CONFIRMED** (service cannot start without credentials)
+- ❌ Shared superuser logic exists — **NOT CONFIRMED** (each service uses its own credentials)
+
+### Section 6: Fail-Closed Guarantees
+- ❌ Silent data loss — **NOT CONFIRMED** (all failures are logged and cause HTTP exception)
+- ❌ Non-deterministic writes — **PARTIAL** (`ingested_at` is non-deterministic, but intentional)
+
+---
+
+## EVIDENCE REQUIRED
+
+### Ingest Entry Validation
+- File paths: `services/ingest/app/main.py:341-353,571-602`, `contracts/event-envelope.schema.json:7-19`
+- Validation code: `validate_schema()` function, `jsonschema.validate()` call
+- Error handling: HTTP 400 BAD REQUEST on validation failure
+
+### Normalization Determinism
+- File paths: `services/ingest/app/main.py:633,507`, `services/ingest/README.md:50,97`
+- Non-deterministic code: `datetime.now(timezone.utc)`, SQL `NOW()`
+- Missing normalization: No normalization code in ingest service
+
+### Integrity & Sequence Guarantees
+- File paths: `services/ingest/app/main.py:401-409,411-415,443-456,604-630,677-692`, `common/integrity/verification.py:76-105`
+- Validation functions: `validate_hash_integrity()`, `verify_sequence_monotonicity()`, `check_duplicate()`, `verify_hash_chain_continuity()`
+- Error handling: HTTP 400/409 on violations, ValueError on sequence violations
+
+### Database Write Semantics
+- File paths: `services/ingest/app/main.py:517-530,464-508,733-734`, `common/db/safety.py:280-318,75-97`
+- Transaction code: `execute_write_operation()`, `begin_transaction()`, `commit_transaction()`, `rollback_transaction()`
+- Error handling: Rollback on exception, deadlock/integrity violation detection
+
+### Credential Usage at DB Layer
+- File paths: `services/ingest/app/main.py:91,109-110,137,147,129-173`
+- Credential code: `config_loader.require('RANSOMEYE_DB_PASSWORD')`, `config_loader.get_secret()`, `_init_db_pool()`
+- Error handling: `ConfigError` causes `exit_config_error()` (fail-fast)
+
+### Fail-Closed Guarantees
+- File paths: `services/ingest/app/main.py:571-602,604-630,636-667,677-692,703-722,732-746`
+- Error handling: HTTP 400/409/500 on failures, no "best effort" or "continue on error" logic
+- Logging: All failures are logged before rejection
+
+---
+
+## GA VERDICT
+
+### Overall: **FAIL**
+
+**Critical Blockers:**
+1. **FAIL:** No normalization occurs in ingest (deferred to downstream)
+   - **Impact:** Normalization determinism cannot be validated in ingest service
+   - **Location:** `services/ingest/README.md:50,97` — "NO normalization: Does not write to normalized tables"
+   - **Severity:** **HIGH** (normalization is deferred, but determinism requirements still apply)
+   - **Master Spec Violation:** Normalization determinism requirements cannot be validated if normalization doesn't exist
+
+2. **FAIL:** `ingested_at` is NOT deterministic (uses `datetime.now()`)
+   - **Impact:** Same event ingested at different times will have different `ingested_at` values
+   - **Location:** `services/ingest/app/main.py:633` — `datetime.now(timezone.utc).isoformat()`
+   - **Severity:** **HIGH** (violates determinism requirements for normalization)
+   - **Master Spec Violation:** Normalization must be deterministic; time-based mutation violates this
+
+3. **FAIL:** SQL `NOW()` is NOT deterministic (uses database server time)
+   - **Impact:** `event_validation_log.validation_timestamp` is non-deterministic
+   - **Location:** `services/ingest/app/main.py:507` — `VALUES (%s, %s, NOW())`
+   - **Severity:** **HIGH** (violates determinism requirements)
+   - **Master Spec Violation:** Normalization must be deterministic; database server time is non-deterministic
+
+**Non-Blocking Issues:**
+1. Ingest entry validation is correct (schema enforcement, required fields)
+2. Integrity and sequence guarantees are correct (hash integrity, sequence monotonicity, duplicate detection)
+3. Database write semantics are correct (transactional, atomic, rollback on failure)
+4. Credential usage is correct (explicit, no fallback, missing credentials block writes)
+5. Fail-closed guarantees are correct (failures stop processing, no "best effort" logic)
+
+**Strengths:**
+1. ✅ Schema validation is present and enforced
+2. ✅ Hash integrity validation is present and enforced
+3. ✅ Sequence monotonicity validation is present and enforced
+4. ✅ Duplicate detection is present and enforced
+5. ✅ Database writes are transactional and atomic
+6. ✅ Credential usage is explicit and fail-fast
+7. ✅ Fail-closed behavior is correct (failures stop processing)
 
 **Recommendations:**
-1. **CRITICAL:** Implement cryptographic signature verification in ingest service
-2. **CRITICAL:** Implement telemetry origin verification (who can publish what)
-3. **CRITICAL:** Implement flood protection (rate limiting, throttling, backpressure)
-4. **CRITICAL:** Implement component identity verification (cryptographic proof of component identity)
-5. **HIGH:** Implement timeout handling on slow database queries
-6. **HIGH:** Implement graceful degradation on database unavailability
-7. **MEDIUM:** Consider implementing normalization in ingest (or document why it's deferred)
-8. **MEDIUM:** Resolve documentation discrepancy (agents can write directly vs use HTTP POST)
+1. **CRITICAL:** Implement normalization in ingest service (or document why it's deferred and validate determinism in downstream)
+2. **CRITICAL:** Make `ingested_at` deterministic (use timestamp from envelope, not `datetime.now()`)
+3. **CRITICAL:** Make SQL `NOW()` deterministic (use explicit timestamp parameter, not `NOW()`)
+4. **HIGH:** Document normalization determinism requirements for downstream components
+5. **MEDIUM:** Consider adding cryptographic nonces to event envelopes for replay protection
 
 ---
 
-**Validation Date:** 2025-01-13
-**Validator:** Lead Validator & Compliance Auditor
-**Next Step:** Validation Step 5 — Intel DB Layer (if applicable) or Validation Step 6 — Correlation Engine
+**Validation Date:** 2025-01-13  
+**Validator:** Independent System Validator  
+**Next Step:** Validation Step 5 — Correlation Engine  
+**GA Status:** **BLOCKED** (Critical failures in normalization determinism)
