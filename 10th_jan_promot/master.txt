@@ -15287,4 +15287,119 @@ If any command can execute without verification → FAIL.
 Prompt Ends
 
 
+Prompt Start
+
+You are fixing PHASE 5 — UI, OPERATOR SAFETY & HONESTY for RansomEye.
+
+This phase is SEQUENTIAL and depends on Phase 4 being PASS (now satisfied).
+
+OBJECTIVE
+
+Ensure operators are never misled.
+
+After this phase:
+
+The UI MUST NOT overstate certainty
+
+Missing guarantees MUST be visible
+
+Evidence quality MUST be explicit
+
+No action can be taken on ambiguous intelligence without warning
+
+MANDATORY FIXES (ALL REQUIRED)
+1. Evidence Quality Indicators
+
+UI MUST display:
+
+Evidence completeness
+
+Determinism status
+
+Contradiction presence
+
+AI provenance availability
+
+No green checkmarks without proof.
+
+2. Confidence vs Certainty Separation
+
+You MUST:
+
+Separate confidence score from confirmation state
+
+Clearly label probabilistic vs deterministic conclusions
+
+Prevent UI wording that implies certainty without CONFIRMED state
+
+3. Operator Action Warnings
+
+You MUST:
+
+Warn operators when:
+
+Evidence is partial
+
+Contradictions exist
+
+AI output is advisory only
+
+Require explicit acknowledgment before action
+
+4. API/UI Access Control
+
+You MUST:
+
+Enforce RBAC consistently
+
+Prevent unauthorized visibility of sensitive actions
+
+Ensure UI does not bypass policy authority
+
+FILES YOU MUST INSPECT & MODIFY
+
+(quote exact paths and lines)
+
+ui/frontend/*
+
+ui/backend/*
+
+API response schemas
+
+Operator action endpoints
+
+FORBIDDEN
+
+No optimistic wording
+
+No hiding uncertainty
+
+No default “OK” states
+
+No auto-confirmation
+
+EVIDENCE REQUIRED IN YOUR RESPONSE
+
+You MUST provide:
+
+UI state examples (before vs after)
+
+Evidence quality model
+
+Operator warning flows
+
+RBAC enforcement proof
+
+Mapping required to:
+
+Validation File 14
+
+Validation File 18
+
+Validation File 19
+
+If UI can mislead an operator → FAIL.
+
+Prompt Ends
+
 
