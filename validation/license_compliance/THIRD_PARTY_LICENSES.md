@@ -227,8 +227,8 @@ Components supplied by customer, not by RansomEye. Customer responsibility for l
 ## Risk Assessment
 
 ### Low Risk (Permissive Licenses)
-- **Count:** 38 dependencies
-- **Licenses:** MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, MPL-2.0, dual-licensed (Apache-2.0 OR MIT)
+- **Count:** 37 dependencies
+- **Licenses:** MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, BSD-3-Clause (with Apache-2.0 components), MPL-2.0, dual-licensed (Apache-2.0 OR MIT / MIT OR Apache-2.0)
 - **Risk Level:** Low
 - **Rationale:** No copyleft requirements, no source disclosure requirements, compatible with commercial licensing
 
@@ -290,7 +290,7 @@ Components supplied by customer, not by RansomEye. Customer responsibility for l
 
 ## Change Log
 
-- **2024-01-10:** Initial license compliance bundle created. All 42 dependencies inventoried. Zero forbidden licenses. One conditionally allowed license (LGPL-3.0, psycopg2-binary, dynamic linking only).
+- **2024-01-10:** Initial license compliance bundle created. All 39 direct dependencies inventoried (transitive dependencies excluded by policy). Zero forbidden licenses. One conditionally allowed license (LGPL-3.0, psycopg2-binary, dynamic linking only).
 
 ---
 
