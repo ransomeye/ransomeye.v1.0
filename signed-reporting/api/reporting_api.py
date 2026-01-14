@@ -217,6 +217,10 @@ class ReportingAPI:
         report_id = str(uuid.uuid4())
         audit_ledger_anchor = str(uuid.uuid4())  # Will be set after ledger entry
         
+        # GA-BLOCKING: Use incident snapshot time for generated_at (not system time)
+        # This ensures deterministic report metadata - same incident snapshot = same timestamp
+        generated_at = incident_snapshot_time or datetime.now(timezone.utc).isoformat()
+        
         report_record = {
             'report_id': report_id,
             'incident_id': incident_id,
@@ -226,7 +230,7 @@ class ReportingAPI:
             'content_hash': content_hash,
             'signature': signature,
             'signing_key_id': self.report_signer.key_id,
-            'generated_at': datetime.now(timezone.utc).isoformat(),
+            'generated_at': generated_at,  # GA-BLOCKING: Incident-anchored timestamp
             'rendering_profile_id': rendering_profile_id,
             'audit_ledger_anchor': audit_ledger_anchor
         }
