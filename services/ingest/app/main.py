@@ -736,12 +736,15 @@ async def ingest_event(request: Request):
             conn = get_db_connection()
             with conn.cursor() as cur:
                 cur.execute("""
-                    INSERT INTO event_validation_log (
-                        event_id, validation_status, validation_timestamp,
-                        error_code, error_message
-                    )
-                    VALUES (NULL, %s, NOW(), %s, %s)
-                """, (VALIDATION_STATUS_INTEGRITY_CHAIN_BROKEN, error_code, "Hash mismatch"))
+                    # PHASE 2: Use deterministic timestamp from envelope (observed_at)
+                    observed_at = parser.isoparse(envelope.get("observed_at", envelope.get("ingested_at")))
+                    cur.execute("""
+                        INSERT INTO event_validation_log (
+                            event_id, validation_status, validation_timestamp,
+                            error_code, error_message
+                        )
+                        VALUES (NULL, %s, %s, %s, %s)
+                    """, (VALIDATION_STATUS_INTEGRITY_CHAIN_BROKEN, observed_at, error_code, "Hash mismatch"))
             conn.commit()
             logger.warning(f"Hash integrity validation failed: {error_code}", event_id=envelope.get("event_id"))
         except Exception as e:
