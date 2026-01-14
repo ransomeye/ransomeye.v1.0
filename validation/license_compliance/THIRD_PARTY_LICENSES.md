@@ -225,16 +225,18 @@ Components supplied by customer, not by RansomEye. Customer responsibility for l
 ## Risk Assessment
 
 ### Low Risk (Permissive Licenses)
-- **Count:** 41 dependencies
+- **Count:** 38 dependencies
 - **Licenses:** MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, MPL-2.0, dual-licensed (Apache-2.0 OR MIT)
 - **Risk Level:** Low
 - **Rationale:** No copyleft requirements, no source disclosure requirements, compatible with commercial licensing
 
-### Medium Risk (Conditionally Allowed)
-- **Count:** 1 dependency
-- **License:** LGPL-3.0 (psycopg2-binary)
+### Medium Risk (Conditionally Allowed / Binary Redistribution)
+- **Count:** 2 dependencies
+- **Licenses:** LGPL-3.0 (psycopg2-binary, dynamic linking only), MIT (bitsandbytes, binary redistribution risk)
 - **Risk Level:** Medium
-- **Rationale:** Requires dynamic linking only. Properly used via Python's dynamic import mechanism. Risk is mitigated by proper usage pattern.
+- **Rationale:** 
+  - psycopg2-binary: Requires dynamic linking only. Properly used via Python's dynamic import mechanism. Risk is mitigated by proper usage pattern. Static bundling is FORBIDDEN.
+  - bitsandbytes: MIT license allows redistribution, but includes CUDA binaries subject to NVIDIA CUDA Toolkit EULA. Binary redistribution requires compliance with NVIDIA EULA terms.
 
 ### High Risk (Forbidden)
 - **Count:** 0 dependencies
