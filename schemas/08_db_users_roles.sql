@@ -1,10 +1,10 @@
 -- RansomEye v1.0 Database Users & Roles
--- AUTHORITATIVE: v1.0 GA uses single DB user (gagan/gagan)
+-- AUTHORITATIVE: PHASE 1 - Per-service database users with least-privilege access
 -- PostgreSQL 14+ compatible
 --
--- PHASE A2 REVERTED: v1.0 GA uses single DB user per credential constraint
--- This schema is DISABLED for v1.0 GA - all services use gagan/gagan
--- DO NOT EXECUTE THIS SCHEMA IN v1.0 GA
+-- PHASE 1 ENABLED: Per-service database users for zero-trust model
+-- Each service has its own database role with least-privilege access
+-- Passwords must be set via ALTER ROLE after creation (no defaults)
 
 -- ============================================================================
 -- DATABASE ROLES (Service-Specific)
