@@ -13,7 +13,7 @@ import argparse
 _supply_chain_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(_supply_chain_dir))
 
-from crypto.vendor_key_manager import VendorKeyManager, VendorKeyManagerError
+from crypto.persistent_signing_authority import PersistentSigningAuthority, PersistentSigningAuthorityError
 from crypto.artifact_signer import ArtifactSigner, ArtifactSigningError
 from engine.manifest_builder import ManifestBuilder, ManifestBuilderError
 
@@ -51,10 +51,16 @@ def main():
         help='Signing key identifier'
     )
     parser.add_argument(
-        '--key-dir',
+        '--vault-dir',
         type=Path,
         required=True,
-        help='Directory containing vendor signing keys'
+        help='Directory containing encrypted key vault'
+    )
+    parser.add_argument(
+        '--registry-path',
+        type=Path,
+        required=True,
+        help='Path to key registry JSON file'
     )
     parser.add_argument(
         '--toolchain-config',
