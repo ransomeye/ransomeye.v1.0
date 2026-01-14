@@ -56,7 +56,7 @@ The following licenses are explicitly allowed for use in RansomEye without restr
 ### BSD-3-Clause License
 - **Status:** ✅ ALLOWED
 - **Rationale:** Permissive license with minimal restrictions (attribution, no endorsement). Compatible with commercial licensing.
-- **Dependencies:** torch, pandas, numpy, scikit-learn, python-dotenv, uvicorn
+- **Dependencies:** torch (primary license, includes Apache-2.0 components), pandas, numpy, scikit-learn, python-dotenv, uvicorn
 
 ### BSD-2-Clause License
 - **Status:** ✅ ALLOWED
