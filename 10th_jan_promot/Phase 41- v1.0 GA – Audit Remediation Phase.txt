@@ -1,0 +1,125 @@
+PROMPT START
+
+You are working on RansomEye v1.0 GA – Audit Remediation Phase.
+This is NOT v2, NOT new feature development, and NOT architectural expansion.
+
+🔒 GLOBAL CONSTRAINTS (MANDATORY)
+
+This is v1.0 GA hardening only
+
+No new features
+
+No redesigns beyond fixing validation failures
+
+No credential changes — keep gagan / gagan as-is
+
+Fail-closed behavior must be preserved
+
+Diagnostics only, never auto-fix
+
+Treat this as code-freeze remediation
+
+TASK 1 — IMPLEMENT PRE-FLIGHT DATABASE DIAGNOSTIC (MANDATORY GA GATE)
+Objective
+
+Prevent opaque startup crashes caused by PostgreSQL authentication misconfiguration (PEER vs MD5), while preserving security boundaries.
+
+Current Failure
+
+When PostgreSQL uses PEER authentication (default on Debian/Ubuntu), RansomEye crashes with a generic DB connection error, even if credentials are correct.
+
+This violates:
+
+Enterprise usability
+
+Audit readiness
+
+Operator trust
+
+REQUIRED IMPLEMENTATION
+
+Create a diagnostic-only module:
+
+core/diagnostics/db_bootstrap_validator.py
+
+Behavior (STRICT)
+
+Attempt DB connection using existing credentials (gagan / gagan)
+
+If authentication fails:
+
+Inspect PostgreSQL error code / message
+
+Detect PEER authentication mismatch
+
+If PEER auth is detected:
+
+DO NOT MODIFY ANY FILE
+
+DO NOT FALL BACK
+
+DO NOT CONTINUE STARTUP
+
+Emit a clear, actionable error:
+
+Example (wording can vary, clarity must not):
+
+FATAL: PostgreSQL is rejecting password authentication.
+Detected PEER authentication in pg_hba.conf.
+Please change the authentication method from peer to md5 for user gagan.
+
+Exit fail-closed
+
+HARD RULES
+
+❌ No auto-editing pg_hba.conf
+
+❌ No weakening authentication
+
+❌ No retries with alternate modes
+
+❌ No credential rotation
+
+✅ Diagnostics only
+
+✅ Deterministic output
+
+✅ Enterprise-grade messaging
+
+INTEGRATION REQUIREMENT
+
+This validator must run before any schema validation or service startup
+
+If it fails → system must terminate cleanly with the diagnostic message
+
+DELIVERABLES
+
+db_bootstrap_validator.py
+
+Integration point showing where Core calls it
+
+Example failure output (as comment or test)
+
+Confirmation that no security boundary was weakened
+
+ACCEPTANCE CRITERIA (GA BLOCKING)
+
+PEER auth → guided failure
+
+MD5 auth → normal startup
+
+No silent crashes
+
+No auto-fix behavior
+
+Respond only with:
+
+Implementation approach
+
+File paths
+
+Key code excerpts
+
+Confirmation of rule compliance
+
+PROMPT END

@@ -13536,144 +13536,129 @@ Implement now.
 Promt End
 
 
-promot start
 
-You are Cursor, executing RansomEye v1.0 GA Hardening.
+PROMPT START
 
-⚠️ IMPORTANT SCOPE CORRECTION — READ CAREFULLY
+You are working on RansomEye v1.0 GA – Audit Remediation Phase.
+This is NOT v2, NOT new feature development, and NOT architectural expansion.
 
-This is NOT a v2 effort.
-This is v1.0 GA audit remediation only.
+🔒 GLOBAL CONSTRAINTS (MANDATORY)
 
-GLOBAL CORRECTIONS (LOCKED)
-
-DO NOT use any “v2” terminology
-
-No “Correlation Engine v2”
-
-No “Installer v2”
-
-All work is v1.0 Hardening Patches ONLY
-
-NO SCOPE CREEP
+This is v1.0 GA hardening only
 
 No new features
 
-No architectural redesign beyond fixing validation failures
+No redesigns beyond fixing validation failures
 
-No future-looking improvements
+No credential changes — keep gagan / gagan as-is
 
-CREDENTIAL CONSTRAINT (CRITICAL)
+Fail-closed behavior must be preserved
 
-gagan / gagan remains the mandatory DB credential for v1.0 GA
+Diagnostics only, never auto-fix
 
-Phase A was diagnostics only
+Treat this as code-freeze remediation
 
-Credential scoping / rotation is OUT OF SCOPE
+TASK 1 — IMPLEMENT PRE-FLIGHT DATABASE DIAGNOSTIC (MANDATORY GA GATE)
+Objective
 
-REQUIRED CORRECTIVE ACTION (IMMEDIATE)
-🔁 REVERT Phase A.2 (Credential Scoping)
+Prevent opaque startup crashes caused by PostgreSQL authentication misconfiguration (PEER vs MD5), while preserving security boundaries.
 
-Undo the following changes:
+Current Failure
 
-Revert per-service DB users
+When PostgreSQL uses PEER authentication (default on Debian/Ubuntu), RansomEye crashes with a generic DB connection error, even if credentials are correct.
 
-Restore single DB user usage (gagan)
+This violates:
 
-Ensure all services:
+Enterprise usability
 
-Use RANSOMEYE_DB_USER=gagan
+Audit readiness
 
-Fail only if diagnostics fail, not due to missing per-service users
+Operator trust
 
-Keep A1 (db_bootstrap_validator.py) unchanged.
+REQUIRED IMPLEMENTATION
 
-PHASE B — INSTALLER & BOOTSTRAP HARDENING (v1.0 ONLY)
+Create a diagnostic-only module:
 
-Proceed with Phase B strictly within v1.0 scope:
+core/diagnostics/db_bootstrap_validator.py
 
-B1. SBOM & Artifact Verification
+Behavior (STRICT)
 
-Generate manifest.json
+Attempt DB connection using existing credentials (gagan / gagan)
 
-Generate .sha256 and .sig (ed25519)
+If authentication fails:
 
-Installer must refuse:
+Inspect PostgreSQL error code / message
 
-Missing artifact
+Detect PEER authentication mismatch
 
-Hash mismatch
+If PEER auth is detected:
 
-Invalid signature
+DO NOT MODIFY ANY FILE
 
-This is supply-chain hardening, not a new installer.
+DO NOT FALL BACK
 
-B2. OS-Aware Validation Executor
+DO NOT CONTINUE STARTUP
 
-Enforce OS checks in executor.py
+Emit a clear, actionable error:
 
-Hard stop on:
+Example (wording can vary, clarity must not):
 
-ETW on Linux
+FATAL: PostgreSQL is rejecting password authentication.
+Detected PEER authentication in pg_hba.conf.
+Please change the authentication method from peer to md5 for user gagan.
 
-eBPF on Windows
+Exit fail-closed
 
-No warnings. Fatal errors only.
+HARD RULES
 
-PHASE F — FORENSIC & OPERATIONAL HARDENING (SELECTIVE)
-F1. Report Determinism (EXPANDED RULE)
+❌ No auto-editing pg_hba.conf
 
-Implement determinism such that:
+❌ No weakening authentication
 
-Report hash is anchored to:
+❌ No retries with alternate modes
 
-Incident snapshot time OR
+❌ No credential rotation
 
-Incident closure time
+✅ Diagnostics only
 
-Renderer must never use system time
+✅ Deterministic output
 
-CRITICAL ADDITION
+✅ Enterprise-grade messaging
 
-Replacing the logo or branding assets MUST NOT change the report hash
+INTEGRATION REQUIREMENT
 
-Visual layer is presentation-only, not evidence
+This validator must run before any schema validation or service startup
 
-CI must assert:
+If it fails → system must terminate cleanly with the diagnostic message
 
-sha256(report_A_with_logo1) == sha256(report_A_with_logo2)
+DELIVERABLES
 
-F2. Headless Agent Survivability (GA GATE)
+db_bootstrap_validator.py
 
-Core offline
+Integration point showing where Core calls it
 
-Prohibited action attempted
+Example failure output (as comment or test)
 
-Agent must fail-closed using cached policy
+Confirmation that no security boundary was weakened
 
-Failure = ❌ GA blocked
+ACCEPTANCE CRITERIA (GA BLOCKING)
 
-EXECUTION RULE
+PEER auth → guided failure
 
-If you encounter any task that:
+MD5 auth → normal startup
 
-Requires new credentials
+No silent crashes
 
-Requires redesign
+No auto-fix behavior
 
-Requires feature addition
+Respond only with:
 
-→ STOP and report. Do not implement.
+Implementation approach
 
-Proceed now with:
+File paths
 
-Phase A2 revert
+Key code excerpts
 
-Phase B execution
+Confirmation of rule compliance
 
-Phase F (determinism + survivability)
-
-prompot end
-
-
-
+PROMPT END
