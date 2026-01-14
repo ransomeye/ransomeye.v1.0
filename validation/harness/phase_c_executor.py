@@ -82,6 +82,8 @@ class PhaseCExecutor:
         self.output_dir.mkdir(parents=True, exist_ok=True)
         
         # Detect OS and set execution mode
+        self.host_os = platform.system().lower()
+        
         if execution_mode is None:
             self.execution_mode = self._detect_execution_mode()
         else:
@@ -89,6 +91,9 @@ class PhaseCExecutor:
         
         if self.execution_mode not in ['linux', 'windows']:
             raise ValueError(f"Invalid execution mode: {execution_mode}. Must be 'linux' or 'windows'")
+        
+        # GA-BLOCKING: Enforce OS gating at executor startup (fail-closed)
+        self._validate_os_track_compatibility()
         
         # Test execution results (always initialize safely)
         phase_name = "Phase C-L" if self.execution_mode == 'linux' else "Phase C-W"
