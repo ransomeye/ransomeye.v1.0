@@ -82,17 +82,21 @@ def validate_signing_key(env_var: str = "RANSOMEYE_COMMAND_SIGNING_KEY",
     # Check for known default/insecure keys
     insecure_keys = [
         "phase7_minimal_default_key_change_in_production",
+        "test_signing_key_minimum_32_characters_long_for_validation_long_enough",
+        "test_signing_key",
         "default",
         "test",
         "changeme",
         "password",
         "secret",
     ]
-    if value.lower() in [k.lower() for k in insecure_keys]:
-        if fail_on_default:
-            error_msg = f"SECURITY VIOLATION: Signing key {env_var} uses insecure default value"
-            print(f"FATAL: {error_msg}", file=sys.stderr)
-            sys.exit(1)  # CONFIG_ERROR
+    # Check if value contains any insecure pattern
+    for insecure_key in insecure_keys:
+        if insecure_key.lower() in value.lower():
+            if fail_on_default:
+                error_msg = f"SECURITY VIOLATION: Signing key {env_var} contains insecure default pattern '{insecure_key}' (not allowed)"
+                print(f"FATAL: {error_msg}", file=sys.stderr)
+                sys.exit(1)  # CONFIG_ERROR
     
     # Validate key strength
     if len(value) < min_length:
