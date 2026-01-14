@@ -812,6 +812,8 @@ async def ingest_event(request: Request):
         event_id = envelope["event_id"]
         
         if check_duplicate(conn, event_id):
+            # PHASE 2: Use deterministic timestamp from envelope (observed_at)
+            observed_at = parser.isoparse(envelope.get("observed_at", envelope.get("ingested_at")))
             with conn.cursor() as cur:
                 cur.execute("""
                     INSERT INTO event_validation_log (
@@ -819,7 +821,7 @@ async def ingest_event(request: Request):
                         error_code, error_message
                     )
                     VALUES (%s, %s, %s, %s, %s)
-                """, (event_id, VALIDATION_STATUS_DUPLICATE_REJECTED, "DUPLICATE_EVENT_ID", "Event ID already exists"))
+                """, (event_id, VALIDATION_STATUS_DUPLICATE_REJECTED, observed_at, "DUPLICATE_EVENT_ID", "Event ID already exists"))
             conn.commit()
             logger.info(f"Duplicate event rejected", event_id=event_id)
             
