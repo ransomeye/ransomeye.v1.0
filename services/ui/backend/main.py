@@ -536,15 +536,28 @@ async def get_incident_detail(incident_id: str):
         incident_data['certainty_state'] = certainty_state
         incident_data['is_probabilistic'] = (certainty_state != 'CONFIRMED')  # PHASE 5: Only CONFIRMED is deterministic
         
+        # PHASE 5: Determine if operator action requires warning
+        eq_data = evidence_quality[0] if evidence_quality else None
+        ai_data = ai_insights[0] if ai_insights else None
+        requires_warning, warning_reasons = requires_operator_warning(eq_data, ai_data)
+        
+        # PHASE 5: Add warning information to policy recommendations
+        enriched_policy_recommendations = []
+        for rec in policy_recommendations:
+            enriched_rec = rec.copy()
+            enriched_rec['requires_warning'] = requires_warning
+            enriched_rec['warning_reasons'] = warning_reasons
+            enriched_policy_recommendations.append(enriched_rec)
+        
         return {
             "incident": incident_data,
             "timeline": timeline,
             "evidence_summary": evidence_summary[0] if evidence_summary else None,
-            "ai_insights": ai_insights[0] if ai_insights else None,
-            "evidence_quality": evidence_quality[0] if evidence_quality else None,  # PHASE 5: Evidence quality indicators
+            "ai_insights": ai_data,
+            "evidence_quality": eq_data,  # PHASE 5: Evidence quality indicators
             "ai_provenance": ai_provenance,  # PHASE 5: AI provenance information
             "contradictions": contradictions[0] if contradictions else None,  # PHASE 5: Contradiction information
-            "policy_recommendations": policy_recommendations
+            "policy_recommendations": enriched_policy_recommendations  # PHASE 5: Policy recommendations with warnings
         }
     except HTTPException:
         raise
