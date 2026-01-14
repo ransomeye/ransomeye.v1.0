@@ -175,32 +175,41 @@ def sign_command(command_payload: Dict[str, Any]) -> str:
 
 
 def create_signed_command(command_type: str, target_machine_id: str, 
-                         incident_id: str) -> Dict[str, Any]:
+                         incident_id: str, policy_id: str, policy_version: str,
+                         issuing_authority: str = 'policy-engine') -> Dict[str, Any]:
     """
-    Create signed command (command payload + signature).
+    PHASE 4: Create signed command (command payload + signature) with policy authority binding.
     
-    Phase 7 requirement: Generate command payload and sign it
-    Phase 7 requirement: Store signed command (not execute it)
+    Generate command payload with policy authority binding and sign it with ed25519.
+    Store signed command (not execute it).
     
     Args:
         command_type: Type of command (e.g., 'ISOLATE_HOST')
         target_machine_id: Machine ID to target
         incident_id: Incident ID that triggered this command
+        policy_id: Policy ID that authorized this command
+        policy_version: Version of policy
+        issuing_authority: Authority that issued this command (default: 'policy-engine')
         
     Returns:
-        Signed command dictionary (payload + signature)
+        Signed command dictionary (payload + signature + key_id)
     """
-    # Phase 7 requirement: Create command payload
-    command_payload = create_command_payload(command_type, target_machine_id, incident_id)
+    # PHASE 4: Create command payload with policy authority binding
+    command_payload = create_command_payload(
+        command_type, target_machine_id, incident_id,
+        policy_id, policy_version, issuing_authority
+    )
     
-    # Phase 7 requirement: Sign command
+    # PHASE 4: Sign command with ed25519
     signature = sign_command(command_payload)
+    signer = get_signer()
     
-    # Phase 7 requirement: Create signed command structure
+    # PHASE 4: Create signed command structure
     signed_command = {
         'payload': command_payload,
         'signature': signature,
-        'signing_algorithm': 'HMAC-SHA256',
+        'signing_key_id': signer.key_id,  # PHASE 4: Key ID for verification
+        'signing_algorithm': 'ed25519',  # PHASE 4: ed25519 (replaces HMAC-SHA256)
         'signed_at': datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
     }
     
