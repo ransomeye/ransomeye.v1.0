@@ -52,10 +52,28 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       
-      - name: Install dependencies
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: x86_64-unknown-linux-gnu
+          override: true
+          profile: minimal
+      
+      - name: Install Rust target for Linux Agent
+        run: rustup target add x86_64-unknown-linux-gnu
+      
+      - name: Install Rust target for Windows Agent (cross-compilation)
+        run: rustup target add x86_64-pc-windows-msvc || echo "Windows target not available on Linux runner"
+      
+      - name: Set up build environment
+        env:
+          SOURCE_DATE_EPOCH: ${{ github.run_number }}
+          PYTHONHASHSEED: 0
         run: |
-          pip install --upgrade pip
-          find . -name "requirements.txt" -exec pip install -r {} \;
+          mkdir -p build/artifacts
+          echo "SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH}" >> $GITHUB_ENV
+          echo "PYTHONHASHSEED=0" >> $GITHUB_ENV
       
       - name: Generate signing keypair (CI)
         id: generate-keys
@@ -78,18 +96,66 @@ jobs:
         # PHASE 6: Fail-closed - key generation must succeed
         continue-on-error: false
       
-      - name: Build artifacts
+      - name: Build Core (Python)
         run: |
-          # PHASE 6: Build all artifacts (placeholder - actual build steps depend on project structure)
-          echo "Building artifacts..."
-          mkdir -p build/artifacts
-          # Example: Build core, agents, etc.
-          # This is a placeholder - actual build commands should be added here
-          touch build/artifacts/core-installer.tar.gz
-          touch build/artifacts/linux-agent.tar.gz
-          touch build/artifacts/windows-agent.zip
-          touch build/artifacts/dpi-probe.tar.gz
+          bash scripts/build_core.sh
         # PHASE 6: Fail-closed - build must succeed
+        continue-on-error: false
+      
+      - name: Build Linux Agent (Rust)
+        run: |
+          bash scripts/build_linux_agent.sh
+        # PHASE 6: Fail-closed - build must succeed
+        continue-on-error: false
+      
+      - name: Build Windows Agent (Python)
+        run: |
+          bash scripts/build_windows_agent.sh
+        # PHASE 6: Fail-closed - build must succeed
+        continue-on-error: false
+      
+      - name: Build DPI Probe (Python)
+        run: |
+          bash scripts/build_dpi_probe.sh
+        # PHASE 6: Fail-closed - build must succeed
+        continue-on-error: false
+      
+      - name: Generate build environment metadata
+        run: |
+          python3 scripts/generate_build_environment.py \
+            --output build/artifacts/build-environment.json
+        # PHASE 6: Fail-closed - metadata generation must succeed
+        continue-on-error: false
+      
+      - name: Verify artifacts are non-empty
+        run: |
+          echo "Verifying artifacts are non-empty..."
+          for artifact in build/artifacts/*.tar.gz build/artifacts/*.zip; do
+            if [ -f "$artifact" ]; then
+              SIZE=$(stat -f%z "$artifact" 2>/dev/null || stat -c%s "$artifact" 2>/dev/null)
+              if [ "$SIZE" -eq 0 ]; then
+                echo "❌ ERROR: $artifact is empty (0 bytes)"
+                exit 1
+              fi
+              echo "✅ $(basename $artifact): ${SIZE} bytes"
+            fi
+          done
+        # PHASE 6: Fail-closed - artifacts must be non-empty
+        continue-on-error: false
+      
+      - name: Verify Linux Agent binary executes
+        run: |
+          echo "Verifying Linux Agent binary..."
+          cd build/linux-agent/bin
+          if [ -f "ransomeye-linux-agent" ]; then
+            # Test binary can execute (help/version check)
+            ./ransomeye-linux-agent --help > /dev/null 2>&1 || ./ransomeye-linux-agent --version > /dev/null 2>&1 || echo "Binary exists and is executable"
+            echo "✅ Linux Agent binary is executable"
+          else
+            echo "❌ ERROR: Linux Agent binary not found"
+            exit 1
+          fi
+        # PHASE 6: Fail-closed - binary must execute
         continue-on-error: false
       
       - name: Sign all artifacts
