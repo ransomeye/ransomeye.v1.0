@@ -70,46 +70,38 @@ class PolicyEngineSigner:
 
 def get_signer() -> PolicyEngineSigner:
     """
-    Get command signing key (loaded once at startup, never reloaded).
+    PHASE 4: Get command signer (loaded once at startup, never reloaded).
     
-    Security: Key is read once at startup, validated for strength, never logged.
-    Terminates Core immediately if key is missing, weak, or is a default value.
+    Security: Keypair is read once at startup, never logged.
+    Terminates Core immediately if keypair is missing or invalid.
     
     Returns:
-        Signing key as bytes (never logged)
+        PolicyEngineSigner instance (never logged)
     """
-    global _SIGNING_KEY
+    global _SIGNER
     
-    # Return cached key if already loaded (never reload)
-    if _SIGNING_KEY is not None:
-        return _SIGNING_KEY
+    # Return cached signer if already loaded (never reload)
+    if _SIGNER is not None:
+        return _SIGNER
     
-    # Security: Validate signing key at startup (fail-fast on weak/invalid keys)
+    # PHASE 4: Load ed25519 keypair from key directory
+    key_dir_env = os.getenv('RANSOMEYE_POLICY_ENGINE_KEY_DIR')
+    if not key_dir_env:
+        error_msg = "SECURITY VIOLATION: RANSOMEYE_POLICY_ENGINE_KEY_DIR is required (no default allowed)"
+        print(f"FATAL: {error_msg}", file=sys.stderr)
+        sys.exit(1)  # CONFIG_ERROR
+    
+    key_dir = Path(key_dir_env)
+    key_manager = PolicyEngineKeyManager(key_dir)
+    
     try:
-        from common.security.secrets import validate_signing_key
-        _SIGNING_KEY = validate_signing_key(
-            env_var="RANSOMEYE_COMMAND_SIGNING_KEY",
-            min_length=32,
-            fail_on_default=True  # Production: fail on default keys
-        )
-        return _SIGNING_KEY
-    except ImportError:
-        # Fallback if security utilities not available
-        signing_key_str = os.getenv("RANSOMEYE_COMMAND_SIGNING_KEY", "")
-        if not signing_key_str:
-            # Fail-fast: no default allowed
-            error_msg = "SECURITY VIOLATION: Signing key RANSOMEYE_COMMAND_SIGNING_KEY is required (no default allowed)"
-            print(f"FATAL: {error_msg}", file=sys.stderr)
-            sys.exit(1)  # CONFIG_ERROR
-        
-        # Basic validation
-        if len(signing_key_str) < 32:
-            error_msg = f"SECURITY VIOLATION: Signing key is too short (minimum 32 characters)"
-            print(f"FATAL: {error_msg}", file=sys.stderr)
-            sys.exit(1)  # CONFIG_ERROR
-        
-        _SIGNING_KEY = signing_key_str.encode('utf-8')
-        return _SIGNING_KEY
+        private_key, public_key, key_id = key_manager.get_or_create_keypair()
+        _SIGNER = PolicyEngineSigner(private_key, key_id)
+        return _SIGNER
+    except Exception as e:
+        error_msg = f"SECURITY VIOLATION: Failed to load Policy Engine signing keypair: {e}"
+        print(f"FATAL: {error_msg}", file=sys.stderr)
+        sys.exit(1)  # CONFIG_ERROR
 
 
 def create_command_payload(command_type: str, target_machine_id: str, 
