@@ -193,7 +193,7 @@ The following licenses are explicitly forbidden and must not be used in RansomEy
 - **ui-backend:** fastapi (MIT), uvicorn (BSD-3-Clause), psycopg2-binary (LGPL-3.0, dynamic linking only), fastapi-cors (MIT), pydantic (MIT), pydantic-settings (MIT)
 
 #### Rust Dependencies (Linux Agent)
-- **linux-agent:** reqwest (Apache-2.0 OR MIT), uuid (Apache-2.0 OR MIT), serde (Apache-2.0 OR MIT), serde_json (Apache-2.0 OR MIT), sha2 (MIT), chrono (MIT OR Apache-2.0), anyhow (MIT OR Apache-2.0), hostname (MIT)
+- **linux-agent:** reqwest (Apache-2.0 OR MIT), uuid (Apache-2.0 OR MIT, Rust crate, distinct from Python uuid), serde (Apache-2.0 OR MIT), serde_json (Apache-2.0 OR MIT), sha2 (MIT), chrono (MIT OR Apache-2.0), anyhow (MIT OR Apache-2.0), hostname (MIT)
 
 #### JavaScript Dependencies (UI Frontend)
 - **ui-frontend:** react (MIT), react-dom (MIT), vitejs-plugin-react (MIT), vite (MIT)
