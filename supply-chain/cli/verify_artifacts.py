@@ -147,7 +147,7 @@ def main():
                     print(f"    {key}: {value}", file=sys.stderr)
             sys.exit(1)
         
-    except (VendorKeyManagerError, ArtifactVerificationError, VerificationEngineError) as e:
+    except (PersistentSigningAuthorityError, KeyRegistryError, ArtifactVerificationError, VerificationEngineError) as e:
         print(f"Artifact verification failed: {e}", file=sys.stderr)
         sys.exit(1)
     except Exception as e:
