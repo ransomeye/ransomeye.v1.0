@@ -14,7 +14,7 @@ import socket
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Tuple
 
 # Add project root to path
 _current_file = os.path.abspath(__file__)
