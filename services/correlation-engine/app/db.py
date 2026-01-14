@@ -343,14 +343,14 @@ def add_evidence_to_incident(conn, incident_id: str, event: Dict[str, Any],
             # PHASE 2: Use deterministic timestamp from event (observed_at)
             stage_changed = False
             if should_transition_stage(current_stage, new_stage):
-                # GA-BLOCKING: State transition
+                # PHASE 3: State transition (deterministic)
                 cur.execute("""
                     INSERT INTO incident_stages (
                         incident_id, from_stage, to_stage, transitioned_at,
-                        evidence_count_at_transition, confidence_score_at_transition
+                        evidence_count_at_transition, confidence_score_at_transition, created_at
                     )
-                    VALUES (%s, %s, %s, %s, %s, %s)
-                """, (incident_id, current_stage, new_stage, observed_at, evidence_count + 1, new_confidence))
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """, (incident_id, current_stage, new_stage, observed_at, evidence_count + 1, new_confidence, observed_at))
                 stage_changed = True
             
             # Update incident record
