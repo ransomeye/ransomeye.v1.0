@@ -14,72 +14,106 @@ import base64
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 
-# Add supply-chain to path (try multiple locations for air-gapped scenarios)
-_supply_chain_dir = None
-for possible_dir in [
-    Path(__file__).parent.parent / "supply-chain",  # Development environment
-    Path(__file__).parent / "supply-chain",  # Release bundle
-    Path("/opt/ransomeye/lib/supply-chain"),  # Installed location
-]:
-    if possible_dir.exists():
-        _supply_chain_dir = possible_dir
+# Try to import from supply-chain module (development/build environment)
+try:
+    _supply_chain_dir = Path(__file__).parent.parent / "supply-chain"
+    if _supply_chain_dir.exists():
         sys.path.insert(0, str(_supply_chain_dir))
-        break
-
-if _supply_chain_dir:
-    from crypto.artifact_verifier import ArtifactVerifier, ArtifactVerificationError
-    from crypto.vendor_key_manager import VendorKeyManager, VendorKeyManagerError
-else:
+        from crypto.artifact_verifier import ArtifactVerifier, ArtifactVerificationError
+        from crypto.vendor_key_manager import VendorKeyManager, VendorKeyManagerError
+        _supply_chain_available = True
+    else:
+        raise ImportError("Supply-chain module not found")
+except ImportError:
     # Fallback: Minimal inline implementation for air-gapped scenarios
+    # This allows verification without the full supply-chain module
+    _supply_chain_available = False
+    
     class ArtifactVerificationError(Exception):
         pass
+    
     class VendorKeyManagerError(Exception):
         pass
     
-    # Minimal inline verifier (for air-gapped scenarios without full supply-chain module)
+    # Minimal inline verifier (for air-gapped scenarios)
     class ArtifactVerifier:
         def __init__(self, public_key=None, public_key_path=None):
-            if public_key_path:
+            try:
                 from cryptography.hazmat.primitives import serialization
                 from cryptography.hazmat.backends import default_backend
+                from cryptography.hazmat.primitives.asymmetric import ed25519
+            except ImportError:
+                raise SBOMVerificationError(
+                    "cryptography library not available. Install with: pip install cryptography"
+                )
+            
+            if public_key_path:
                 public_key_bytes = public_key_path.read_bytes()
                 self.public_key = serialization.load_pem_public_key(
                     public_key_bytes, backend=default_backend()
                 )
-            else:
+            elif public_key:
                 self.public_key = public_key
+            else:
+                raise SBOMVerificationError("Either public_key or public_key_path must be provided")
         
         def verify_manifest_signature(self, manifest):
-            # Inline implementation (same as supply-chain version)
+            """Verify manifest signature (inline implementation)."""
             signature_b64 = manifest.get('signature', '')
             if not signature_b64:
                 return False
-            manifest_copy = manifest.copy()
-            manifest_copy.pop('signature', None)
-            canonical_json = json.dumps(manifest_copy, sort_keys=True, separators=(',', ':'), ensure_ascii=False)
-            manifest_hash = hashlib.sha256(canonical_json.encode('utf-8')).digest()
-            signature_bytes = base64.b64decode(signature_b64.encode('ascii'))
-            self.public_key.verify(signature_bytes, manifest_hash)
-            return True
+            
+            try:
+                # Create manifest copy without signature for hashing
+                manifest_copy = manifest.copy()
+                manifest_copy.pop('signature', None)
+                
+                # Build canonical JSON (sorted, no whitespace)
+                canonical_json = json.dumps(
+                    manifest_copy,
+                    sort_keys=True,
+                    separators=(',', ':'),
+                    ensure_ascii=False
+                )
+                
+                # Hash manifest
+                manifest_hash = hashlib.sha256(canonical_json.encode('utf-8')).digest()
+                
+                # Decode signature
+                signature_bytes = base64.b64decode(signature_b64.encode('ascii'))
+                
+                # Verify signature
+                self.public_key.verify(signature_bytes, manifest_hash)
+                return True
+            except Exception:
+                return False
         
         def verify_artifact_hash(self, artifact_path, expected_sha256):
+            """Verify artifact hash (inline implementation)."""
             hash_obj = hashlib.sha256()
             with open(artifact_path, 'rb') as f:
                 for chunk in iter(lambda: f.read(4096), b''):
                     hash_obj.update(chunk)
             computed_hash = hash_obj.hexdigest()
-            return computed_hash == expected_sha256.lower()
+            return computed_hash.lower() == expected_sha256.lower()
     
     class VendorKeyManager:
         def __init__(self, key_dir):
             self.key_dir = Path(key_dir)
         
         def get_public_key(self, key_id):
-            from cryptography.hazmat.primitives import serialization
-            from cryptography.hazmat.backends import default_backend
+            try:
+                from cryptography.hazmat.primitives import serialization
+                from cryptography.hazmat.backends import default_backend
+            except ImportError:
+                raise SBOMVerificationError(
+                    "cryptography library not available. Install with: pip install cryptography"
+                )
+            
             public_key_path = self.key_dir / f"{key_id}.pub"
             if not public_key_path.exists():
                 return None
+            
             public_key_bytes = public_key_path.read_bytes()
             return serialization.load_pem_public_key(public_key_bytes, backend=default_backend())
 
