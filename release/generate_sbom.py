@@ -182,9 +182,19 @@ def generate_sbom(
         }
         
         # Sign manifest (without signature field)
-        key_manager = VendorKeyManager(key_dir)
-        private_key, public_key, key_id = key_manager.get_or_create_keypair(signing_key_id)
-        signer = ArtifactSigner(private_key, key_id)
+        # PHASE-9: Use persistent signing authority (no ephemeral keys)
+        from crypto.persistent_signing_authority import PersistentSigningAuthority
+        import os
+        
+        vault_dir = Path(os.environ.get('RANSOMEYE_KEY_VAULT_DIR', key_dir.parent / 'vault'))
+        registry_path = Path(os.environ.get('RANSOMEYE_KEY_REGISTRY_PATH', key_dir.parent / 'registry.json'))
+        
+        authority = PersistentSigningAuthority(
+            vault_dir=vault_dir,
+            registry_path=registry_path
+        )
+        private_key, public_key = authority.get_signing_key(signing_key_id, require_active=True)
+        signer = ArtifactSigner(private_key, signing_key_id)
         
         # GA-BLOCKING: Sign manifest (signature computed on manifest without signature field)
         signature = signer.sign_manifest(manifest)
@@ -208,7 +218,7 @@ def generate_sbom(
         print(f"  Artifacts: {len(artifacts)}")
         print(f"  Signing Key ID: {signing_key_id}")
         
-    except (VendorKeyManagerError, ArtifactSigningError) as e:
+    except (PersistentSigningAuthorityError, ArtifactSigningError) as e:
         raise SBOMGeneratorError(f"Failed to generate SBOM: {e}") from e
     except Exception as e:
         raise SBOMGeneratorError(f"Unexpected error generating SBOM: {e}") from e
