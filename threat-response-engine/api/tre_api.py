@@ -174,24 +174,34 @@ class TREAPI:
             
             action_id = str(uuid.uuid4())
         
-        # Get command payload from policy decision (if available)
-        # Otherwise, construct from policy decision
+        # PHASE 4: Get command payload from policy decision (if available)
+        # Otherwise, construct from policy decision with policy authority binding
         if 'signed_command' in policy_decision:
             command_payload = policy_decision['signed_command']['payload']
+            # PHASE 4: Ensure policy authority fields are present
+            if 'policy_id' not in command_payload:
+                command_payload['policy_id'] = policy_decision.get('policy_id', 'unknown')
+            if 'policy_version' not in command_payload:
+                command_payload['policy_version'] = policy_decision.get('policy_version', '1.0.0')
+            if 'issuing_authority' not in command_payload:
+                command_payload['issuing_authority'] = 'threat-response-engine'
         else:
-            # Construct command payload
+            # PHASE 4: Construct command payload with policy authority binding
             command_payload = {
                 'command_id': str(uuid.uuid4()),
                 'command_type': policy_decision['recommended_action'],
                 'target_machine_id': policy_decision.get('machine_id', ''),
                 'incident_id': policy_decision['incident_id'],
+                'policy_id': policy_decision.get('policy_id', 'unknown'),  # PHASE 4: Policy authority binding
+                'policy_version': policy_decision.get('policy_version', '1.0.0'),  # PHASE 4: Policy version
+                'issuing_authority': 'threat-response-engine',  # PHASE 4: Issuing authority
                 'issued_at': datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
                 'issued_by_user_id': user_id,
                 'tre_mode': enforcement_result.get('mode') if self.enforcement_pipeline else None,
                 'approval_id': enforcement_result.get('approval_id') if self.enforcement_pipeline else None
             }
         
-        # Sign command with TRE key (separate from Policy Engine's HMAC)
+        # PHASE 4: Sign command with TRE key (ed25519, replaces HMAC)
         signed_command = self.signer.sign_command(command_payload)
         signed_command['action_id'] = action_id
         
