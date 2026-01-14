@@ -1,40 +1,40 @@
 name,version,component,language,license,license_type,static_or_dynamic,distribution_scope,risk_level,notes
-torch,">=2.0.0",mishka,python,BSD-3-Clause,permissive,dynamic,core,low,"PyTorch - Core ML framework for training"
-transformers,">=4.35.0",mishka,python,Apache-2.0,permissive,dynamic,core,low,"Hugging Face Transformers library"
-peft,">=0.7.0",mishka,python,Apache-2.0,permissive,dynamic,core,low,"Parameter-Efficient Fine-Tuning"
-accelerate,">=0.24.0",mishka,python,Apache-2.0,permissive,dynamic,core,low,"Hugging Face Accelerate"
-bitsandbytes,">=0.41.0",mishka,python,MIT,permissive,dynamic,core,low,"Quantization library for QLoRA"
-datasets,">=2.14.0",mishka,python,Apache-2.0,permissive,dynamic,core,low,"Hugging Face Datasets"
-pandas,">=2.0.0",mishka,python,BSD-3-Clause,permissive,dynamic,core,low,"Data analysis library"
-numpy,">=1.24.0","mishka,ai-core",python,BSD-3-Clause,permissive,dynamic,core,low,"Numerical computing library"
-jsonlines,">=3.1.0",mishka,python,MIT,permissive,dynamic,core,low,"JSON Lines file format support"
-scikit-learn,">=1.3.0","mishka,ai-core",python,BSD-3-Clause,permissive,dynamic,core,low,"Machine learning library"
-rouge-score,">=0.1.2",mishka,python,Apache-2.0,permissive,dynamic,core,low,"ROUGE evaluation metric"
-tqdm,">=4.66.0",mishka,python,MPL-2.0,permissive,dynamic,core,low,"Progress bar library"
-pyyaml,">=6.0",mishka,python,MIT,permissive,dynamic,core,low,"YAML parser"
-python-dotenv,">=1.0.0",mishka,python,BSD-3-Clause,permissive,dynamic,core,low,"Environment variable loader"
-llama-cpp-python,">=0.2.0",mishka,python,MIT,permissive,dynamic,core,low,"GGUF model support"
-requests,">=2.31.0",mishka,python,Apache-2.0,permissive,dynamic,core,low,"HTTP library"
-beautifulsoup4,">=4.12.0",mishka,python,MIT,permissive,dynamic,core,low,"HTML/XML parser"
-fastapi,0.104.1,"ui-backend,ingest",python,MIT,permissive,dynamic,core,low,"Web framework"
-uvicorn,0.24.0,"ui-backend,ingest",python,BSD-3-Clause,permissive,dynamic,core,low,"ASGI server"
-psycopg2-binary,2.9.9,"ui-backend,policy-engine,ai-core,correlation-engine,ingest",python,LGPL-3.0,weak-copyleft,dynamic,core,medium,"PostgreSQL adapter - LGPL allows dynamic linking"
-fastapi-cors,0.0.6,ui-backend,python,MIT,permissive,dynamic,core,low,"CORS middleware"
-pydantic,2.5.0,"ui-backend,policy-engine,ai-core,correlation-engine,ingest",python,MIT,permissive,dynamic,core,low,"Data validation"
-pydantic-settings,2.1.0,"ui-backend,policy-engine,ai-core,correlation-engine,ingest",python,MIT,permissive,dynamic,core,low,"Settings management"
-cryptography,41.0.7,policy-engine,python,Apache-2.0,permissive,dynamic,core,low,"Cryptographic primitives"
-python-dateutil,2.8.2,"policy-engine,ai-core,ingest",python,Apache-2.0,permissive,dynamic,core,low,"Date/time utilities"
-uuid,1.30,"ai-core,correlation-engine",python,BSD-2-Clause,permissive,dynamic,core,low,"UUID generation"
-jsonschema,4.19.2,ingest,python,MIT,permissive,dynamic,core,low,"JSON Schema validation"
-reqwest,0.11,linux-agent,rust,"Apache-2.0 OR MIT",permissive,static,agent,low,"HTTP client - dual licensed"
-uuid,1.0,linux-agent,rust,"Apache-2.0 OR MIT",permissive,static,agent,low,"UUID generation - dual licensed"
-serde,1.0,linux-agent,rust,"Apache-2.0 OR MIT",permissive,static,agent,low,"Serialization framework - dual licensed"
-serde_json,1.0,linux-agent,rust,"Apache-2.0 OR MIT",permissive,static,agent,low,"JSON serialization - dual licensed"
-sha2,0.10,linux-agent,rust,MIT,permissive,static,agent,low,"SHA-256 hashing"
-chrono,0.4,linux-agent,rust,"MIT OR Apache-2.0",permissive,static,agent,low,"Date/time handling - dual licensed"
-anyhow,1.0,linux-agent,rust,"MIT OR Apache-2.0",permissive,static,agent,low,"Error handling - dual licensed"
-hostname,0.4,linux-agent,rust,MIT,permissive,static,agent,low,"Hostname retrieval"
-react,"^18.2.0",ui-frontend,javascript,MIT,permissive,static,core,low,"React UI framework"
-react-dom,"^18.2.0",ui-frontend,javascript,MIT,permissive,static,core,low,"React DOM renderer"
-vitejs-plugin-react,"^4.2.1",ui-frontend,javascript,MIT,permissive,static,core,low,"Vite React plugin (@vitejs/plugin-react)"
-vite,"^5.0.0",ui-frontend,javascript,MIT,permissive,static,core,low,"Build tool"
+torch,>=2.0.0,mishka,python,BSD-3-Clause (with Apache-2.0 components),permissive,dynamic,core,low,"PyTorch - Core ML framework. Primary license BSD-3-Clause, but includes bundled components under Apache-2.0 (e.g., torch/_vendor/packaging). Both licenses are permissive and compatible."
+transformers,>=4.35.0,mishka,python,Apache-2.0,permissive,dynamic,core,low,"Hugging Face Transformers library. Has transitive dependencies (filelock, huggingface-hub, numpy, packaging, pyyaml, regex, requests, tokenizers, safetensors, tqdm) - all permissively licensed (Apache-2.0, MIT, BSD-3-Clause, PSF). Transitive dependencies are not individually inventoried per policy."
+peft,>=0.7.0,mishka,python,Apache-2.0,permissive,dynamic,core,low,Parameter-Efficient Fine-Tuning
+accelerate,>=0.24.0,mishka,python,Apache-2.0,permissive,dynamic,core,low,Hugging Face Accelerate
+bitsandbytes,>=0.41.0,mishka,python,MIT,permissive,dynamic,core,medium,"Quantization library for QLoRA. MIT license allows redistribution, but includes CUDA binaries subject to NVIDIA CUDA Toolkit EULA. Binary redistribution requires compliance with NVIDIA EULA terms. Source code redistribution under MIT is unrestricted."
+datasets,>=2.14.0,mishka,python,Apache-2.0,permissive,dynamic,core,low,Hugging Face Datasets
+pandas,>=2.0.0,mishka,python,BSD-3-Clause,permissive,dynamic,core,low,Data analysis library
+numpy,>=1.24.0,"mishka,ai-core",python,BSD-3-Clause,permissive,dynamic,core,low,Numerical computing library
+jsonlines,>=3.1.0,mishka,python,MIT,permissive,dynamic,core,low,JSON Lines file format support
+scikit-learn,>=1.3.0,"mishka,ai-core",python,BSD-3-Clause,permissive,dynamic,core,low,Machine learning library
+rouge-score,>=0.1.2,mishka,python,Apache-2.0,permissive,dynamic,core,low,ROUGE evaluation metric
+tqdm,>=4.66.0,mishka,python,MPL-2.0,permissive,dynamic,core,low,Progress bar library
+pyyaml,>=6.0,mishka,python,MIT,permissive,dynamic,core,low,YAML parser
+python-dotenv,>=1.0.0,mishka,python,BSD-3-Clause,permissive,dynamic,core,low,Environment variable loader
+llama-cpp-python,>=0.2.0,mishka,python,MIT,permissive,dynamic,core,low,GGUF model support
+requests,>=2.31.0,mishka,python,Apache-2.0,permissive,dynamic,core,low,HTTP library
+beautifulsoup4,>=4.12.0,mishka,python,MIT,permissive,dynamic,core,low,HTML/XML parser
+fastapi,0.104.1,"ui-backend,ingest",python,MIT,permissive,dynamic,core,low,Web framework
+uvicorn,0.24.0,"ui-backend,ingest",python,BSD-3-Clause,permissive,dynamic,core,low,ASGI server
+psycopg2-binary,2.9.9,"ui-backend,policy-engine,ai-core,correlation-engine,ingest",python,LGPL-3.0,weak-copyleft,dynamic,core,medium,"PostgreSQL adapter. LGPL-3.0 allows dynamic linking only. Static bundling is FORBIDDEN. Used via Python's dynamic import mechanism (standard pip installation), which constitutes dynamic linking. No static linking occurs. RansomEye code is not a derivative work."
+fastapi-cors,0.0.6,ui-backend,python,MIT,permissive,dynamic,core,low,CORS middleware
+pydantic,2.5.0,"ui-backend,policy-engine,ai-core,correlation-engine,ingest",python,MIT,permissive,dynamic,core,low,Data validation
+pydantic-settings,2.1.0,"ui-backend,policy-engine,ai-core,correlation-engine,ingest",python,MIT,permissive,dynamic,core,low,Settings management
+cryptography,41.0.7,policy-engine,python,Apache-2.0,permissive,dynamic,core,low,Cryptographic primitives
+python-dateutil,2.8.2,"policy-engine,ai-core,ingest",python,Apache-2.0,permissive,dynamic,core,low,Date/time utilities
+uuid,1.30,"ai-core,correlation-engine",python,BSD-2-Clause,permissive,dynamic,core,low,Python UUID generation library (distinct from Rust uuid crate)
+jsonschema,4.19.2,ingest,python,MIT,permissive,dynamic,core,low,JSON Schema validation
+reqwest,0.11,linux-agent,rust,Apache-2.0 OR MIT,permissive,static,agent,low,HTTP client - dual licensed
+uuid,1.0,linux-agent,rust,Apache-2.0 OR MIT,permissive,static,agent,low,Rust UUID generation crate (distinct from Python uuid package) - dual licensed
+serde,1.0,linux-agent,rust,Apache-2.0 OR MIT,permissive,static,agent,low,Serialization framework - dual licensed
+serde_json,1.0,linux-agent,rust,Apache-2.0 OR MIT,permissive,static,agent,low,JSON serialization - dual licensed
+sha2,0.10,linux-agent,rust,MIT,permissive,static,agent,low,SHA-256 hashing
+chrono,0.4,linux-agent,rust,MIT OR Apache-2.0,permissive,static,agent,low,Date/time handling - dual licensed
+anyhow,1.0,linux-agent,rust,MIT OR Apache-2.0,permissive,static,agent,low,Error handling - dual licensed
+hostname,0.4,linux-agent,rust,MIT,permissive,static,agent,low,Hostname retrieval
+react,^18.2.0,ui-frontend,javascript,MIT,permissive,static,core,low,React UI framework
+react-dom,^18.2.0,ui-frontend,javascript,MIT,permissive,static,core,low,React DOM renderer
+vitejs-plugin-react,^4.2.1,ui-frontend,javascript,MIT,permissive,static,core,low,Vite React plugin (@vitejs/plugin-react)
+vite,^5.0.0,ui-frontend,javascript,MIT,permissive,static,core,low,Build tool
