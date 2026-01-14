@@ -175,7 +175,7 @@ The following licenses are explicitly forbidden and must not be used in RansomEy
 - **linux-agent:** reqwest (Apache-2.0 OR MIT), uuid (Apache-2.0 OR MIT), serde (Apache-2.0 OR MIT), serde_json (Apache-2.0 OR MIT), sha2 (MIT), chrono (MIT OR Apache-2.0), anyhow (MIT OR Apache-2.0), hostname (MIT)
 
 #### JavaScript Dependencies (UI Frontend)
-- **ui-frontend:** react (MIT), react-dom (MIT), @vitejs/plugin-react (MIT), vite (MIT)
+- **ui-frontend:** react (MIT), react-dom (MIT), vitejs-plugin-react (MIT), vite (MIT)
 
 #### Python Dependencies (ML Training - mishka)
 - **mishka:** torch (BSD-3-Clause), transformers (Apache-2.0), peft (Apache-2.0), accelerate (Apache-2.0), bitsandbytes (MIT), datasets (Apache-2.0), pandas (BSD-3-Clause), numpy (BSD-3-Clause), jsonlines (MIT), scikit-learn (BSD-3-Clause), rouge-score (Apache-2.0), tqdm (MPL-2.0), pyyaml (MIT), python-dotenv (BSD-3-Clause), llama-cpp-python (MIT), requests (Apache-2.0), beautifulsoup4 (MIT)
