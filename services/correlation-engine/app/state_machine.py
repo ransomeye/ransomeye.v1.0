@@ -214,38 +214,97 @@ def is_within_deduplication_window(event_time: datetime, incident_time: datetime
     return time_diff <= DEDUPLICATION_TIME_WINDOW
 
 
-def detect_contradiction(event: Dict[str, Any], existing_evidence: list) -> bool:
+def detect_contradiction(event: Dict[str, Any], existing_evidence: list) -> Tuple[bool, Optional[str]]:
     """
-    GA-BLOCKING: Detect if event contradicts existing evidence.
+    PHASE 3: Detect if event contradicts existing evidence (deterministic).
     
-    Simple contradiction detection (logic only, no new rules):
-    - If event indicates "clean" behavior but incident has "suspicious" evidence → contradiction
-    - If event indicates "benign" process but incident has "malicious" evidence → contradiction
+    Contradiction types:
+    1. Host vs Network: Host signals suspicious activity but network shows benign traffic
+    2. Execution vs Timing: Execution signals present but timing indicates normal operation
+    3. Persistence vs Silence: Persistence signals but no ongoing activity
+    4. Deception vs Absence: Deception signals but no deception artifacts found
     
     Args:
         event: New event
         existing_evidence: List of existing evidence dictionaries
         
     Returns:
-        True if contradiction detected, False otherwise
+        Tuple of (is_contradiction: bool, contradiction_type: Optional[str])
     """
-    # GA-BLOCKING: Simple contradiction detection (logic only)
-    # Check if event payload indicates benign/clean behavior
+    if not existing_evidence:
+        return False, None  # No existing evidence, no contradiction possible
+    
     payload = event.get('payload', {})
     if not isinstance(payload, dict):
-        return False
+        return False, None
     
-    # Check for explicit "clean" indicators in payload
     component = event.get('component', '')
     
-    # GA-BLOCKING: If event is from health monitor indicating "healthy" → contradiction
+    # PHASE 3: Contradiction Type 1 - Host vs Network
+    # Host signals suspicious but network shows benign
+    host_components = ['linux_agent', 'windows_agent']
+    network_components = ['dpi']
+    
+    if component in network_components:
+        # Network component showing benign traffic
+        if payload.get('threat_level') == 'BENIGN' or payload.get('flow_type') == 'NORMAL':
+            # Check if existing evidence has host-based suspicious signals
+            for evidence in existing_evidence:
+                evidence_component = evidence.get('component', '')
+                if evidence_component in host_components:
+                    evidence_payload = evidence.get('payload', {})
+                    if isinstance(evidence_payload, dict):
+                        if evidence_payload.get('threat_level') in ['SUSPICIOUS', 'MALICIOUS']:
+                            return True, 'HOST_VS_NETWORK'
+    
+    # PHASE 3: Contradiction Type 2 - Execution vs Timing
+    # Execution signals present but timing indicates normal operation
+    if component in host_components:
+        if payload.get('event_type') in ['PROCESS_EXECUTION', 'FILE_MODIFICATION']:
+            # Check timing - if execution happened during normal business hours with normal patterns
+            if payload.get('timing_pattern') == 'NORMAL' or payload.get('business_hours') == True:
+                # Check if existing evidence has high-confidence suspicious execution
+                for evidence in existing_evidence:
+                    evidence_payload = evidence.get('payload', {})
+                    if isinstance(evidence_payload, dict):
+                        if evidence_payload.get('event_type') in ['PROCESS_EXECUTION', 'FILE_MODIFICATION']:
+                            if evidence_payload.get('threat_level') in ['SUSPICIOUS', 'MALICIOUS']:
+                                return True, 'EXECUTION_VS_TIMING'
+    
+    # PHASE 3: Contradiction Type 3 - Persistence vs Silence
+    # Persistence signals but no ongoing activity
+    if payload.get('event_type') == 'PERSISTENCE':
+        # Persistence mechanism detected
+        if payload.get('activity_level') == 'NONE' or payload.get('ongoing_activity') == False:
+            # Check if existing evidence has persistence indicators
+            for evidence in existing_evidence:
+                evidence_payload = evidence.get('payload', {})
+                if isinstance(evidence_payload, dict):
+                    if evidence_payload.get('event_type') == 'PERSISTENCE':
+                        # Persistence detected but no activity - contradiction
+                        return True, 'PERSISTENCE_VS_SILENCE'
+    
+    # PHASE 3: Contradiction Type 4 - Deception vs Absence
+    # Deception signals but no deception artifacts found
+    if component == 'deception':
+        if payload.get('deception_triggered') == False or payload.get('artifacts_found') == False:
+            # Check if existing evidence has deception signals
+            for evidence in existing_evidence:
+                evidence_component = evidence.get('component', '')
+                if evidence_component == 'deception':
+                    evidence_payload = evidence.get('payload', {})
+                    if isinstance(evidence_payload, dict):
+                        if evidence_payload.get('deception_triggered') == True:
+                            # Deception was triggered but no artifacts found - contradiction
+                            return True, 'DECEPTION_VS_ABSENCE'
+    
+    # PHASE 3: Generic contradiction - health monitor indicates healthy
     if component == 'health_monitor' and payload.get('status') == 'HEALTHY':
-        # If we have suspicious evidence, this is a contradiction
         if existing_evidence:
-            return True
+            return True, 'HEALTHY_VS_SUSPICIOUS'
     
-    # GA-BLOCKING: If event indicates "benign" process but we have suspicious evidence
+    # PHASE 3: Generic contradiction - explicit benign threat level
     if payload.get('threat_level') == 'BENIGN' and existing_evidence:
-        return True
+        return True, 'BENIGN_VS_SUSPICIOUS'
     
-    return False
+    return False, None
