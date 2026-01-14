@@ -160,7 +160,7 @@ def generate_sbom(
         version: Release version (e.g., "1.0.0")
         build_id: Build identifier (e.g., git commit hash)
         signing_key_id: Signing key identifier
-        key_dir: Directory containing vendor signing keys
+        key_dir: Legacy parameter (now points to vault_dir for compatibility)
         output_path: Path to write manifest.json
         
     Raises:
@@ -253,10 +253,14 @@ def main():
         help='Signing key identifier'
     )
     parser.add_argument(
-        '--key-dir',
+        '--vault-dir',
         type=Path,
-        required=True,
-        help='Directory containing vendor signing keys'
+        help='Directory containing encrypted key vault (default: from RANSOMEYE_KEY_VAULT_DIR env)'
+    )
+    parser.add_argument(
+        '--registry-path',
+        type=Path,
+        help='Path to key registry JSON file (default: from RANSOMEYE_KEY_REGISTRY_PATH env)'
     )
     parser.add_argument(
         '--output',
@@ -274,12 +278,16 @@ def main():
     output_path = args.output or (args.release_root / 'manifest.json')
     
     try:
+        # Use environment variables or arguments for vault/registry paths
+        vault_dir = args.vault_dir or Path(os.environ.get('RANSOMEYE_KEY_VAULT_DIR', 'keys/vault'))
+        registry_path = args.registry_path or Path(os.environ.get('RANSOMEYE_KEY_REGISTRY_PATH', 'keys/registry.json'))
+        
         generate_sbom(
             release_root=args.release_root,
             version=args.version,
             build_id=args.build_id,
             signing_key_id=args.signing_key_id,
-            key_dir=args.key_dir,
+            key_dir=vault_dir,  # Legacy parameter name, but now points to vault
             output_path=output_path
         )
     except SBOMGeneratorError as e:
