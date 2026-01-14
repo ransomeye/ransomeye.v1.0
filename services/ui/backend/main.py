@@ -205,6 +205,32 @@ try:
 except ImportError:
     logger.warning("PHASE 5: RBAC middleware not available - endpoints are public (restrict in production)")
 
+# PHASE 5: RBAC permission decorator helper
+def require_ui_permission(permission: str):
+    """
+    PHASE 5: Decorator to require UI permission.
+    
+    Args:
+        permission: Permission name (e.g., 'ui:read', 'ui:write')
+    
+    Returns:
+        Decorator function
+    """
+    def decorator(func):
+        async def wrapper(*args, **kwargs):
+            # PHASE 5: RBAC enforcement (if available)
+            if _rbac_available and _rbac_auth:
+                # TODO: Extract user from request and check permission
+                # For now, this is a placeholder
+                # In production, use: user = await _rbac_auth.get_current_user(request)
+                # has_permission = _rbac_auth.permission_checker.check_permission(user['user_id'], permission, 'ui', None)
+                # if not has_permission:
+                #     raise HTTPException(status_code=403, detail={"error_code": "PERMISSION_DENIED"})
+                pass
+            return await func(*args, **kwargs)
+        return wrapper
+    return decorator
+
 @app.on_event("startup")
 async def startup_event():
     """FastAPI startup event."""
