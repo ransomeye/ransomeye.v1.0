@@ -3,465 +3,561 @@
 **Component Identity:**
 - **Name:** Core Kernel (Trust Root)
 - **Primary Entry Points:**
-  - `/home/ransomeye/rebuild/core/main.py` - Main entry point
-  - `/home/ransomeye/rebuild/core/runtime.py` - Runtime coordinator
+  - `/home/ransomeye/rebuild/core/main.py` — Main entry point
+  - `/home/ransomeye/rebuild/core/runtime.py` — Runtime coordinator
 - **Runtime Ownership:** Core runtime initializes first, then loads components as modules
-- **Component Independence:** ⚠️ **Services CAN start independently** - All services have `if __name__ == "__main__"` blocks allowing standalone execution
+- **Trust Root Role:** Core must act as single, authoritative trust root for all cryptographic material
 
-**Spec Reference:**
+**Master Spec References:**
 - Phase 10.1 — Core Runtime Hardening (Startup & Shutdown)
 - Master specification: Core as single runtime coordinator
+- Master specification: Trust root validation requirements
+- Master specification: Fail-closed startup behavior
+- Master specification: No implicit trust requirements
 
 ---
 
-## 1. COMPONENT IDENTITY
+## PURPOSE
+
+This validation proves that RansomEye Core enforces trust correctly at startup and cannot enter a partially trusted or undefined state.
+
+This file validates the root of runtime trust. Core must validate ALL trust root material before allowing any operation.
+
+This validation does NOT validate installer, agents, correlation, or AI. This validation validates Core trust root only.
+
+---
+
+## TRUST ROOT DEFINITION
+
+**Trust Root Material (Master Spec Requirements):**
+
+1. **Database Credentials** — `RANSOMEYE_DB_PASSWORD` (required for data integrity)
+2. **Command Signing Keys** — `RANSOMEYE_COMMAND_SIGNING_KEY` (required for command authority)
+3. **Audit Ledger Keys** — Managed by Audit Ledger subsystem (separate keypair)
+4. **Global Validator Keys** — Managed by Global Validator subsystem (separate keypair)
+5. **Reporting Keys** — Managed by Signed Reporting subsystem (separate keypair)
+6. **Human Authority Keys** — Managed by Human Authority Framework (separate keypair per human)
+7. **Supply Chain Keys** — Managed by Supply Chain subsystem (separate vendor keypair)
+
+**Trust Root Validation Requirements:**
+- Core MUST validate all trust root material before serving traffic
+- Core MUST verify cryptographic material existence and strength
+- Core MUST fail immediately if trust root is invalid or missing
+- Core MUST NOT allow partial trust states
+
+---
+
+## WHAT IS VALIDATED
+
+### 1. Core Startup Trust Chain
+- Trust root validation occurs before serving traffic
+- Cryptographic material existence and strength verified
+- Fail-fast behavior on trust root failures
+- No partial trust states allowed
+
+### 2. Credential Validation at Startup
+- DB credentials (presence, not correctness)
+- Internal service credentials (signing keys)
+- Audit Ledger keys (if applicable)
+- Global Validator keys (if applicable)
+- Reporting / signing keys (if applicable)
+
+### 3. No Implicit Trust
+- No internal service is auto-trusted
+- No localhost or loopback bypass exists
+- All trust relationships are explicit and validated
+
+### 4. Fail-Closed Guarantees
+- Trust failures result in process termination
+- No retry loops that mask failure
+- Errors are explicit and logged
+
+### 5. Determinism at Trust Root
+- Same inputs → same startup decision
+- No randomness or time-based trust decisions
+
+---
+
+## WHAT IS EXPLICITLY NOT ASSUMED
+
+- **NOT ASSUMED:** That signing key validation in Policy Engine module is sufficient (Core must validate at startup)
+- **NOT ASSUMED:** That subsystem key management is sufficient (Core must validate trust root material)
+- **NOT ASSUMED:** That services starting independently is acceptable (Core trust root must be authoritative)
+- **NOT ASSUMED:** That localhost defaults are secure (they are validated as non-security-sensitive)
+- **NOT ASSUMED:** That deferred validation is acceptable (Core must validate before allowing operation)
+
+---
+
+## VALIDATION METHODOLOGY
+
+### Evidence Collection Strategy
+
+1. **Code Path Analysis:** Trace Core startup sequence (`core/runtime.py`, `core/main.py`)
+2. **Trust Root Material Search:** Identify all cryptographic material that should be validated
+3. **Validation Function Analysis:** Verify validation functions exist and are called
+4. **Fail-Fast Behavior Analysis:** Verify trust failures cause termination
+5. **Implicit Trust Search:** Search for localhost bypasses, auto-trust patterns
+
+### Forbidden Patterns (Grep Validation)
+
+- `localhost` — Used for DB host default (acceptable, non-security-sensitive)
+- `127.0.0.1` — Used for DB host default (acceptable, non-security-sensitive)
+- `auto.*trust` — Implicit trust patterns (forbidden)
+- `implicit.*trust` — Implicit trust patterns (forbidden)
+- `bypass.*auth` — Authentication bypass patterns (forbidden)
+
+---
+
+## 1. CORE STARTUP TRUST CHAIN
 
 ### Evidence
 
-**Component Name:**
-- ✅ Core Kernel is identified as "Core Runtime" in `core/runtime.py:1-5`
-- ✅ Entry point is `core/main.py:1-6` which calls `run_core()` from `core/runtime.py`
+**Startup Sequence (Master Spec Phase 10.1 Compliance):**
+- ✅ `core/runtime.py:392-444` — `_core_startup_validation()` defines startup validation order
+- ✅ `core/runtime.py:502-514` — `_initialize_core()` calls `_core_startup_validation()` before loading modules
+- ✅ `core/runtime.py:569-578` — `run_core()` calls `_initialize_core()` before `_load_component_modules()`
+- ✅ Validation occurs before serving traffic (components loaded after validation)
 
-**Primary Entry Points:**
-- ✅ `core/main.py:21-32` - Main entry point with exception handling
-- ✅ `core/runtime.py:544-571` - `run_core()` function coordinates initialization
+**Trust Root Material Validation:**
+- ✅ `core/runtime.py:116-134` — `_validate_environment()` validates `RANSOMEYE_DB_PASSWORD`
+- ✅ `core/runtime.py:136-159` — `_validate_db_connectivity()` validates DB connection
+- ✅ `core/runtime.py:161-208` — `_validate_schema_presence()` validates schema
+- ❌ **CRITICAL FAILURE:** Core does NOT validate `RANSOMEYE_COMMAND_SIGNING_KEY` at startup
+- ❌ **CRITICAL FAILURE:** Core does NOT validate Audit Ledger keys at startup
+- ❌ **CRITICAL FAILURE:** Core does NOT validate Global Validator keys at startup
+- ❌ **CRITICAL FAILURE:** Core does NOT validate Reporting keys at startup
 
-**Runtime Ownership:**
-- ✅ `core/runtime.py:477-489` - `_initialize_core()` registers signal handlers and performs startup validation
-- ✅ `core/runtime.py:491-542` - `_load_component_modules()` loads services as modules (not standalone processes)
-- ✅ `core/runtime.py:557-559` - Comments state "Components are not standalone services, they are Core modules"
+**Cryptographic Material Existence Verification:**
+- ✅ `common/security/secrets.py:50-116` — `validate_signing_key()` function exists
+- ✅ `common/security/secrets.py:72-76` — Missing signing key causes `sys.exit(1)`
+- ✅ `common/security/secrets.py:98-101` — Weak signing key causes `sys.exit(1)`
+- ❌ **CRITICAL FAILURE:** Core does NOT call `validate_signing_key()` at startup
+- ❌ **CRITICAL FAILURE:** Signing key validation is deferred to Policy Engine module (`services/policy-engine/app/main.py:96-111`)
 
-**Component Independence Check:**
-- ⚠️ **CRITICAL FINDING:** Services CAN operate independently:
-  - `services/ingest/app/main.py:722-729` - Has `if __name__ == "__main__"` block for standalone execution
-  - `services/correlation-engine/app/main.py:239-248` - Has `if __name__ == "__main__"` block for standalone execution
-  - `services/policy-engine/app/main.py:334` - Has `if __name__ == "__main__"` block for standalone execution
-  - `services/ai-core/app/main.py:399` - Has `if __name__ == "__main__"` block for standalone execution
-  - `services/ui/backend/main.py:491` - Has `if __name__ == "__main__"` block for standalone execution
+**What Happens if Trust Root is Invalid or Missing:**
+- ✅ `core/runtime.py:126-132` — Missing `RANSOMEYE_DB_PASSWORD` causes `exit_config_error()`
+- ✅ `core/runtime.py:156-159` — Invalid DB connection causes `exit_startup_error()`
+- ✅ `core/runtime.py:199-202` — Missing schema tables causes `exit_startup_error()`
+- ❌ **CRITICAL FAILURE:** Missing `RANSOMEYE_COMMAND_SIGNING_KEY` does NOT prevent Core startup
+- ❌ **CRITICAL FAILURE:** Invalid signing key does NOT prevent Core startup (only Policy Engine module fails to load)
+
+**Partial Trust States:**
+- ❌ **CRITICAL FAILURE:** Core can start successfully without signing keys (Policy Engine just won't load)
+- ❌ **CRITICAL FAILURE:** Core can enter partially trusted state (DB validated, signing keys not validated)
 
 ### Verdict: **FAIL**
 
 **Justification:**
-- Core is designed as runtime coordinator, but services have standalone entry points
-- **CRITICAL:** Services can bypass Core's trust root validation by starting independently
-- Core's trust root guarantees are NOT enforced if services start standalone
-- This violates the "single authoritative trust root" requirement
+- Core validates DB credentials and schema at startup (correct)
+- **CRITICAL FAILURE:** Core does NOT validate signing keys at startup (violates trust root requirement)
+- **CRITICAL FAILURE:** Core can start without signing keys (violates fail-closed requirement)
+- **CRITICAL FAILURE:** Core can enter partially trusted state (DB validated, signing keys not validated)
+- Signing key validation is deferred to Policy Engine module, not enforced by Core
+
+**FAIL Conditions (Met):**
+- Core starts with missing keys — **CONFIRMED** (signing keys not validated)
+- Weak or placeholder keys are accepted — **CONFIRMED** (validation deferred to Policy Engine)
+- Startup continues after trust failure — **CONFIRMED** (Core starts, Policy Engine module fails to load)
+
+**Evidence Required:**
+- File paths: `core/runtime.py:116-134,392-444`, `core/main.py:21-32`
+- Code paths: `_validate_environment()` only validates DB password, not signing keys
+- Missing validation: No call to `validate_signing_key()` in `_core_startup_validation()`
 
 ---
 
-## 2. TRUST ROOT MATERIAL (CRITICAL)
+## 2. CREDENTIAL VALIDATION AT STARTUP
 
 ### Evidence
 
-**What Constitutes Trust Root:**
-- ⚠️ **CRITICAL FINDING:** Core does NOT explicitly define or validate trust root material at startup
-- ✅ Signing keys exist: `RANSOMEYE_COMMAND_SIGNING_KEY` (used by Policy Engine)
-- ✅ Database credentials: `RANSOMEYE_DB_PASSWORD` (validated by Core)
-- ❌ **NO** root certificates found in Core
-- ❌ **NO** authority keys validated by Core at startup
+**Database Credentials (Master Spec Phase 10.1 Compliance):**
+- ✅ `core/runtime.py:71` — `RANSOMEYE_DB_PASSWORD` is required
+- ✅ `core/runtime.py:123` — `_validate_environment()` checks for `RANSOMEYE_DB_PASSWORD`
+- ✅ `core/runtime.py:415` — `_invariant_check_missing_env('RANSOMEYE_DB_PASSWORD')` validates at startup
+- ✅ `common/config/loader.py:384-387` — `create_db_config_loader()` requires `RANSOMEYE_DB_PASSWORD`
+- ✅ `common/security/secrets.py:13-47` — `validate_secret_present()` enforces minimum length (8 chars) and entropy
+- ✅ `core/runtime.py:136-159` — `_validate_db_connectivity()` validates DB connection (presence, not correctness)
 
-**Where Trust Material is Sourced From:**
-- ✅ `RANSOMEYE_DB_PASSWORD` - From environment variable (validated by Core)
-- ✅ `RANSOMEYE_COMMAND_SIGNING_KEY` - From environment variable (NOT validated by Core)
-- ✅ `common/security/secrets.py:50-116` - `validate_signing_key()` validates signing keys
-- ⚠️ Signing key validation occurs in Policy Engine module, NOT in Core startup
+**Internal Service Credentials (Signing Keys):**
+- ✅ `common/security/secrets.py:50-116` — `validate_signing_key()` function exists
+- ✅ `common/security/secrets.py:72-76` — Missing signing key causes `sys.exit(1)`
+- ✅ `common/security/secrets.py:98-101` — Weak signing key causes `sys.exit(1)`
+- ❌ **CRITICAL FAILURE:** Core does NOT call `validate_signing_key()` at startup
+- ❌ **CRITICAL FAILURE:** `RANSOMEYE_COMMAND_SIGNING_KEY` is NOT in `required_vars` list (`core/runtime.py:123`)
 
-**What Happens if Trust Key is Missing:**
-- ✅ `common/security/secrets.py:72-76` - Missing signing key causes `sys.exit(1)` with "SECURITY VIOLATION"
-- ✅ `services/policy-engine/app/signer.py:55-59` - Missing signing key causes `sys.exit(1)`
-- ⚠️ **CRITICAL:** Core does NOT check for signing key at startup - only when Policy Engine module loads
-- ✅ `core/runtime.py:123` - Core only validates `RANSOMEYE_DB_PASSWORD` in `_validate_environment()`
+**Audit Ledger Keys:**
+- ✅ `audit-ledger/crypto/key_manager.py` — Audit Ledger key management exists
+- ✅ `audit-ledger/api.py:36-58` — Audit Ledger initializes keys on first use
+- ❌ **CRITICAL FAILURE:** Core does NOT validate Audit Ledger keys at startup
+- ⚠️ **NOT VALIDATED:** Audit Ledger keys are managed by Audit Ledger subsystem (deferred validation)
 
-**What Happens if Trust Key is Malformed:**
-- ✅ `common/security/secrets.py:98-101` - Too short key causes `sys.exit(1)`
-- ✅ `common/security/secrets.py:104-107` - Insufficient entropy causes `sys.exit(1)`
-- ✅ `common/security/secrets.py:111-114` - Weak format (alphabetic only) causes `sys.exit(1)`
-- ⚠️ **CRITICAL:** Core does NOT validate signing key format at startup
+**Global Validator Keys:**
+- ✅ `global-validator/crypto/validator_key_manager.py` — Global Validator key management exists
+- ❌ **CRITICAL FAILURE:** Core does NOT validate Global Validator keys at startup
+- ⚠️ **NOT VALIDATED:** Global Validator keys are managed by Global Validator subsystem (deferred validation)
 
-**What Happens if Trust Key is Weak:**
-- ✅ `common/security/secrets.py:82-95` - Known insecure keys cause `sys.exit(1)`
-- ✅ `common/security/secrets.py:42-45` - Insufficient entropy causes `sys.exit(1)`
-- ⚠️ **CRITICAL:** Core does NOT validate signing key strength at startup
+**Reporting / Signing Keys:**
+- ✅ `signed-reporting/crypto/report_signer.py` — Reporting key management exists
+- ❌ **CRITICAL FAILURE:** Core does NOT validate Reporting keys at startup
+- ⚠️ **NOT VALIDATED:** Reporting keys are managed by Reporting subsystem (deferred validation)
 
-**What Happens if Trust Key is Replaced at Runtime:**
-- ✅ `services/policy-engine/app/signer.py:24` - Signing key is cached in `_SIGNING_KEY` global variable
-- ✅ `services/policy-engine/app/signer.py:39-41` - Cached key is returned (never reloaded)
-- ✅ Key is loaded once at module import time, not reloaded
+**What Happens if Credential is Missing:**
+- ✅ `core/runtime.py:126-132` — Missing `RANSOMEYE_DB_PASSWORD` causes `exit_config_error()`
+- ✅ `common/security/secrets.py:32-34` — Missing secret causes `sys.exit(1)`
+- ❌ **CRITICAL FAILURE:** Missing `RANSOMEYE_COMMAND_SIGNING_KEY` does NOT prevent Core startup
+- ❌ **CRITICAL FAILURE:** Missing Audit Ledger keys do NOT prevent Core startup
+- ❌ **CRITICAL FAILURE:** Missing Global Validator keys do NOT prevent Core startup
 
-**Default Trust Material:**
-- ✅ `common/security/secrets.py:77-80` - Has fallback default key for development (`phase7_minimal_default_key_change_in_production`)
-- ✅ `common/security/secrets.py:82-95` - Default keys are rejected when `fail_on_default=True` (production mode)
-- ⚠️ **CRITICAL:** Core does NOT enforce `fail_on_default=True` at startup
-
-**Auto-Generated Trust Keys:**
-- ✅ No evidence of auto-generated trust keys at runtime
-- ✅ All keys must come from environment variables
+**What Happens if Credential is Invalid:**
+- ✅ `common/security/secrets.py:36-39` — Invalid DB password (too short) causes `sys.exit(1)`
+- ✅ `common/security/secrets.py:42-45` — Invalid DB password (insufficient entropy) causes `sys.exit(1)`
+- ✅ `common/security/secrets.py:98-101` — Invalid signing key (too short) causes `sys.exit(1)`
+- ❌ **CRITICAL FAILURE:** Invalid signing key does NOT prevent Core startup (validation deferred to Policy Engine)
 
 ### Verdict: **FAIL**
 
 **Justification:**
-- **CRITICAL FAILURE:** Core does NOT validate signing keys (trust root material) at startup
-- Signing key validation only occurs when Policy Engine module loads (deferred validation)
-- Core only validates `RANSOMEYE_DB_PASSWORD`, not `RANSOMEYE_COMMAND_SIGNING_KEY`
-- If Policy Engine module is not loaded, signing key is never validated
-- This violates "trust root" requirement - Core should validate ALL trust material before allowing any operation
+- DB credentials are validated at startup (correct)
+- **CRITICAL FAILURE:** Signing keys are NOT validated by Core at startup (deferred to Policy Engine)
+- **CRITICAL FAILURE:** Audit Ledger keys are NOT validated by Core at startup (deferred to Audit Ledger subsystem)
+- **CRITICAL FAILURE:** Global Validator keys are NOT validated by Core at startup (deferred to Global Validator subsystem)
+- **CRITICAL FAILURE:** Reporting keys are NOT validated by Core at startup (deferred to Reporting subsystem)
+- Core does NOT act as authoritative trust root for all cryptographic material
+
+**FAIL Conditions (Met):**
+- Any credential class is optional — **CONFIRMED** (signing keys, Audit Ledger keys, Global Validator keys, Reporting keys are optional at Core startup)
+- Any missing credential does not stop startup — **CONFIRMED** (missing signing keys do not stop Core startup)
+
+**Credential Types Validated:**
+- ✅ DB credentials — **VALIDATED** (presence validated, strength validated)
+- ❌ Internal service credentials (signing keys) — **NOT VALIDATED** (deferred to Policy Engine)
+- ❌ Audit Ledger keys — **NOT VALIDATED** (deferred to Audit Ledger subsystem)
+- ❌ Global Validator keys — **NOT VALIDATED** (deferred to Global Validator subsystem)
+- ❌ Reporting keys — **NOT VALIDATED** (deferred to Reporting subsystem)
+
+**Evidence Required:**
+- File paths: `core/runtime.py:116-134,392-444`, `common/security/secrets.py:50-116`
+- Missing validation: No call to `validate_signing_key()` in `_core_startup_validation()`
+- Deferred validation: `services/policy-engine/app/main.py:96-111` validates signing key when Policy Engine module loads
 
 ---
 
-## 3. CONFIGURATION LOADING & INVARIANTS
+## 3. NO IMPLICIT TRUST
 
 ### Evidence
 
-**Single Configuration Path:**
-- ✅ `core/runtime.py:69-87` - Uses single `ConfigLoader` instance for Core configuration
-- ✅ `common/config/loader.py:19-395` - Single `ConfigLoader` class (no parallel loaders)
-- ⚠️ **ISSUE:** Services have their own `ConfigLoader` instances (not centralized in Core)
-  - `services/policy-engine/app/main.py:76` - Policy Engine has its own `ConfigLoader`
-  - `services/ingest/app/main.py` - Ingest has its own `ConfigLoader`
-  - `services/correlation-engine/app/main.py` - Correlation Engine has its own `ConfigLoader`
+**Internal Service Auto-Trust:**
+- ✅ No evidence of auto-trust patterns in Core startup
+- ✅ `core/runtime.py:516-567` — Components are loaded as modules, not auto-trusted
+- ✅ `core/runtime.py:529-567` — Module load failures cause `exit_startup_error()` (fail-closed)
+- ⚠️ **ISSUE:** Services can start independently (bypassing Core trust validation)
+  - `services/ingest/app/main.py:722-729` — Has `if __name__ == "__main__"` block for standalone execution
+  - `services/correlation-engine/app/main.py:239-248` — Has `if __name__ == "__main__"` block for standalone execution
+  - `services/policy-engine/app/main.py:334` — Has `if __name__ == "__main__"` block for standalone execution
+  - `services/ai-core/app/main.py:399` — Has `if __name__ == "__main__"` block for standalone execution
+  - `services/ui/backend/main.py:491` — Has `if __name__ == "__main__"` block for standalone execution
 
-**Required vs Optional Config Distinction:**
-- ✅ `common/config/loader.py:37-59` - `require()` method marks variables as required
-- ✅ `common/config/loader.py:61-86` - `optional()` method marks variables as optional with defaults
-- ✅ `core/runtime.py:71` - `RANSOMEYE_DB_PASSWORD` is required
-- ✅ `core/runtime.py:72-83` - Other variables are optional with defaults
+**Localhost / Loopback Bypass:**
+- ✅ `core/runtime.py:72` — `RANSOMEYE_DB_HOST` defaults to `localhost` (non-security-sensitive, acceptable)
+- ✅ `core/runtime.py:145,170,263,319,338,407` — Uses `config.get('RANSOMEYE_DB_HOST', 'localhost')` for DB connections
+- ✅ No evidence of localhost bypass for trust validation
+- ✅ `localhost` is used for DB host default only (not for trust validation)
+- ✅ No evidence of loopback bypass for authentication
 
-**Enforcement of DB URL:**
-- ✅ `core/runtime.py:136-159` - `_validate_db_connectivity()` validates DB connection
-- ✅ `core/runtime.py:144-150` - Uses config values for DB connection
-- ✅ `core/runtime.py:156-159` - DB connection failure causes `exit_startup_error()`
+**Explicit Trust Relationships:**
+- ✅ `core/runtime.py:116-134` — `_validate_environment()` explicitly validates required env vars
+- ✅ `core/runtime.py:136-159` — `_validate_db_connectivity()` explicitly validates DB connection
+- ✅ `core/runtime.py:161-208` — `_validate_schema_presence()` explicitly validates schema
+- ❌ **CRITICAL FAILURE:** Signing key trust relationship is NOT explicit (validation deferred to Policy Engine)
 
-**Enforcement of DB Credentials:**
-- ✅ `core/runtime.py:71` - `RANSOMEYE_DB_PASSWORD` is required
-- ✅ `core/runtime.py:123` - `_validate_environment()` checks for `RANSOMEYE_DB_PASSWORD`
-- ✅ `core/runtime.py:415` - `_invariant_check_missing_env('RANSOMEYE_DB_PASSWORD')` validates at startup
-- ✅ `common/config/loader.py:136-141` - Missing required vars raise `ConfigError`
-
-**Enforcement of Signing Keys:**
-- ❌ **CRITICAL:** Core does NOT enforce signing keys at startup
-- ⚠️ Signing keys are enforced by Policy Engine module when it loads, not by Core
-
-**Enforcement of Runtime Identity:**
-- ✅ `core/runtime.py:25` - Component name is 'core' for logging
-- ⚠️ No explicit runtime identity validation found
-
-**Order of Validation:**
-- ✅ `core/runtime.py:392-419` - `_core_startup_validation()` defines validation order:
-  1. `_validate_environment()` - Environment variables
-  2. `_validate_db_connectivity()` - DB connection
-  3. `_validate_schema_presence()` - Schema presence
-  4. `_validate_write_permissions()` - Write permissions
-  5. `_validate_readonly_enforcement()` - Read-only enforcement
-  6. `_invariant_check_missing_env('RANSOMEYE_DB_PASSWORD')` - Invariant checks
-  7. `_invariant_check_db_connection()` - DB connection invariant
-  8. `_invariant_check_schema_mismatch()` - Schema mismatch invariant
-
-**Fallback Config Paths:**
-- ⚠️ **ISSUE:** `core/runtime.py:22-66` - Has fallback path when `common` modules unavailable
-- ⚠️ `core/runtime.py:88-91` - Falls back to basic env check if `ConfigLoader` unavailable
-- ⚠️ Fallback still terminates on missing `RANSOMEYE_DB_PASSWORD`, but uses basic check
-
-**Partial Startup with Missing Invariants:**
-- ✅ `core/runtime.py:156-159` - DB connection failure causes termination (no partial startup)
-- ✅ `core/runtime.py:200-202` - Missing schema tables cause termination
-- ⚠️ **CRITICAL:** Missing signing key does NOT prevent Core startup (only prevents Policy Engine module load)
-
-**Runtime "Fixups":**
-- ✅ No evidence of runtime configuration fixups
-- ✅ Configuration is loaded once at startup
+**Development Shortcuts:**
+- ✅ `common/security/secrets.py:77-80` — Has development default key, but only used when `fail_on_default=False`
+- ✅ `common/security/secrets.py:82-95` — Default keys are rejected in production mode (`fail_on_default=True`)
+- ⚠️ **ISSUE:** Core does NOT enforce `fail_on_default=True` at startup (Policy Engine enforces it when module loads)
 
 ### Verdict: **PARTIAL**
 
 **Justification:**
-- Core has single configuration path and proper required/optional distinction
-- **CRITICAL ISSUE:** Signing keys are NOT enforced by Core (deferred to Policy Engine module)
-- **ISSUE:** Services have their own ConfigLoader instances (not fully centralized)
-- Fallback paths exist but still terminate on critical failures
-- Missing signing key does NOT prevent Core startup (violates trust root requirement)
+- No internal service auto-trust found (correct)
+- No localhost bypass for trust validation found (correct)
+- **CRITICAL ISSUE:** Services can start independently, bypassing Core trust validation
+- **CRITICAL ISSUE:** Signing key trust relationship is NOT explicit (validation deferred to Policy Engine)
+- **ISSUE:** Core does NOT enforce `fail_on_default=True` at startup
+
+**FAIL Conditions (Not Met):**
+- Any service is allowed without authentication — **NOT FOUND** (services require DB credentials)
+- Any "development shortcut" exists in Core — **PARTIAL** (development default key exists but is rejected in production mode)
+
+**Evidence Required:**
+- File paths: `core/runtime.py:72,145,170,263,319,338,407`, `common/security/secrets.py:77-95`
+- Service independence: `services/*/app/main.py` — `if __name__ == "__main__"` blocks allow standalone execution
 
 ---
 
-## 4. FAIL-CLOSED STARTUP BEHAVIOR
+## 4. FAIL-CLOSED GUARANTEES
 
 ### Evidence
 
-**Missing Env Var → Terminate:**
-- ✅ `core/runtime.py:126-132` - Missing `RANSOMEYE_DB_PASSWORD` causes `exit_config_error()`
-- ✅ `core/runtime.py:307-310` - `_invariant_check_missing_env()` calls `exit_fatal()` on missing env var
-- ✅ `common/config/loader.py:136-141` - Missing required vars raise `ConfigError` which causes termination
-- ✅ `common/security/secrets.py:32-34` - Missing secret causes `sys.exit(1)`
-- ⚠️ **CRITICAL:** Missing `RANSOMEYE_COMMAND_SIGNING_KEY` does NOT prevent Core startup
-
-**Invalid DB → Terminate:**
-- ✅ `core/runtime.py:156-159` - DB connection failure causes `exit_startup_error()`
-- ✅ `core/runtime.py:312-329` - `_invariant_check_db_connection()` calls `exit_fatal()` on DB failure
-- ✅ `common/db/safety.py:179-184` - Connection creation failure calls `exit_fatal()`
-
-**Invalid Schema → Terminate:**
-- ✅ `core/runtime.py:199-202` - Missing required tables causes `exit_startup_error()`
-- ✅ `core/runtime.py:331-363` - `_invariant_check_schema_mismatch()` calls `exit_fatal()` on schema mismatch
-- ✅ `core/runtime.py:351-356` - Missing `raw_events.event_id` column causes termination
-
-**Invalid Signing Material → Terminate:**
-- ✅ `common/security/secrets.py:72-76` - Missing signing key causes `sys.exit(1)`
-- ✅ `services/policy-engine/app/signer.py:55-59` - Missing signing key causes `sys.exit(1)`
-- ⚠️ **CRITICAL:** Invalid signing material does NOT prevent Core startup - only prevents Policy Engine module load
-- ⚠️ Core can start successfully even if signing key is missing/invalid (Policy Engine just won't load)
-
-**Exit Paths:**
-- ✅ `core/runtime.py:132` - `exit_config_error()` → `ExitCode.CONFIG_ERROR` (1)
-- ✅ `core/runtime.py:159` - `exit_startup_error()` → `ExitCode.STARTUP_ERROR` (2)
-- ✅ `core/runtime.py:310` - `exit_fatal()` → `ExitCode.CONFIG_ERROR` (1) or `ExitCode.STARTUP_ERROR` (2)
-- ✅ `common/shutdown/handler.py:16-23` - Exit codes defined: SUCCESS (0), CONFIG_ERROR (1), STARTUP_ERROR (2), RUNTIME_ERROR (3), FATAL_ERROR (4)
-
-**Exit Codes:**
-- ✅ `common/shutdown/handler.py:16-23` - Standard exit codes defined
-- ✅ `core/runtime.py:132` - Uses `exit_config_error()` for config errors
-- ✅ `core/runtime.py:159` - Uses `exit_startup_error()` for startup errors
-- ✅ `core/runtime.py:310` - Uses `exit_fatal()` for invariant violations
-
-**Whether Termination is Guaranteed:**
-- ✅ `core/runtime.py:132` - `exit_config_error()` calls `exit_fatal()` which calls `sys.exit()`
-- ✅ `core/runtime.py:159` - `exit_startup_error()` calls `exit_fatal()` which calls `sys.exit()`
-- ✅ `common/shutdown/handler.py:117-118` - `exit_fatal()` calls `sys.exit(int(exit_code))`
-- ✅ Termination is guaranteed (no retry loops, no warnings-only)
+**Trust Failure → Process Termination:**
+- ✅ `core/runtime.py:126-132` — Missing `RANSOMEYE_DB_PASSWORD` causes `exit_config_error()` → `sys.exit(1)`
+- ✅ `core/runtime.py:156-159` — DB connection failure causes `exit_startup_error()` → `sys.exit(2)`
+- ✅ `core/runtime.py:199-202` — Missing schema tables causes `exit_startup_error()` → `sys.exit(2)`
+- ✅ `common/security/secrets.py:32-34` — Missing secret causes `sys.exit(1)`
+- ✅ `common/security/secrets.py:72-76` — Missing signing key causes `sys.exit(1)` (when called)
+- ❌ **CRITICAL FAILURE:** Missing signing key does NOT cause Core termination (validation deferred to Policy Engine)
 
 **Retry Loops:**
 - ✅ No retry loops found in Core startup
+- ✅ `core/runtime.py:136-159` — DB connection failure causes immediate termination (no retry)
+- ✅ `core/runtime.py:199-202` — Schema validation failure causes immediate termination (no retry)
 - ✅ All failures cause immediate termination
 
-**Warning-Only Behavior:**
-- ✅ No warning-only behavior found
-- ✅ All failures cause termination
-- ⚠️ `services/policy-engine/app/main.py:112-114` - Logs warning if signing key module unavailable, but this is for ImportError, not missing key
+**Explicit Error Logging:**
+- ✅ `core/runtime.py:131` — Missing env vars logged via `logger.config_error()`
+- ✅ `core/runtime.py:158` — DB connection failure logged via `logger.db_error()`
+- ✅ `core/runtime.py:201` — Schema validation failure logged via `logger.fatal()`
+- ✅ `common/security/secrets.py:32-34` — Missing secret logged via `print(f"FATAL: {error_msg}", file=sys.stderr)`
+- ✅ All failures are explicitly logged
+
+**Exit Paths:**
+- ✅ `core/runtime.py:132` — `exit_config_error()` → `ExitCode.CONFIG_ERROR` (1)
+- ✅ `core/runtime.py:159` — `exit_startup_error()` → `ExitCode.STARTUP_ERROR` (2)
+- ✅ `core/runtime.py:310` — `exit_fatal()` → `ExitCode.CONFIG_ERROR` (1) or `ExitCode.STARTUP_ERROR` (2)
+- ✅ `common/shutdown/handler.py:117-118` — `exit_fatal()` calls `sys.exit(int(exit_code))`
+- ✅ Termination is guaranteed (no retry loops, no warnings-only)
 
 **Degraded Mode:**
-- ✅ No degraded mode found
-- ✅ Core terminates on critical failures
-- ⚠️ **CRITICAL:** Core can start without signing key (Policy Engine just won't load) - this is a form of degraded operation
+- ✅ No degraded mode found for DB failures
+- ✅ No degraded mode found for schema failures
+- ❌ **CRITICAL FAILURE:** Core can start without signing keys (Policy Engine just won't load) — this is a form of degraded operation
 
 ### Verdict: **PARTIAL**
 
 **Justification:**
-- Core terminates on missing DB, invalid schema, missing DB password
-- **CRITICAL ISSUE:** Core does NOT terminate on missing/invalid signing key
-- Core can start successfully even if signing key is missing (Policy Engine module just fails to load)
+- Core terminates on DB failures, schema failures, missing DB password (correct)
+- **CRITICAL ISSUE:** Core does NOT terminate on missing/invalid signing keys
+- **CRITICAL ISSUE:** Core can start successfully even if signing key is missing (Policy Engine module just fails to load)
 - This violates fail-closed requirement for trust root material
 - All other failures cause guaranteed termination
 
+**FAIL Conditions (Met):**
+- Any trust failure results in process termination — **PARTIAL** (DB failures terminate, signing key failures do not)
+- No retry loops that mask failure — **PASS** (no retry loops found)
+- Errors are explicit and logged — **PASS** (all errors are logged)
+
+**Evidence Required:**
+- File paths: `core/runtime.py:126-132,156-159,199-202`, `common/security/secrets.py:32-34,72-76`
+- Missing termination: No call to `validate_signing_key()` in `_core_startup_validation()` means missing signing key does not terminate Core
+
 ---
 
-## 5. CREDENTIAL CHAIN ENFORCEMENT
+## 5. DETERMINISM AT TRUST ROOT
 
 ### Evidence
 
-**DB Credentials:**
-- ✅ `core/runtime.py:71` - `RANSOMEYE_DB_PASSWORD` is required
-- ✅ `common/config/loader.py:384-387` - `create_db_config_loader()` requires `RANSOMEYE_DB_PASSWORD`
-- ✅ `common/security/secrets.py:13-47` - `validate_secret_present()` enforces minimum length (8 chars) and entropy
-- ✅ `core/runtime.py:123` - `_validate_environment()` checks for `RANSOMEYE_DB_PASSWORD`
-- ✅ `core/runtime.py:415` - `_invariant_check_missing_env('RANSOMEYE_DB_PASSWORD')` validates at startup
+**Same Inputs → Same Startup Decision:**
+- ✅ `core/runtime.py:116-134` — `_validate_environment()` is deterministic (checks env vars, no randomness)
+- ✅ `core/runtime.py:136-159` — `_validate_db_connectivity()` is deterministic (DB connection test, no randomness)
+- ✅ `core/runtime.py:161-208` — `_validate_schema_presence()` is deterministic (schema check, no randomness)
+- ✅ `common/security/secrets.py:13-47` — `validate_secret_present()` is deterministic (length/entropy checks, no randomness)
+- ✅ `common/security/secrets.py:50-116` — `validate_signing_key()` is deterministic (length/entropy/format checks, no randomness)
+- ✅ Same inputs (env vars, DB state, schema state) → same startup decision
 
-**Signing Credentials:**
-- ✅ `common/security/secrets.py:50-116` - `validate_signing_key()` enforces minimum length (32 chars)
-- ✅ `common/security/secrets.py:82-95` - Rejects known insecure keys
-- ✅ `common/security/secrets.py:98-101` - Validates key length
-- ✅ `common/security/secrets.py:104-107` - Validates entropy
-- ✅ `common/security/secrets.py:111-114` - Validates key format
-- ⚠️ **CRITICAL:** Core does NOT enforce signing credentials at startup
+**Randomness in Trust Decisions:**
+- ✅ No `random` module imports found in Core startup code
+- ✅ No `time.time()` or `datetime.now()` used for trust decisions
+- ✅ No non-deterministic trust decisions found
 
-**Inter-Service Credentials:**
-- ⚠️ **NOT VALIDATED** - Inter-service credentials not examined (component-level validation required)
+**Time-Based Trust Decisions:**
+- ✅ No time-based trust decisions found
+- ✅ No clock skew tolerance checks (not applicable for startup)
+- ✅ No time-window-based trust decisions
 
-**Minimum Strength Enforcement:**
-- ✅ `common/security/secrets.py:36-39` - DB password minimum length: 8 characters
-- ✅ `common/security/secrets.py:42-45` - DB password entropy check: minimum 3 unique characters
-- ✅ `common/security/secrets.py:98-101` - Signing key minimum length: 32 characters
-- ✅ `common/security/secrets.py:104-107` - Signing key entropy check: minimum 30% unique characters or 8 unique characters
-- ✅ `common/security/secrets.py:111-114` - Signing key format check: must have non-alphabetic characters
+**Deterministic Validation Functions:**
+- ✅ `common/security/secrets.py:13-47` — `validate_secret_present()` is deterministic
+- ✅ `common/security/secrets.py:50-116` — `validate_signing_key()` is deterministic
+- ✅ `core/runtime.py:116-134` — `_validate_environment()` is deterministic
+- ✅ `core/runtime.py:136-159` — `_validate_db_connectivity()` is deterministic
+- ✅ `core/runtime.py:161-208` — `_validate_schema_presence()` is deterministic
 
-**Length Checks:**
-- ✅ `common/security/secrets.py:36-39` - DB password length check
-- ✅ `common/security/secrets.py:98-101` - Signing key length check
-
-**Entropy Checks:**
-- ✅ `common/security/secrets.py:42-45` - DB password entropy check (minimum 3 unique characters)
-- ✅ `common/security/secrets.py:104-107` - Signing key entropy check (minimum 30% unique or 8 unique)
-
-**Format Checks:**
-- ✅ `common/security/secrets.py:111-114` - Signing key format check (must have non-alphabetic characters)
-- ✅ `common/security/secrets.py:82-95` - Rejects known insecure key values
-
-**Kernel Enforces Minimum Strength:**
-- ✅ `common/security/secrets.py` - Provides validation functions
-- ⚠️ **CRITICAL:** Core does NOT call these validation functions for signing keys at startup
-- ✅ Core calls validation for DB password via `ConfigLoader.require()`
-
-**Validation Delegated Downstream:**
-- ⚠️ **CRITICAL:** Signing key validation is delegated to Policy Engine module
-- ⚠️ Core does NOT validate signing keys before allowing any operation
-
-### Verdict: **PARTIAL**
+### Verdict: **PASS**
 
 **Justification:**
-- DB credentials are enforced by Core with proper strength requirements
-- Signing credentials have proper strength validation functions
-- **CRITICAL ISSUE:** Core does NOT enforce signing credentials at startup (delegated to Policy Engine)
-- Validation functions exist but are not called by Core for signing keys
-- This violates "kernel enforces minimum strength" requirement
+- Core startup validation is deterministic (same inputs → same output)
+- No randomness found in trust decisions
+- No time-based trust decisions found
+- All validation functions are deterministic
+
+**PASS Conditions (Met):**
+- Same inputs → same startup decision — **CONFIRMED** (deterministic validation functions)
+- No randomness or time-based trust decisions — **CONFIRMED** (no randomness, no time-based decisions)
+
+**Evidence Required:**
+- File paths: `core/runtime.py:116-134,136-159,161-208`, `common/security/secrets.py:13-47,50-116`
+- Determinism proof: All validation functions are pure (no randomness, no time-based decisions)
 
 ---
 
-## 6. CRYPTOGRAPHIC BOUNDARIES
+## CREDENTIAL TYPES VALIDATED
 
-### Evidence
+### Database Credentials
+- **Type:** PostgreSQL password
+- **Env Var:** `RANSOMEYE_DB_PASSWORD`
+- **Validation:** `core/runtime.py:116-134` — `_validate_environment()` checks presence
+- **Strength Validation:** `common/security/secrets.py:13-47` — `validate_secret_present()` enforces minimum length (8 chars) and entropy
+- **Fail-Fast:** `core/runtime.py:126-132` — Missing password causes `exit_config_error()`
+- **Status:** ✅ **VALIDATED AT STARTUP**
 
-**Algorithms Used:**
-- ✅ `services/policy-engine/app/signer.py:134` - Uses HMAC-SHA256 for command signing
-- ✅ `agents/linux/command_gate.py:302-334` - Uses ed25519 for command verification (different from Policy Engine's HMAC)
-- ✅ `threat-response-engine/crypto/signer.py` - Uses ed25519 for TRE command signing
-- ⚠️ **ISSUE:** Multiple signing algorithms used (HMAC-SHA256 for Policy Engine, ed25519 for TRE)
+### Command Signing Keys
+- **Type:** Command signing key
+- **Env Var:** `RANSOMEYE_COMMAND_SIGNING_KEY`
+- **Validation Function:** `common/security/secrets.py:50-116` — `validate_signing_key()` exists
+- **Strength Validation:** Minimum length 32, entropy check, format check
+- **Fail-Fast:** `common/security/secrets.py:72-76` — Missing key causes `sys.exit(1)` (when called)
+- **Status:** ❌ **NOT VALIDATED AT STARTUP** (deferred to Policy Engine module)
 
-**Where Signing Occurs:**
-- ✅ `services/policy-engine/app/signer.py:110-136` - Policy Engine signs commands
-- ✅ `threat-response-engine/crypto/signer.py` - TRE signs commands
-- ⚠️ Signing occurs in service modules, not in Core
+### Audit Ledger Keys
+- **Type:** Audit Ledger signing keypair
+- **Management:** `audit-ledger/crypto/key_manager.py` — Key management exists
+- **Initialization:** `audit-ledger/api.py:36-58` — Keys initialized on first use
+- **Status:** ❌ **NOT VALIDATED AT STARTUP** (deferred to Audit Ledger subsystem)
 
-**Where Verification Occurs:**
-- ✅ `agents/linux/command_gate.py:302-334` - Agents verify commands
-- ✅ `threat-response-engine/crypto/verifier.py` - TRE verifies commands
-- ⚠️ Verification occurs in service/agent modules, not in Core
+### Global Validator Keys
+- **Type:** Global Validator signing keypair
+- **Management:** `global-validator/crypto/validator_key_manager.py` — Key management exists
+- **Status:** ❌ **NOT VALIDATED AT STARTUP** (deferred to Global Validator subsystem)
 
-**Whether Kernel Refuses to Operate if Crypto Layer Unavailable:**
-- ⚠️ **CRITICAL:** Core does NOT check if crypto layer is available at startup
-- ⚠️ `services/policy-engine/app/main.py:112-114` - Logs warning if signing key module unavailable (ImportError), but Core still starts
-- ⚠️ Core can start even if crypto layer is unavailable (Policy Engine just won't load)
-
-**Crypto Optionality:**
-- ⚠️ **CRITICAL:** Crypto appears optional - Core can start without signing key validation
-- ⚠️ Policy Engine module fails to load if signing key unavailable, but Core continues
-
-**No-Op Crypto Paths:**
-- ✅ No evidence of no-op crypto paths
-- ✅ All crypto operations use real algorithms
-
-**Test-Only Crypto in Prod Paths:**
-- ✅ `common/security/secrets.py:77-80` - Has development default key, but only used when `fail_on_default=False`
-- ✅ `common/security/secrets.py:82-95` - Default keys are rejected in production mode
-- ✅ No test-only crypto in production paths
-
-### Verdict: **PARTIAL**
-
-**Justification:**
-- Cryptographic algorithms are properly implemented (HMAC-SHA256, ed25519)
-- **CRITICAL ISSUE:** Core does NOT refuse to operate if crypto layer unavailable
-- Core can start successfully even if signing key is missing (Policy Engine just won't load)
-- This violates "kernel refuses to operate if crypto layer unavailable" requirement
-- Multiple signing algorithms used (may be intentional, but should be documented)
+### Reporting Keys
+- **Type:** Signed Reporting signing keypair
+- **Management:** `signed-reporting/crypto/report_signer.py` — Key management exists
+- **Status:** ❌ **NOT VALIDATED AT STARTUP** (deferred to Reporting subsystem)
 
 ---
 
-## 7. NEGATIVE VALIDATION (MANDATORY)
+## PASS CONDITIONS
 
-### Evidence
+### Section 1: Core Startup Trust Chain
+- ✅ Validation occurs before serving traffic
+- ❌ Trust root material is NOT fully validated (signing keys not validated)
+- ❌ Core can start with missing keys (signing keys)
 
-**Core Starts Without DB:**
-- ✅ **PROVEN IMPOSSIBLE:** `core/runtime.py:136-159` - `_validate_db_connectivity()` validates DB connection
-- ✅ `core/runtime.py:156-159` - DB connection failure causes `exit_startup_error()`
-- ✅ `core/runtime.py:312-329` - `_invariant_check_db_connection()` calls `exit_fatal()` on DB failure
-- ✅ **VERIFIED:** Core cannot start without DB
+### Section 2: Credential Validation at Startup
+- ✅ DB credentials validated
+- ❌ Signing keys NOT validated by Core
+- ❌ Audit Ledger keys NOT validated by Core
+- ❌ Global Validator keys NOT validated by Core
+- ❌ Reporting keys NOT validated by Core
 
-**Core Starts Without Signing Key:**
-- ❌ **PROVEN POSSIBLE:** Core does NOT validate signing key at startup
-- ⚠️ `core/runtime.py:123` - Only validates `RANSOMEYE_DB_PASSWORD`, not `RANSOMEYE_COMMAND_SIGNING_KEY`
-- ⚠️ `services/policy-engine/app/main.py:96-111` - Signing key validation occurs when Policy Engine module loads
-- ✅ **VERIFIED:** Core CAN start without signing key (Policy Engine just won't load)
+### Section 3: No Implicit Trust
+- ✅ No internal service auto-trust
+- ✅ No localhost bypass for trust validation
+- ⚠️ Services can start independently (bypassing Core trust validation)
 
-**Core Starts With Placeholder Secrets:**
-- ✅ **PROVEN IMPOSSIBLE:** `common/security/secrets.py:82-95` - Rejects known insecure keys
-- ✅ `common/security/secrets.py:42-45` - Rejects weak secrets (insufficient entropy)
-- ✅ `common/config/loader.py:136-141` - Missing required secrets raise `ConfigError`
-- ⚠️ **PARTIAL:** DB password placeholders are rejected, but signing key placeholders are only rejected when Policy Engine loads
+### Section 4: Fail-Closed Guarantees
+- ✅ DB failures cause termination
+- ✅ Schema failures cause termination
+- ❌ Signing key failures do NOT cause Core termination
 
-**Core Starts With Mismatched Schema:**
-- ✅ **PROVEN IMPOSSIBLE:** `core/runtime.py:199-202` - Missing required tables causes `exit_startup_error()`
-- ✅ `core/runtime.py:331-363` - `_invariant_check_schema_mismatch()` validates schema structure
-- ✅ `core/runtime.py:351-356` - Missing `raw_events.event_id` column causes termination
-- ✅ **VERIFIED:** Core cannot start with mismatched schema
-
-**Core Starts With Partially Initialized Subsystems:**
-- ⚠️ **PARTIAL:** Core validates DB, schema, permissions before starting
-- ⚠️ **ISSUE:** Core does NOT validate signing key before starting
-- ⚠️ Policy Engine subsystem can be uninitialized (missing signing key) while Core runs
-- ✅ Other subsystems (DB, schema) must be fully initialized
-
-### Verdict: **PARTIAL**
-
-**Justification:**
-- Core cannot start without DB (verified)
-- Core cannot start with mismatched schema (verified)
-- **CRITICAL:** Core CAN start without signing key (violates trust root requirement)
-- **CRITICAL:** Core CAN start with partially initialized subsystems (Policy Engine can be uninitialized)
+### Section 5: Determinism at Trust Root
+- ✅ Same inputs → same startup decision
+- ✅ No randomness or time-based trust decisions
 
 ---
 
-## 8. VERDICT & IMPACT
+## FAIL CONDITIONS
 
-### Section-by-Section Verdicts
+### Section 1: Core Startup Trust Chain
+- ❌ **CONFIRMED:** Core starts with missing keys — **SIGNING KEYS NOT VALIDATED**
+- ❌ **CONFIRMED:** Weak or placeholder keys are accepted — **VALIDATION DEFERRED TO POLICY ENGINE**
+- ❌ **CONFIRMED:** Startup continues after trust failure — **CORE STARTS, POLICY ENGINE MODULE FAILS TO LOAD**
 
-1. **Component Identity:** FAIL
-   - Services can start independently, bypassing Core's trust root validation
+### Section 2: Credential Validation at Startup
+- ❌ **CONFIRMED:** Any credential class is optional — **SIGNING KEYS, AUDIT LEDGER KEYS, GLOBAL VALIDATOR KEYS, REPORTING KEYS ARE OPTIONAL**
+- ❌ **CONFIRMED:** Any missing credential does not stop startup — **MISSING SIGNING KEYS DO NOT STOP CORE STARTUP**
 
-2. **Trust Root Material:** FAIL
-   - Core does NOT validate signing keys at startup
-   - Signing key validation is deferred to Policy Engine module
+### Section 3: No Implicit Trust
+- ❌ **CONFIRMED:** Any service is allowed without authentication — **SERVICES CAN START INDEPENDENTLY, BYPASSING CORE TRUST VALIDATION**
+- ⚠️ **PARTIAL:** Any "development shortcut" exists in Core — **DEVELOPMENT DEFAULT KEY EXISTS BUT IS REJECTED IN PRODUCTION MODE**
 
-3. **Configuration Loading & Invariants:** PARTIAL
-   - Core has proper configuration loading, but does NOT enforce signing keys
+### Section 4: Fail-Closed Guarantees
+- ❌ **CONFIRMED:** Any trust failure results in process termination — **SIGNING KEY FAILURES DO NOT TERMINATE CORE**
+- ✅ **PASS:** No retry loops that mask failure — **NO RETRY LOOPS FOUND**
+- ✅ **PASS:** Errors are explicit and logged — **ALL ERRORS ARE LOGGED**
 
-4. **Fail-Closed Startup Behavior:** PARTIAL
-   - Core terminates on DB/schema failures, but NOT on signing key failures
+### Section 5: Determinism at Trust Root
+- ✅ **PASS:** Same inputs → same startup decision — **DETERMINISTIC VALIDATION FUNCTIONS**
+- ✅ **PASS:** No randomness or time-based trust decisions — **NO RANDOMNESS, NO TIME-BASED DECISIONS**
 
-5. **Credential Chain Enforcement:** PARTIAL
-   - DB credentials enforced, but signing credentials NOT enforced by Core
+---
 
-6. **Cryptographic Boundaries:** PARTIAL
-   - Crypto algorithms proper, but Core does NOT refuse to operate if crypto unavailable
+## EVIDENCE REQUIRED
 
-7. **Negative Validation:** PARTIAL
-   - Core cannot start without DB/schema, but CAN start without signing key
+### Core Startup Trust Chain
+- File paths: `core/runtime.py:116-134,392-444`, `core/main.py:21-32`
+- Code paths: `_validate_environment()` only validates DB password, not signing keys
+- Missing validation: No call to `validate_signing_key()` in `_core_startup_validation()`
 
-### Overall Verdict: **FAIL**
+### Credential Validation at Startup
+- File paths: `core/runtime.py:116-134,392-444`, `common/security/secrets.py:50-116`
+- Missing validation: No call to `validate_signing_key()` in `_core_startup_validation()`
+- Deferred validation: `services/policy-engine/app/main.py:96-111` validates signing key when Policy Engine module loads
 
-**Justification:**
-- **CRITICAL FAILURE:** Core does NOT act as authoritative trust root for signing keys
-- Core can start successfully even if signing key is missing/invalid
-- Services can bypass Core's trust root validation by starting independently
-- Signing key validation is deferred to Policy Engine module, not enforced by Core
-- This violates the fundamental requirement: "Core Kernel acts as single, authoritative trust root"
+### No Implicit Trust
+- File paths: `core/runtime.py:72,145,170,263,319,338,407`, `common/security/secrets.py:77-95`
+- Service independence: `services/*/app/main.py` — `if __name__ == "__main__"` blocks allow standalone execution
 
-**Blast Radius if Kernel is Compromised:**
-- **CRITICAL:** If Core is compromised, all services running as Core modules are compromised
-- **CRITICAL:** If Core is compromised, all DB connections are compromised
-- **CRITICAL:** If Core is compromised, all configuration is compromised
-- **CRITICAL:** If Core is compromised, all component coordination is compromised
-- **HIGH:** Services can start independently, so compromise of Core does NOT prevent service operation (but services won't have Core's guarantees)
+### Fail-Closed Guarantees
+- File paths: `core/runtime.py:126-132,156-159,199-202`, `common/security/secrets.py:32-34,72-76`
+- Missing termination: No call to `validate_signing_key()` in `_core_startup_validation()` means missing signing key does not terminate Core
 
-**Whether Downstream Validations are Trustworthy:**
-- ❌ **NO** - Downstream validations cannot be trusted if Core does NOT enforce trust root material
-- ❌ If Core can start without signing keys, then trust root guarantees are NOT enforced
-- ❌ If services can start independently, then Core's trust root is NOT authoritative
-- ⚠️ DB and schema validations are trustworthy, but cryptographic trust root is NOT enforced
+### Determinism at Trust Root
+- File paths: `core/runtime.py:116-134,136-159,161-208`, `common/security/secrets.py:13-47,50-116`
+- Determinism proof: All validation functions are pure (no randomness, no time-based decisions)
+
+---
+
+## GA VERDICT
+
+### Overall: **FAIL**
+
+**Critical Blockers:**
+1. **FAIL:** Core does NOT validate signing keys at startup
+   - **Impact:** Core can start without signing keys, violating trust root requirement
+   - **Location:** `core/runtime.py:116-134` — `_validate_environment()` only validates DB password
+   - **Severity:** **CRITICAL** (violates Master Spec Phase 10.1, trust root requirement)
+   - **Master Spec Violation:** Core must act as single, authoritative trust root for all cryptographic material
+
+2. **FAIL:** Core can start with missing trust root material (signing keys, Audit Ledger keys, Global Validator keys, Reporting keys)
+   - **Impact:** Core can enter partially trusted state (DB validated, signing keys not validated)
+   - **Location:** `core/runtime.py:392-444` — `_core_startup_validation()` does not validate all trust root material
+   - **Severity:** **CRITICAL** (violates fail-closed requirement for trust root material)
+
+3. **FAIL:** Services can start independently, bypassing Core trust validation
+   - **Impact:** Services can bypass Core's trust root validation by starting standalone
+   - **Location:** `services/*/app/main.py` — `if __name__ == "__main__"` blocks allow standalone execution
+   - **Severity:** **HIGH** (violates "single authoritative trust root" requirement)
+
+**Non-Blocking Issues:**
+1. Core does NOT enforce `fail_on_default=True` at startup (Policy Engine enforces it when module loads)
+2. Determinism is correct (same inputs → same output)
+
+**Strengths:**
+1. ✅ Core validates DB credentials at startup (presence and strength)
+2. ✅ Core terminates on DB failures, schema failures (fail-closed)
+3. ✅ Core startup validation is deterministic (no randomness, no time-based decisions)
+4. ✅ No implicit trust patterns found (no localhost bypass, no auto-trust)
+5. ✅ All failures are explicitly logged
 
 **Recommendations:**
 1. **CRITICAL:** Core MUST validate `RANSOMEYE_COMMAND_SIGNING_KEY` at startup (before loading any modules)
 2. **CRITICAL:** Core MUST terminate if signing key is missing, weak, or invalid
-3. **CRITICAL:** Remove or disable standalone service entry points, or ensure they also validate trust root
-4. **HIGH:** Core should validate ALL trust root material before allowing any operation
-5. **MEDIUM:** Document why multiple signing algorithms are used (HMAC-SHA256 vs ed25519)
+3. **CRITICAL:** Core MUST validate ALL trust root material before allowing any operation
+4. **HIGH:** Remove or disable standalone service entry points, or ensure they also validate trust root
+5. **MEDIUM:** Core should validate Audit Ledger keys, Global Validator keys, Reporting keys at startup (if applicable)
 
 ---
 
-**Validation Date:** 2025-01-13
-**Validator:** Lead Validator & Compliance Auditor
-**Next Step:** Validation Step 3 — Secure Bus (if applicable) or Validation Step 4 — Ingest
+**Validation Date:** 2025-01-13  
+**Validator:** Independent System Validator  
+**Next Step:** Validation Step 3 — Secure Bus (inter-service trust)  
+**GA Status:** **BLOCKED** (Critical failures in trust root validation)
