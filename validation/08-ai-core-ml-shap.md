@@ -1,4 +1,4 @@
-# Validation Step 8 — AI Core (ML Models, Training, SHAP & Autolearn Boundaries)
+# Validation Step 8 — AI Core / ML / SHAP (In-Depth)
 
 **Component Identity:**
 - **Name:** AI Core (Low-Compute ML Layer)
@@ -8,83 +8,168 @@
   - `/home/ransomeye/rebuild/services/ai-core/app/clustering.py` - KMeans clustering
   - `/home/ransomeye/rebuild/services/ai-core/app/shap_explainer.py` - SHAP explainability
   - `/home/ransomeye/rebuild/services/ai-core/app/db.py` - Database operations
+  - `/home/ransomeye/rebuild/ai-model-registry/` - Model registry (if applicable)
 - **Entry Point:** Batch processing loop - `services/ai-core/app/main.py:95` - `run_ai_core()`
 
-**Spec Reference:**
+**Master Spec References:**
 - Phase 6 — Read-Only, Non-Blocking AI Core
 - AI Metadata Schema (`schemas/05_ai_metadata.sql`)
+- Validation File 06 (Ingest Pipeline) — **TREATED AS FAILED AND LOCKED**
+- Validation File 07 (Correlation Engine) — **TREATED AS FAILED AND LOCKED**
 
 ---
 
-## 1. COMPONENT IDENTITY & AUTHORITY
+## PURPOSE
+
+This validation proves that AI/ML components are explainable, reproducible, auditable, and not black-box.
+
+This validation does NOT assume ingest determinism or correlation determinism. Validation Files 06 and 07 are treated as FAILED and LOCKED. This validation must account for non-deterministic inputs affecting AI/ML behavior.
+
+This file validates:
+- Model registry & provenance
+- Training & retraining discipline
+- Inference determinism (non-LLM)
+- SHAP explainability
+- Replay & auditability
+- No black-box paths
+
+This validation does NOT validate UI, agents, installer, or provide fixes/recommendations.
+
+---
+
+## AI CORE DEFINITION
+
+**AI Core Requirements (Master Spec):**
+
+1. **Model Registry & Provenance** — Model versioning, model lineage, training data traceability
+2. **Training & Retraining Discipline** — Presence of training pipeline, deterministic training inputs, ability to retrain models
+3. **Inference Determinism (Non-LLM)** — Identical inputs → identical outputs, no hidden randomness
+4. **SHAP Explainability** — SHAP artifacts generated, SHAP references persisted, SHAP explanations tied to model version
+5. **Replay & Auditability** — AI outputs can be recomputed later, non-deterministic inputs do not break audit trails
+6. **No Black-Box Paths** — No inference path bypasses explanation, no opaque scores
+
+**AI Core Structure:**
+- **Entry Point:** Batch processing loop (`run_ai_core()`)
+- **Processing Chain:** Read incidents → Extract features → Cluster → Generate SHAP → Store metadata
+- **Storage Tables:** `feature_vectors`, `clusters`, `cluster_memberships`, `shap_explanations`, `ai_model_versions`
+
+---
+
+## WHAT IS VALIDATED
+
+### 1. Model Registry & Provenance
+- Model versioning
+- Model lineage
+- Training data traceability
+
+### 2. Training & Retraining Discipline
+- Presence of training pipeline
+- Deterministic training inputs
+- Ability to retrain models
+
+### 3. Inference Determinism (Non-LLM)
+- Identical inputs → identical outputs
+- No hidden randomness
+
+### 4. SHAP Explainability
+- SHAP artifacts are generated
+- SHAP references are persisted
+- SHAP explanations are tied to model version
+
+### 5. Replay & Auditability
+- Whether AI outputs can be recomputed later
+- Whether non-deterministic inputs break audit trails
+
+### 6. No Black-Box Paths
+- No inference path bypasses explanation
+- No opaque scores
+
+---
+
+## WHAT IS EXPLICITLY NOT ASSUMED
+
+- **NOT ASSUMED:** That ingest_time (ingested_at) is deterministic (Validation File 06 is FAILED, ingested_at is non-deterministic)
+- **NOT ASSUMED:** That correlation engine produces deterministic incidents (Validation File 07 is FAILED, incidents may differ on replay)
+- **NOT ASSUMED:** That AI Core receives deterministic inputs (incidents may differ on replay)
+- **NOT ASSUMED:** That AI outputs can be recomputed from stored evidence if inputs are non-deterministic
+
+---
+
+## VALIDATION METHODOLOGY
+
+### Evidence Collection Strategy
+
+1. **Code Path Analysis:** Trace model training, inference, SHAP generation, model versioning
+2. **Database Query Analysis:** Examine SQL queries for model version storage, SHAP persistence, feature storage
+3. **Determinism Analysis:** Verify inference determinism, training reproducibility, SHAP determinism
+4. **Provenance Analysis:** Check model versioning, lineage tracking, training data traceability
+5. **Explainability Analysis:** Verify SHAP generation, persistence, model version association
+6. **Replay Analysis:** Check if AI outputs can be recomputed from stored evidence
+
+### Forbidden Patterns (Grep Validation)
+
+- `random\.|np\.random|torch\.rand` — Hidden randomness (must be seeded)
+- `NOW\(\)|CURRENT_TIMESTAMP` — Non-deterministic timestamps (affects replay)
+- `continue.*except|pass.*except` — Silent error handling (forbidden, must fail-closed)
+
+---
+
+## 1. MODEL REGISTRY & PROVENANCE
 
 ### Evidence
 
-**AI Core Services/Modules:**
-- ✅ Main module: `services/ai-core/app/main.py` - `run_ai_core()` batch processing loop
-- ✅ Feature extraction: `services/ai-core/app/feature_extraction.py` - `extract_incident_features()`, `extract_features_batch()`
-- ✅ Clustering: `services/ai-core/app/clustering.py` - `cluster_incidents()`, `create_cluster_metadata()`
-- ✅ SHAP explainability: `services/ai-core/app/shap_explainer.py` - `explain_incident_confidence()`, `explain_batch()`
-- ✅ Database operations: `services/ai-core/app/db.py` - Read-only incident reads, metadata writes
+**Model Versioning:**
+- ✅ Model version storage: `services/ai-core/app/db.py:155-199` - `get_model_version()` stores model versions in `ai_model_versions` table
+- ✅ Model version fields: `services/ai-core/app/db.py:180-186` - Model versions include `model_type`, `model_version_string`, `deployed_at`, `description`
+- ✅ Model version retrieval: `services/ai-core/app/main.py:191-192` - `get_model_version(write_conn, 'CLUSTERING', '1.0.0')` and `get_model_version(write_conn, 'EXPLAINABILITY', '1.0.0')`
+- ⚠️ **ISSUE:** Model versions are hard-coded: `services/ai-core/app/main.py:191-192` - Model versions are `'1.0.0'` (hard-coded, not derived from training artifacts)
+- ⚠️ **ISSUE:** Model version creation uses `NOW()`: `services/ai-core/app/db.py:184` - `deployed_at = NOW()` (non-deterministic timestamp)
 
-**Model Types Used:**
-- ✅ Clustering: KMeans (scikit-learn) - `services/ai-core/app/clustering.py:53` - `KMeans(n_clusters=n_clusters, random_state=random_state, n_init=10)`
-- ✅ Explainability: SHAP-like explanations - `services/ai-core/app/shap_explainer.py:17` - `explain_incident_confidence()` (simple linear contribution model)
-- ✅ No deep learning models: `services/ai-core/README.md:116` - "NO deep learning: Uses only scikit-learn (KMeans) and SHAP, no deep learning models"
+**Model Lineage:**
+- ⚠️ **ISSUE:** No model lineage tracking found: No code found that tracks model lineage (parent models, training data sources, training parameters)
+- ⚠️ **ISSUE:** Model versions do not reference training data: `services/ai-core/app/db.py:180-186` - Model versions do not include training data references
+- ⚠️ **ISSUE:** Model versions do not reference training parameters: `services/ai-core/app/db.py:180-186` - Model versions do not include training parameters
 
-**Explicit Statement of What AI is Allowed to Do:**
-- ✅ Read incidents: `services/ai-core/app/db.py:106-146` - `get_unresolved_incidents()` reads from `incidents` table
-- ✅ Extract features: `services/ai-core/app/feature_extraction.py:15` - Extract numeric features from incidents
-- ✅ Cluster incidents: `services/ai-core/app/clustering.py:18` - Cluster incidents using KMeans
-- ✅ Generate SHAP explanations: `services/ai-core/app/shap_explainer.py:17` - Generate SHAP-like explanations
-- ✅ Write metadata: `services/ai-core/app/db.py:199-366` - Write to `feature_vectors`, `clusters`, `cluster_memberships`, `shap_explanations` tables
-- ✅ Advisory only: `services/ai-core/README.md:69-82` - "AI Output is Advisory Only" (metadata only, not actionable)
+**Training Data Traceability:**
+- ⚠️ **ISSUE:** No training data traceability found: No code found that tracks training data sources, training data versions, or training data hashes
+- ⚠️ **ISSUE:** Models are trained at runtime: `services/ai-core/app/clustering.py:53-54` - `KMeans.fit_predict()` trains model at runtime (no persistent training data)
+- ⚠️ **ISSUE:** Training data is incidents: `services/ai-core/app/main.py:153` - `get_unresolved_incidents(read_conn)` reads incidents (training data is incidents, not tracked separately)
 
-**Explicit Statement of What AI Must Never Do:**
-- ✅ NO incident modification: `services/ai-core/README.md:39` - "NO incident modification: Does not create, update, or delete incidents"
-- ✅ NO evidence modification: `services/ai-core/README.md:40` - "NO evidence modification: Does not create, update, or delete evidence"
-- ✅ NO fact modification: `services/ai-core/README.md:41` - "NO fact modification: Does not modify any fact tables"
-- ✅ NO blocking: `services/ai-core/README.md:56` - "NO blocking: Does not block data plane or correlation engine"
-- ✅ NO decision-making: `services/ai-core/README.md:57` - "NO decision-making: Does not create incidents or modify incident state"
-- ✅ NO real-time inference: `services/ai-core/README.md:58` - "NO real-time inference: Operates in batch mode, not real-time"
+**Any Model Is Used Without Provenance:**
+- ⚠️ **ISSUE:** Models are trained at runtime: `services/ai-core/app/clustering.py:53-54` - Models are trained at runtime (no persistent trained models)
+- ⚠️ **ISSUE:** Model versions are hard-coded: `services/ai-core/app/main.py:191-192` - Model versions are `'1.0.0'` (hard-coded, not derived from training artifacts)
+- ⚠️ **ISSUE:** Model provenance is minimal: Model versions exist but do not include training data references, training parameters, or model lineage
 
-**AI Makes Enforcement Decisions:**
-- ✅ **VERIFIED:** AI does NOT make enforcement decisions:
-  - `services/ai-core/README.md:57` - "NO decision-making: Does not create incidents or modify incident state"
-  - `services/ai-core/README.md:75` - "No action triggers: AI output does not trigger any actions or decisions"
-  - ✅ **VERIFIED:** AI does NOT make enforcement decisions (advisory only)
-
-**AI Escalates Incidents Independently:**
-- ✅ **VERIFIED:** AI does NOT escalate incidents:
-  - `services/ai-core/README.md:39` - "NO incident modification: Does not create, update, or delete incidents"
-  - `services/ai-core/README.md:80` - "AI Core does not modify incident stage or confidence"
-  - ✅ **VERIFIED:** AI does NOT escalate incidents (read-only)
-
-**AI Bypasses Correlation Engine:**
-- ✅ **VERIFIED:** AI does NOT bypass correlation engine:
-  - `services/ai-core/README.md:79` - "AI Core does not create incidents (correlation engine creates incidents)"
-  - `services/ai-core/README.md:111` - "AI does NOT create incidents: Correlation engine creates incidents (Phase 5), not AI"
-  - ✅ **VERIFIED:** AI does NOT bypass correlation engine (reads incidents created by correlation engine)
-
-### Verdict: **PASS**
+### Verdict: **PARTIAL**
 
 **Justification:**
-- AI Core is clearly identified as read-only, advisory-only, non-blocking
-- Model types are explicitly documented (KMeans clustering, SHAP-like explanations)
-- Explicit statements of what AI can/cannot do are present
-- AI does NOT make enforcement decisions, escalate incidents, or bypass correlation engine
+- Model versioning exists (model versions are stored in database)
+- **ISSUE:** Model versions are hard-coded (not derived from training artifacts)
+- **ISSUE:** No model lineage tracking found
+- **ISSUE:** No training data traceability found
+- **ISSUE:** Models are trained at runtime (no persistent trained models)
+
+**PASS Conditions (Met):**
+- Model versioning exists — **CONFIRMED** (model versions are stored)
+
+**FAIL Conditions (Met):**
+- Any model is used without provenance — **PARTIAL** (model versions exist but provenance is minimal)
+
+**Evidence Required:**
+- File paths: `services/ai-core/app/db.py:155-199,180-186`, `services/ai-core/app/main.py:191-192`, `services/ai-core/app/clustering.py:53-54`
+- Model versioning: Model version storage, retrieval, fields
+- Provenance: Model lineage, training data traceability
 
 ---
 
-## 2. MODEL TRAINABILITY (MANDATORY)
+## 2. TRAINING & RETRAINING DISCIPLINE
 
 ### Evidence
 
 **Presence of Training Script:**
-- ❌ **CRITICAL:** No separate training script found:
-  - No `*train*.py` files found in `services/ai-core/`
-  - Models are trained inline at runtime: `services/ai-core/app/clustering.py:53-54` - `kmeans = KMeans(...); cluster_labels = kmeans.fit_predict(feature_vectors)`
-  - ❌ **CRITICAL:** No separate training script exists (training happens inline at runtime)
+- ❌ **CRITICAL:** No separate training script found: No `*train*.py` files found in `services/ai-core/`
+- ⚠️ **ISSUE:** Models are trained inline at runtime: `services/ai-core/app/clustering.py:53-54` - `kmeans = KMeans(...); cluster_labels = kmeans.fit_predict(feature_vectors)` (training happens inline)
+- ❌ **CRITICAL:** No separate training script exists (training happens inline at runtime)
 
 **Ability to Train from Scratch:**
 - ✅ Models can be trained from scratch: `services/ai-core/app/clustering.py:53-54` - `KMeans.fit_predict()` trains model from scratch each run
@@ -94,26 +179,24 @@
 **Deterministic Training Options:**
 - ✅ Deterministic training: `services/ai-core/app/clustering.py:53` - `random_state=42` ensures reproducibility
 - ✅ Deterministic training: `services/ai-core/app/clustering.py:53` - `n_init=10` fixed initialization count
-- ✅ Reproducible: `services/ai-core/README.md:251` - "random_state=42: Ensures same input → same output (reproducible)"
+- ✅ Reproducible: `services/ai-core/app/clustering.py:19-56` - `random_state=42` ensures same input → same output (reproducible)
+- ✅ Training inputs are deterministic: `services/ai-core/app/feature_extraction.py:15-60` - Feature extraction is deterministic (no probabilistic logic)
 
 **Model Versioning & Metadata:**
 - ✅ Model versioning: `services/ai-core/app/main.py:191-192` - `get_model_version(write_conn, 'CLUSTERING', '1.0.0')` and `get_model_version(write_conn, 'EXPLAINABILITY', '1.0.0')`
-- ✅ Model versions stored: `services/ai-core/app/db.py:149-196` - `get_model_version()` stores model versions in `ai_model_versions` table
-- ✅ Model metadata: `services/ai-core/app/db.py:174-180` - Model versions include `model_type`, `model_version_string`, `deployed_at`, `description`
+- ✅ Model versions stored: `services/ai-core/app/db.py:155-199` - `get_model_version()` stores model versions in `ai_model_versions` table
+- ✅ Model metadata: `services/ai-core/app/db.py:180-186` - Model versions include `model_type`, `model_version_string`, `deployed_at`, `description`
 - ⚠️ **ISSUE:** Model versions are hard-coded (`'1.0.0'`), not derived from training artifacts
 
-**Pretrained-Only Models:**
-- ✅ Models are NOT pretrained-only: Models are trained at runtime from scratch
-- ✅ Training happens inline: `services/ai-core/app/clustering.py:53-54` - `KMeans.fit_predict()` trains model
+**Models Cannot Be Reproduced:**
+- ⚠️ **ISSUE:** Models are retrained from scratch each run: `services/ai-core/app/clustering.py:53-54` - Models are retrained from scratch (no persistent trained models)
+- ⚠️ **ISSUE:** Training data is incidents (may differ on replay): `services/ai-core/app/main.py:153` - `get_unresolved_incidents(read_conn)` reads incidents (training data may differ on replay if correlation is non-deterministic)
+- ✅ Training is deterministic: `services/ai-core/app/clustering.py:53` - `random_state=42` ensures reproducibility
+- ⚠️ **ISSUE:** But training data (incidents) may differ on replay (if correlation is non-deterministic)
 
-**Binary Blobs Without Training Code:**
-- ✅ No binary blobs: Models are trained from scratch using scikit-learn (no binary model files)
-- ✅ Training code present: `services/ai-core/app/clustering.py:53-54` - Training code is inline
-
-**Models Without Reproducible Training Paths:**
-- ✅ Reproducible training: `services/ai-core/app/clustering.py:53` - `random_state=42` ensures reproducibility
-- ✅ Reproducible training: `services/ai-core/README.md:251` - "random_state=42: Ensures same input → same output (reproducible)"
-- ⚠️ **ISSUE:** No separate training script (training happens inline, but is reproducible)
+**Training Code Is Missing:**
+- ❌ **CRITICAL:** No separate training script found: No `*train*.py` files found in `services/ai-core/`
+- ⚠️ **ISSUE:** Training code is inline: `services/ai-core/app/clustering.py:53-54` - Training code is inline (not in separate script)
 
 ### Verdict: **PARTIAL**
 
@@ -123,177 +206,100 @@
 - Model versioning exists (but versions are hard-coded, not derived from training artifacts)
 - **CRITICAL ISSUE:** No separate training script found (training happens inline at runtime)
 - **ISSUE:** Models are retrained from scratch each run (no persistent trained models)
+- **ISSUE:** Training data (incidents) may differ on replay (if correlation is non-deterministic)
+
+**PASS Conditions (Met):**
+- Ability to train from scratch — **CONFIRMED** (training happens inline at runtime)
+- Deterministic training options — **CONFIRMED** (random_state=42 ensures reproducibility)
+
+**FAIL Conditions (Met):**
+- Models cannot be reproduced — **PARTIAL** (training is deterministic, but training data may differ on replay)
+- Training code is missing — **CONFIRMED** (no separate training script)
+
+**Evidence Required:**
+- File paths: `services/ai-core/app/clustering.py:53-54,19-56`, `services/ai-core/app/main.py:236,191-192`, `services/ai-core/app/feature_extraction.py:15-60`
+- Training: Inline training, deterministic options, reproducibility
+- Model versioning: Model version storage, hard-coded versions
 
 ---
 
-## 3. INCREMENTAL / AUTOLEARN PIPELINES
+## 3. INFERENCE DETERMINISM (NON-LLM)
 
 ### Evidence
 
-**Incremental Learning Logic:**
-- ❌ **CRITICAL:** No incremental learning logic found:
-  - `services/ai-core/app/clustering.py:53-54` - `KMeans.fit_predict()` trains model from scratch each run
-  - No incremental learning found
-  - No partial_fit or warm_start found
-  - ❌ **CRITICAL:** No incremental learning logic exists (models retrained from scratch each run)
+**Identical Inputs → Identical Outputs:**
+- ✅ Clustering is deterministic: `services/ai-core/app/clustering.py:53` - `random_state=42` ensures reproducibility
+- ✅ Feature extraction is deterministic: `services/ai-core/app/feature_extraction.py:15-60` - Feature extraction is deterministic (no probabilistic logic)
+- ✅ SHAP explanation is deterministic: `services/ai-core/app/shap_explainer.py:17-81` - SHAP explanation is deterministic (computed from feature values)
+- ⚠️ **ISSUE:** But inputs (incidents) may differ on replay (if correlation is non-deterministic)
 
-**Data Eligibility Rules:**
-- ❌ **CRITICAL:** No data eligibility rules found:
-  - `services/ai-core/app/db.py:106-146` - `get_unresolved_incidents()` reads all unresolved incidents
-  - No data eligibility filtering found
-  - No data quality checks found
-  - ❌ **CRITICAL:** No data eligibility rules exist (all unresolved incidents are used)
+**No Hidden Randomness:**
+- ✅ Clustering uses fixed random_state: `services/ai-core/app/clustering.py:53` - `random_state=42` (no hidden randomness)
+- ✅ Feature extraction has no randomness: `services/ai-core/app/feature_extraction.py:15-60` - Feature extraction is deterministic (no probabilistic logic)
+- ✅ SHAP explanation has no randomness: `services/ai-core/app/shap_explainer.py:17-81` - SHAP explanation is deterministic (computed from feature values)
+- ✅ **VERIFIED:** No hidden randomness found (all operations are deterministic)
 
-**Drift Detection:**
-- ❌ **CRITICAL:** No drift detection found:
-  - No drift detection logic found
-  - No model performance monitoring found
-  - No data distribution monitoring found
-  - ❌ **CRITICAL:** No drift detection exists
+**Outputs Vary Without Explanation:**
+- ✅ **VERIFIED:** Outputs do not vary without explanation: All operations are deterministic (random_state=42, no probabilistic logic)
+- ⚠️ **ISSUE:** But inputs (incidents) may differ on replay (if correlation is non-deterministic), causing outputs to differ
 
-**Safeguards Against Poisoning:**
-- ❌ **CRITICAL:** No safeguards against poisoning found:
-  - No data validation beyond basic structure checks
-  - No outlier detection found
-  - No adversarial example detection found
-  - ❌ **CRITICAL:** No safeguards against poisoning exist
+**Inference Depends on Non-Deterministic Inputs:**
+- ⚠️ **ISSUE:** Inference depends on incidents: `services/ai-core/app/main.py:153` - `get_unresolved_incidents(read_conn)` reads incidents (inputs are incidents)
+- ⚠️ **ISSUE:** Incidents may differ on replay (if correlation is non-deterministic): Validation File 07 is FAILED, incidents may differ on replay
+- ⚠️ **ISSUE:** If incidents differ on replay, inference outputs will differ (inputs differ)
 
-**How New Data Is Selected:**
-- ⚠️ **ISSUE:** All unresolved incidents are selected:
-  - `services/ai-core/app/db.py:126` - `WHERE resolved = FALSE` (all unresolved incidents)
-  - No filtering or selection criteria found
-  - ⚠️ **ISSUE:** All unresolved incidents are used (no selection criteria)
-
-**Who Authorizes Model Updates:**
-- ❌ **CRITICAL:** No authorization mechanism found:
-  - `services/ai-core/app/main.py:191-192` - Model versions are hard-coded (`'1.0.0'`)
-  - No authorization checks found
-  - No approval workflow found
-  - ❌ **CRITICAL:** No authorization mechanism exists (model versions are hard-coded)
-
-**Whether Rollback Exists:**
-- ⚠️ **ISSUE:** No rollback mechanism found:
-  - Model versions are stored in `ai_model_versions` table with `deprecated_at` field
-  - No rollback logic found
-  - No model version switching found
-  - ⚠️ **ISSUE:** No rollback mechanism exists (models are retrained from scratch each run)
-
-**Blind Retraining:**
-- ⚠️ **ISSUE:** Blind retraining exists:
-  - `services/ai-core/app/clustering.py:53-54` - Models are retrained from scratch each run
-  - No validation of training data found
-  - No performance checks found
-  - ⚠️ **ISSUE:** Models are retrained blindly (no validation or performance checks)
-
-**Unbounded Autolearn:**
-- ✅ No unbounded autolearn: Models are retrained from scratch each run (not autolearn)
-- ✅ No autolearn: No incremental learning or autolearn pipelines exist
-
-**No Rollback Path:**
-- ⚠️ **ISSUE:** No rollback path exists:
-  - Models are retrained from scratch each run
-  - No persistent trained models stored
-  - No model version switching found
-  - ⚠️ **ISSUE:** No rollback path exists (models are retrained from scratch each run)
-
-### Verdict: **FAIL**
+### Verdict: **PARTIAL**
 
 **Justification:**
-- **CRITICAL FAILURE:** No incremental learning logic found (models retrained from scratch each run)
-- **CRITICAL FAILURE:** No data eligibility rules found (all unresolved incidents are used)
-- **CRITICAL FAILURE:** No drift detection found
-- **CRITICAL FAILURE:** No safeguards against poisoning found
-- **CRITICAL FAILURE:** No authorization mechanism found (model versions are hard-coded)
-- **ISSUE:** No rollback path exists (models are retrained from scratch each run)
+- Inference is deterministic (random_state=42, no hidden randomness)
+- **ISSUE:** But inputs (incidents) may differ on replay (if correlation is non-deterministic), causing outputs to differ
+- **ISSUE:** Inference depends on non-deterministic inputs (incidents from correlation engine)
+
+**PASS Conditions (Met):**
+- Identical inputs → identical outputs — **CONFIRMED** (inference is deterministic)
+- No hidden randomness — **CONFIRMED** (random_state=42, no probabilistic logic)
+
+**FAIL Conditions (Met):**
+- Outputs vary without explanation — **PARTIAL** (outputs may vary if inputs differ on replay)
+
+**Evidence Required:**
+- File paths: `services/ai-core/app/clustering.py:53`, `services/ai-core/app/feature_extraction.py:15-60`, `services/ai-core/app/shap_explainer.py:17-81`, `services/ai-core/app/main.py:153`
+- Inference determinism: random_state, deterministic operations
+- Input dependencies: Incidents from correlation engine
 
 ---
 
-## 4. FEATURE STORE & INPUT BOUNDARIES
-
-### Evidence
-
-**Feature Derivation Sources:**
-- ✅ Features derived from DB tables: `services/ai-core/app/feature_extraction.py:15-60` - Features extracted from `incidents` table:
-  - `confidence_score`: From `incidents.confidence_score`
-  - `current_stage`: From `incidents.current_stage` (encoded as numeric)
-  - `total_evidence_count`: From `incidents.total_evidence_count`
-- ✅ Features from incidents only: `services/ai-core/app/db.py:116-128` - Reads from `incidents` table only
-- ✅ No raw events: `services/ai-core/README.md:196` - "Raw events (used indirectly via incidents, not directly read by AI Core)"
-
-**No Raw Packet or Payload Usage:**
-- ✅ No raw packet usage: Features are extracted from `incidents` table only (no raw packets)
-- ✅ No payload usage: Features are extracted from `incidents` table only (no payloads)
-- ✅ No raw telemetry: `services/ai-core/app/db.py:116-128` - Reads from `incidents` table only (no raw_events)
-
-**No Secrets or Credentials Used as Features:**
-- ✅ No secrets as features: Features are `confidence_score`, `current_stage`, `total_evidence_count` (no secrets)
-- ✅ No credentials as features: Features are numeric only (no credentials)
-- ✅ No sensitive data: `services/ai-core/app/feature_extraction.py:35-50` - Features are numeric only (no sensitive data)
-
-**AI Reads Raw Telemetry Bypassing Schemas:**
-- ✅ **VERIFIED:** AI does NOT read raw telemetry:
-  - `services/ai-core/app/db.py:116-128` - Reads from `incidents` table only (not raw_events)
-  - `services/ai-core/README.md:196` - "Raw events (used indirectly via incidents, not directly read by AI Core)"
-  - ✅ **VERIFIED:** AI does NOT read raw telemetry (reads from incidents table only)
-
-**AI Consumes Secrets:**
-- ✅ **VERIFIED:** AI does NOT consume secrets:
-  - `services/ai-core/app/feature_extraction.py:35-50` - Features are numeric only (no secrets)
-  - ✅ **VERIFIED:** AI does NOT consume secrets (features are numeric only)
-
-**AI Mutates Raw Events:**
-- ✅ **VERIFIED:** AI does NOT mutate raw events:
-  - `services/ai-core/app/db.py:116-128` - Reads from `incidents` table only (does not read raw_events)
-  - `services/ai-core/README.md:41` - "NO fact modification: Does not modify any fact tables"
-  - ✅ **VERIFIED:** AI does NOT mutate raw events (read-only, does not read raw_events)
-
-### Verdict: **PASS**
-
-**Justification:**
-- Features are derived from DB tables only (incidents table)
-- No raw packet or payload usage (features are numeric only)
-- No secrets or credentials used as features (features are numeric only)
-- AI does NOT read raw telemetry, consume secrets, or mutate raw events
-
----
-
-## 5. SHAP EXPLAINABILITY (NON-NEGOTIABLE)
+## 4. SHAP EXPLAINABILITY
 
 ### Evidence
 
 **SHAP Generation Per Inference:**
 - ✅ SHAP generated per incident: `services/ai-core/app/main.py:338` - `shap_explanations = explain_batch(incidents, feature_vectors.tolist())`
 - ✅ SHAP generated for all incidents: `services/ai-core/app/main.py:358-362` - Loop stores SHAP explanation for each incident
-- ✅ SHAP generated per run: `services/ai-core/README.md:139` - "SHAP output is generated per run"
+- ✅ SHAP generated per run: `services/ai-core/app/shap_explainer.py:84-106` - `explain_batch()` generates SHAP for all incidents
 - ⚠️ **ISSUE:** SHAP is SHAP-like, not full SHAP: `services/ai-core/app/shap_explainer.py:29` - "Phase 6 minimal: Simple SHAP-like explanation method (full SHAP library not required)"
+- ⚠️ **ISSUE:** SHAP is simplified: `services/ai-core/app/shap_explainer.py:46-70` - Simple linear contribution model (proportional to feature value)
 
 **Storage of SHAP Artifacts:**
 - ✅ SHAP artifacts stored: `services/ai-core/app/main.py:360-361` - `store_shap_explanation(write_conn, incident['incident_id'], explainability_model_version, shap_explanation, top_n=10)`
-- ✅ SHAP stored in database: `services/ai-core/app/db.py:320-366` - `store_shap_explanation()` stores in `shap_explanations` table
-- ✅ SHAP stored as references: `services/ai-core/app/db.py:332-333` - SHAP explanation stored as hash (reference only, not blob)
-- ✅ Top N features stored: `services/ai-core/app/db.py:336` - Top N features stored as JSONB for quick access
+- ✅ SHAP stored in database: `services/ai-core/app/db.py:326-362` - `store_shap_explanation()` stores in `shap_explanations` table
+- ✅ SHAP stored as references: `services/ai-core/app/db.py:336-339` - SHAP explanation stored as hash (reference only, not blob)
+- ✅ Top N features stored: `services/ai-core/app/db.py:342` - Top N features stored as JSONB for quick access
 
 **Association with Model Version + Incident:**
 - ✅ Associated with model version: `services/ai-core/app/main.py:360` - `store_shap_explanation(..., explainability_model_version, ...)`
 - ✅ Associated with incident: `services/ai-core/app/main.py:360` - `store_shap_explanation(write_conn, incident['incident_id'], ...)`
-- ✅ Stored with associations: `services/ai-core/app/db.py:340-350` - SHAP stored with `event_id` (incident_id) and `model_version_id`
+- ✅ Stored with associations: `services/ai-core/app/db.py:345-350` - SHAP stored with `event_id` (incident_id) and `model_version_id`
 
-**Numeric Inference Without SHAP:**
-- ✅ **VERIFIED:** All numeric inferences have SHAP:
-  - `services/ai-core/app/main.py:338` - `shap_explanations = explain_batch(incidents, feature_vectors.tolist())` (generates SHAP for all incidents)
-  - `services/ai-core/app/main.py:358-362` - Loop stores SHAP explanation for each incident
-  - ✅ **VERIFIED:** All numeric inferences have SHAP (SHAP generated for all incidents)
+**Any Inference Lacks Explainability:**
+- ✅ **VERIFIED:** All inferences have SHAP: `services/ai-core/app/main.py:338` - `shap_explanations = explain_batch(incidents, feature_vectors.tolist())` (generates SHAP for all incidents)
+- ✅ **VERIFIED:** SHAP stored for all incidents: `services/ai-core/app/main.py:358-362` - Loop stores SHAP explanation for each incident
 
-**SHAP Optional or Best-Effort:**
-- ⚠️ **ISSUE:** SHAP failure causes exception: `services/ai-core/app/main.py:346-354` - Exception handling logs error and raises (not best-effort)
-- ⚠️ **ISSUE:** SHAP failure terminates processing: `services/ai-core/app/main.py:353` - `logger.error(...); raise` (terminates on SHAP failure)
-- ⚠️ **ISSUE:** SHAP is mandatory (not optional), but failure terminates processing (not best-effort)
-
-**Explanations Generated Only for UI:**
-- ✅ **VERIFIED:** Explanations are NOT generated only for UI:
-  - `services/ai-core/app/main.py:338` - SHAP generated for all incidents (not UI-specific)
-  - `services/ai-core/app/db.py:320-366` - SHAP stored in database (not UI-specific)
-  - ✅ **VERIFIED:** Explanations are generated for all incidents (not UI-specific)
+**SHAP Data Cannot Be Verified Later:**
+- ⚠️ **ISSUE:** SHAP is stored as hash: `services/ai-core/app/db.py:336-339` - SHAP explanation stored as hash (reference only, not blob)
+- ⚠️ **ISSUE:** SHAP explanation itself is not stored: `services/ai-core/app/db.py:336-339` - Only hash is stored, not full explanation
+- ⚠️ **ISSUE:** SHAP cannot be recomputed from stored data: SHAP explanation is not stored, only hash (cannot verify later)
+- ⚠️ **ISSUE:** Top N features are stored: `services/ai-core/app/db.py:342` - Top N features stored as JSONB (partial explanation stored)
 
 ### Verdict: **PARTIAL**
 
@@ -302,237 +308,295 @@
 - SHAP artifacts are stored (as references, with top N features)
 - SHAP is associated with model version and incident
 - **ISSUE:** SHAP is SHAP-like, not full SHAP library (simple linear contribution model)
-- **ISSUE:** SHAP failure terminates processing (not best-effort, but also not graceful degradation)
+- **ISSUE:** SHAP explanation itself is not stored (only hash), cannot be verified later
+
+**PASS Conditions (Met):**
+- SHAP generation per inference — **CONFIRMED** (SHAP generated for all incidents)
+- Storage of SHAP artifacts — **CONFIRMED** (SHAP stored as references)
+- Association with model version + incident — **CONFIRMED** (SHAP stored with associations)
+
+**FAIL Conditions (Met):**
+- Any inference lacks explainability — **NOT CONFIRMED** (all inferences have SHAP)
+- SHAP data cannot be verified later — **CONFIRMED** (SHAP explanation not stored, only hash)
+
+**Evidence Required:**
+- File paths: `services/ai-core/app/main.py:338,360-361`, `services/ai-core/app/db.py:326-362,336-339,342,345-350`, `services/ai-core/app/shap_explainer.py:29,46-70`
+- SHAP generation: SHAP generation per inference, SHAP-like vs full SHAP
+- SHAP storage: Hash storage, top N features, associations
 
 ---
 
-## 6. FAILURE & DEGRADED BEHAVIOR
+## 5. REPLAY & AUDITABILITY
 
 ### Evidence
 
-**Behavior When Models Unavailable:**
-- ⚠️ **ISSUE:** Models are trained at runtime (not loaded from storage):
-  - `services/ai-core/app/clustering.py:53-54` - `KMeans.fit_predict()` trains model at runtime
-  - No model loading found
-  - ⚠️ **ISSUE:** Models are always available (trained at runtime), but training can fail
+**Whether AI Outputs Can Be Recomputed Later:**
+- ⚠️ **ISSUE:** Models are retrained from scratch each run: `services/ai-core/app/clustering.py:53-54` - Models are retrained from scratch (no persistent trained models)
+- ⚠️ **ISSUE:** Training data is incidents (may differ on replay): `services/ai-core/app/main.py:153` - `get_unresolved_incidents(read_conn)` reads incidents (training data may differ on replay if correlation is non-deterministic)
+- ⚠️ **ISSUE:** If incidents differ on replay, models will differ (training data differs)
+- ⚠️ **ISSUE:** If models differ, outputs will differ (inference depends on model)
+- ✅ Feature extraction is deterministic: `services/ai-core/app/feature_extraction.py:15-60` - Feature extraction is deterministic (can be recomputed)
+- ✅ SHAP explanation is deterministic: `services/ai-core/app/shap_explainer.py:17-81` - SHAP explanation is deterministic (can be recomputed)
+- ⚠️ **ISSUE:** But inputs (incidents) may differ on replay (if correlation is non-deterministic)
 
-**Behavior When Training Fails:**
-- ✅ Training failure causes exception: `services/ai-core/app/main.py:242-250` - Exception handling logs error and raises
-- ✅ Training failure terminates processing: `services/ai-core/app/main.py:249` - `logger.error(...); raise` (terminates on training failure)
-- ⚠️ **ISSUE:** Training failure terminates processing (not graceful degradation)
+**Whether Non-Deterministic Inputs Break Audit Trails:**
+- ⚠️ **ISSUE:** Inputs are incidents: `services/ai-core/app/main.py:153` - `get_unresolved_incidents(read_conn)` reads incidents (inputs are incidents)
+- ⚠️ **ISSUE:** Incidents may differ on replay (if correlation is non-deterministic): Validation File 07 is FAILED, incidents may differ on replay
+- ⚠️ **ISSUE:** If incidents differ on replay, AI outputs will differ (inputs differ)
+- ❌ **CRITICAL FAILURE:** Non-deterministic inputs break audit trails (cannot recompute same outputs from stored evidence if inputs differ)
 
-**Behavior When SHAP Computation Fails:**
-- ✅ SHAP failure causes exception: `services/ai-core/app/main.py:346-354` - Exception handling logs error and raises
-- ✅ SHAP failure terminates processing: `services/ai-core/app/main.py:353` - `logger.error(...); raise` (terminates on SHAP failure)
-- ⚠️ **ISSUE:** SHAP failure terminates processing (not graceful degradation)
+**Outputs Cannot Be Re-Derived from Stored Evidence:**
+- ⚠️ **ISSUE:** SHAP explanation is not stored: `services/ai-core/app/db.py:336-339` - Only hash is stored, not full explanation
+- ⚠️ **ISSUE:** Models are not stored: `services/ai-core/app/clustering.py:53-54` - Models are retrained from scratch (no persistent trained models)
+- ⚠️ **ISSUE:** Training data (incidents) may differ on replay (if correlation is non-deterministic)
+- ❌ **CRITICAL FAILURE:** Outputs cannot be re-derived from stored evidence (SHAP not stored, models not stored, inputs may differ on replay)
 
-**Behavior When Feature Store Unavailable:**
-- ✅ Feature extraction failure causes exception: `services/ai-core/app/main.py:204-212` - Exception handling logs error and raises
-- ✅ Feature extraction failure terminates processing: `services/ai-core/app/main.py:211` - `logger.error(...); raise` (terminates on feature extraction failure)
-- ⚠️ **ISSUE:** Feature extraction failure terminates processing (not graceful degradation)
-
-**Silent Fallback to Heuristics:**
-- ✅ **VERIFIED:** No silent fallback to heuristics:
-  - `services/ai-core/app/main.py:204-212` - Exception handling logs error and raises (no silent fallback)
-  - `services/ai-core/app/main.py:242-250` - Exception handling logs error and raises (no silent fallback)
-  - ✅ **VERIFIED:** No silent fallback to heuristics (failures cause exceptions)
-
-**AI Inference Without Explanation:**
-- ✅ **VERIFIED:** AI inference does NOT occur without explanation:
-  - `services/ai-core/app/main.py:338` - SHAP generated for all incidents before storage
-  - `services/ai-core/app/main.py:358-362` - SHAP stored for each incident
-  - ✅ **VERIFIED:** AI inference does NOT occur without explanation (SHAP generated for all incidents)
-
-**System Crash Due to AI Failure:**
-- ⚠️ **ISSUE:** AI failure terminates processing:
-  - `services/ai-core/app/main.py:204-212` - Feature extraction failure raises exception
-  - `services/ai-core/app/main.py:242-250` - Clustering failure raises exception
-  - `services/ai-core/app/main.py:346-354` - SHAP failure raises exception
-  - ⚠️ **ISSUE:** AI failure terminates processing (not graceful degradation, but also not system crash - batch processing terminates)
-
-### Verdict: **PARTIAL**
+### Verdict: **FAIL**
 
 **Justification:**
-- No silent fallback to heuristics (failures cause exceptions)
-- AI inference does NOT occur without explanation (SHAP generated for all incidents)
-- **ISSUE:** AI failures terminate processing (not graceful degradation, but batch processing terminates, not system crash)
-- **ISSUE:** Models are trained at runtime (not loaded from storage, so "models unavailable" scenario does not apply)
+- **CRITICAL FAILURE:** Non-deterministic inputs break audit trails (cannot recompute same outputs from stored evidence if inputs differ)
+- **CRITICAL FAILURE:** Outputs cannot be re-derived from stored evidence (SHAP not stored, models not stored, inputs may differ on replay)
+- **ISSUE:** Models are retrained from scratch each run (no persistent trained models)
+- **ISSUE:** Training data (incidents) may differ on replay (if correlation is non-deterministic)
+
+**FAIL Conditions (Met):**
+- Outputs cannot be re-derived from stored evidence — **CONFIRMED** (SHAP not stored, models not stored, inputs may differ)
+- Non-deterministic inputs break audit trails — **CONFIRMED** (inputs may differ on replay)
+
+**Evidence Required:**
+- File paths: `services/ai-core/app/main.py:153`, `services/ai-core/app/clustering.py:53-54`, `services/ai-core/app/db.py:336-339`
+- Replay: Model retraining, input dependencies, output recomputation
+- Audit trails: SHAP storage, model storage, input determinism
 
 ---
 
-## 7. DB READ / WRITE BOUNDARIES
+## 6. NO BLACK-BOX PATHS
 
 ### Evidence
 
-**AI DB Reads Are Read-Only:**
-- ✅ Read-only connections: `services/ai-core/app/db.py:44-71` - `get_db_connection_readonly()` creates read-only connection
-- ✅ Read-only enforcement: `services/ai-core/app/db.py:144` - `execute_read_operation(..., enforce_readonly=True)`
-- ✅ Read-only for incidents: `services/ai-core/app/db.py:106-146` - `get_unresolved_incidents()` uses read-only connection
-- ✅ Read-only enforcement: `services/ai-core/app/db.py:48` - "Read-only enforcement: Abort if write attempted"
+**No Inference Path Bypasses Explanation:**
+- ✅ All inferences generate SHAP: `services/ai-core/app/main.py:338` - `shap_explanations = explain_batch(incidents, feature_vectors.tolist())` (generates SHAP for all incidents)
+- ✅ SHAP stored for all incidents: `services/ai-core/app/main.py:358-362` - Loop stores SHAP explanation for each incident
+- ✅ **VERIFIED:** No inference path bypasses explanation (all inferences have SHAP)
 
-**AI Writes Only Metadata / Scores / Explanations:**
-- ✅ Writes only metadata: `services/ai-core/app/db.py:199-366` - Writes to `feature_vectors`, `clusters`, `cluster_memberships`, `shap_explanations` tables
-- ✅ Writes only metadata: `services/ai-core/app/main.py:105` - "Write to AI metadata tables only (feature_vectors, clusters, cluster_memberships, shap_explanations)"
-- ✅ No fact table writes: `services/ai-core/README.md:42` - "ONLY metadata: Writes ONLY to AI metadata tables"
+**No Opaque Scores:**
+- ✅ Feature extraction is explicit: `services/ai-core/app/feature_extraction.py:15-60` - Feature extraction is explicit (confidence_score, current_stage, total_evidence_count)
+- ✅ Clustering is explicit: `services/ai-core/app/clustering.py:18-56` - Clustering is explicit (KMeans with random_state=42)
+- ✅ SHAP explanation is explicit: `services/ai-core/app/shap_explainer.py:17-81` - SHAP explanation is explicit (feature contributions)
+- ✅ **VERIFIED:** No opaque scores found (all operations are explicit)
 
-**No Mutation of Incident State:**
-- ✅ **VERIFIED:** AI does NOT mutate incident state:
-  - `services/ai-core/README.md:39` - "NO incident modification: Does not create, update, or delete incidents"
-  - `services/ai-core/app/db.py:106-146` - Reads from `incidents` table only (no UPDATE statements)
-  - ✅ **VERIFIED:** AI does NOT mutate incident state (read-only for incidents)
-
-**AI Updates Incident State:**
-- ✅ **VERIFIED:** AI does NOT update incident state:
-  - No UPDATE statements for incidents found
-  - `services/ai-core/README.md:39` - "NO incident modification: Does not create, update, or delete incidents"
-  - ✅ **VERIFIED:** AI does NOT update incident state (read-only)
-
-**AI Overwrites Historical Data:**
-- ✅ **VERIFIED:** AI does NOT overwrite historical data:
-  - `services/ai-core/app/db.py:199-248` - `store_feature_vector()` uses `ON CONFLICT` for idempotency (does not overwrite)
-  - `services/ai-core/app/db.py:320-366` - `store_shap_explanation()` uses `ON CONFLICT ... DO UPDATE` (updates only metadata, not historical data)
-  - ✅ **VERIFIED:** AI does NOT overwrite historical data (metadata updates only, not fact tables)
-
-**AI Bypasses Correlation Engine:**
-- ✅ **VERIFIED:** AI does NOT bypass correlation engine:
-  - `services/ai-core/app/db.py:116-128` - Reads from `incidents` table (incidents created by correlation engine)
-  - `services/ai-core/README.md:79` - "AI Core does not create incidents (correlation engine creates incidents)"
-  - ✅ **VERIFIED:** AI does NOT bypass correlation engine (reads incidents created by correlation engine)
+**Any Decision Is Unexplainable:**
+- ✅ **VERIFIED:** All decisions are explainable: All inferences have SHAP explanations
+- ✅ **VERIFIED:** No black-box paths found (all operations are explicit and explainable)
 
 ### Verdict: **PASS**
 
 **Justification:**
-- AI DB reads are read-only (read-only connections, read-only enforcement)
-- AI writes only metadata/scores/explanations (feature_vectors, clusters, cluster_memberships, shap_explanations)
-- AI does NOT mutate incident state (read-only for incidents)
-- AI does NOT update incident state, overwrite historical data, or bypass correlation engine
+- All inferences generate SHAP explanations
+- No inference path bypasses explanation
+- No opaque scores found (all operations are explicit)
+- All decisions are explainable
+
+**PASS Conditions (Met):**
+- No inference path bypasses explanation — **CONFIRMED** (all inferences have SHAP)
+- No opaque scores — **CONFIRMED** (all operations are explicit)
+
+**Evidence Required:**
+- File paths: `services/ai-core/app/main.py:338,358-362`, `services/ai-core/app/feature_extraction.py:15-60`, `services/ai-core/app/clustering.py:18-56`, `services/ai-core/app/shap_explainer.py:17-81`
+- Explainability: SHAP generation, explicit operations, no black-box paths
 
 ---
 
-## 8. NEGATIVE VALIDATION (MANDATORY)
+## CREDENTIAL TYPES VALIDATED
 
-### Evidence
-
-**AI Marks Incident as Confirmed:**
-- ✅ **PROVEN IMPOSSIBLE:** AI cannot mark incident as Confirmed:
-  - `services/ai-core/README.md:39` - "NO incident modification: Does not create, update, or delete incidents"
-  - `services/ai-core/app/db.py:106-146` - Reads from `incidents` table only (no UPDATE statements)
-  - ✅ **VERIFIED:** AI cannot mark incident as Confirmed (read-only, no UPDATE statements)
-
-**AI Triggers Response Actions:**
-- ✅ **PROVEN IMPOSSIBLE:** AI cannot trigger response actions:
-  - `services/ai-core/README.md:75` - "No action triggers: AI output does not trigger any actions or decisions"
-  - `services/ai-core/README.md:81` - "AI Core does not trigger alerts or actions"
-  - ✅ **VERIFIED:** AI cannot trigger response actions (advisory only, no action triggers)
-
-**AI Runs Without Training Artifacts:**
-- ⚠️ **ISSUE:** AI runs without training artifacts:
-  - `services/ai-core/app/clustering.py:53-54` - Models are trained at runtime (no training artifacts required)
-  - No training artifact loading found
-  - ⚠️ **ISSUE:** AI runs without training artifacts (models trained at runtime, not loaded from artifacts)
-
-**AI Produces Scores Without SHAP:**
-- ✅ **PROVEN IMPOSSIBLE:** AI cannot produce scores without SHAP:
-  - `services/ai-core/app/main.py:338` - `shap_explanations = explain_batch(incidents, feature_vectors.tolist())` (SHAP generated for all incidents)
-  - `services/ai-core/app/main.py:358-362` - SHAP stored for each incident before completion
-  - ✅ **VERIFIED:** AI cannot produce scores without SHAP (SHAP generated for all incidents, stored before completion)
-
-### Verdict: **PARTIAL**
-
-**Justification:**
-- AI cannot mark incident as Confirmed (read-only, no UPDATE statements)
-- AI cannot trigger response actions (advisory only, no action triggers)
-- **ISSUE:** AI runs without training artifacts (models trained at runtime, not loaded from artifacts)
-- AI cannot produce scores without SHAP (SHAP generated for all incidents)
+### Database Credentials
+- **Type:** PostgreSQL user/password (`RANSOMEYE_DB_USER`/`RANSOMEYE_DB_PASSWORD`)
+- **Source:** Environment variable (required, no default)
+- **Validation:** ❌ **NOT VALIDATED** (validation file 05 covers database credentials)
+- **Usage:** Database connection for AI metadata operations
+- **Status:** ❌ **NOT VALIDATED** (outside scope of this validation)
 
 ---
 
-## 9. VERDICT & IMPACT
+## PASS CONDITIONS
 
-### Section-by-Section Verdicts
+### Section 1: Model Registry & Provenance
+- ✅ Model versioning exists — **PASS**
+- ⚠️ Model lineage exists — **PARTIAL**
+- ⚠️ Training data traceability exists — **PARTIAL**
 
-1. **Component Identity & Authority:** PASS
-   - AI Core is clearly identified as read-only, advisory-only, non-blocking
-   - Model types are explicitly documented
-   - AI does NOT make enforcement decisions, escalate incidents, or bypass correlation engine
+### Section 2: Training & Retraining Discipline
+- ✅ Ability to train from scratch — **PASS**
+- ✅ Deterministic training options — **PASS**
+- ❌ Separate training script exists — **FAIL**
 
-2. **Model Trainability:** PARTIAL
-   - Models can be trained from scratch (training happens inline at runtime)
-   - Training is deterministic (random_state=42 ensures reproducibility)
-   - **CRITICAL ISSUE:** No separate training script found (training happens inline at runtime)
+### Section 3: Inference Determinism (Non-LLM)
+- ✅ Identical inputs → identical outputs — **PASS**
+- ✅ No hidden randomness — **PASS**
+- ⚠️ Outputs do NOT vary without explanation — **PARTIAL**
 
-3. **Incremental / Autolearn Pipelines:** FAIL
-   - **CRITICAL FAILURE:** No incremental learning logic found (models retrained from scratch each run)
-   - **CRITICAL FAILURE:** No data eligibility rules, drift detection, or safeguards against poisoning found
-   - **CRITICAL FAILURE:** No authorization mechanism or rollback path found
+### Section 4: SHAP Explainability
+- ✅ SHAP generation per inference — **PASS**
+- ✅ Storage of SHAP artifacts — **PASS**
+- ✅ Association with model version + incident — **PASS**
+- ⚠️ SHAP data can be verified later — **PARTIAL**
 
-4. **Feature Store & Input Boundaries:** PASS
-   - Features are derived from DB tables only (incidents table)
-   - No raw packet or payload usage
-   - No secrets or credentials used as features
+### Section 5: Replay & Auditability
+- ❌ AI outputs can be recomputed later — **FAIL**
+- ❌ Non-deterministic inputs do NOT break audit trails — **FAIL**
 
-5. **SHAP Explainability:** PARTIAL
-   - SHAP is generated per inference (for all incidents)
-   - SHAP artifacts are stored (as references, with top N features)
-   - **ISSUE:** SHAP is SHAP-like, not full SHAP library (simple linear contribution model)
-
-6. **Failure & Degraded Behavior:** PARTIAL
-   - No silent fallback to heuristics (failures cause exceptions)
-   - AI inference does NOT occur without explanation
-   - **ISSUE:** AI failures terminate processing (not graceful degradation)
-
-7. **DB Read / Write Boundaries:** PASS
-   - AI DB reads are read-only
-   - AI writes only metadata/scores/explanations
-   - AI does NOT mutate incident state
-
-8. **Negative Validation:** PARTIAL
-   - AI cannot mark incident as Confirmed or trigger response actions
-   - **ISSUE:** AI runs without training artifacts (models trained at runtime)
-
-### Overall Verdict: **PARTIAL**
-
-**Justification:**
-- **CRITICAL FAILURE:** No incremental learning or autolearn pipelines found (models retrained from scratch each run)
-- **CRITICAL FAILURE:** No data eligibility rules, drift detection, or safeguards against poisoning found
-- **CRITICAL FAILURE:** No authorization mechanism or rollback path found
-- **ISSUE:** No separate training script found (training happens inline at runtime)
-- **ISSUE:** SHAP is SHAP-like, not full SHAP library (simple linear contribution model)
-- **ISSUE:** AI failures terminate processing (not graceful degradation)
-- **ISSUE:** AI runs without training artifacts (models trained at runtime)
-- AI Core is read-only, advisory-only, non-blocking (correctly implemented)
-- Features are derived from DB tables only (no raw packets, payloads, or secrets)
-- SHAP is generated for all inferences (but is SHAP-like, not full SHAP)
-
-**Impact if AI is Compromised or Incorrect:**
-- **LOW:** If AI is compromised, system correctness is unaffected (AI is advisory only, read-only)
-- **LOW:** If AI is incorrect, incidents remain unchanged (AI does not modify incidents)
-- **MEDIUM:** If AI is compromised, metadata may be incorrect (but does not affect system correctness)
-- **MEDIUM:** If AI is incorrect, SHAP explanations may be misleading (but does not affect system correctness)
-- **HIGH:** If AI is compromised, clustering may group incidents incorrectly (but does not affect system correctness)
-- **HIGH:** If AI is incorrect, feature extraction may be wrong (but does not affect system correctness)
-
-**Whether System Still Operates Safely Without AI:**
-- ✅ **YES:** System operates safely without AI:
-  - `services/ai-core/README.md:86-103` - "System Remains Correct Without AI"
-  - `services/ai-core/README.md:91` - "Detection without AI: Correlation engine creates incidents without AI (deterministic rules)"
-  - `services/ai-core/README.md:101-103` - "If AI Core is disabled: Incidents are still created by correlation engine (Phase 5); Events are still validated and stored (Phase 4); System correctness is unaffected (AI is advisory only)"
-  - ✅ **VERIFIED:** System operates safely without AI (AI is advisory only, read-only, non-blocking)
-
-**Recommendations:**
-1. **CRITICAL:** Implement incremental learning pipelines (partial_fit, warm_start, or model persistence)
-2. **CRITICAL:** Implement data eligibility rules (data quality checks, outlier detection)
-3. **CRITICAL:** Implement drift detection (model performance monitoring, data distribution monitoring)
-4. **CRITICAL:** Implement safeguards against poisoning (adversarial example detection, data validation)
-5. **CRITICAL:** Implement authorization mechanism for model updates (approval workflow, model version management)
-6. **CRITICAL:** Implement rollback path (model version switching, persistent trained models)
-7. **HIGH:** Implement separate training script (reproducible training from scratch)
-8. **HIGH:** Implement full SHAP library (not SHAP-like, actual SHAP values)
-9. **MEDIUM:** Implement graceful degradation (continue processing with reduced functionality on AI failures)
-10. **MEDIUM:** Implement training artifact storage (persistent trained models, not retraining from scratch each run)
+### Section 6: No Black-Box Paths
+- ✅ No inference path bypasses explanation — **PASS**
+- ✅ No opaque scores — **PASS**
 
 ---
 
-**Validation Date:** 2025-01-13
-**Validator:** Lead Validator & Compliance Auditor
-**Next Step:** Validation Step 9 — Policy Engine (if applicable)
+## FAIL CONDITIONS
+
+### Section 1: Model Registry & Provenance
+- ⚠️ Any model is used without provenance — **PARTIAL** (model versions exist but provenance is minimal)
+
+### Section 2: Training & Retraining Discipline
+- ❌ **CONFIRMED:** Training code is missing — **No separate training script found**
+- ⚠️ Models cannot be reproduced — **PARTIAL** (training is deterministic, but training data may differ on replay)
+
+### Section 3: Inference Determinism (Non-LLM)
+- ⚠️ Outputs vary without explanation — **PARTIAL** (outputs may vary if inputs differ on replay)
+
+### Section 4: SHAP Explainability
+- ❌ **CONFIRMED:** SHAP data cannot be verified later — **SHAP explanation not stored, only hash**
+
+### Section 5: Replay & Auditability
+- ❌ **CONFIRMED:** Outputs cannot be re-derived from stored evidence — **SHAP not stored, models not stored, inputs may differ**
+- ❌ **CONFIRMED:** Non-deterministic inputs break audit trails — **Inputs may differ on replay**
+
+### Section 6: No Black-Box Paths
+- ❌ Any decision is unexplainable — **NOT CONFIRMED** (all decisions are explainable)
+
+---
+
+## EVIDENCE REQUIRED
+
+### Model Registry & Provenance
+- File paths: `services/ai-core/app/db.py:155-199,180-186`, `services/ai-core/app/main.py:191-192`, `services/ai-core/app/clustering.py:53-54`
+- Model versioning: Model version storage, retrieval, fields
+- Provenance: Model lineage, training data traceability
+
+### Training & Retraining Discipline
+- File paths: `services/ai-core/app/clustering.py:53-54,19-56`, `services/ai-core/app/main.py:236,191-192`, `services/ai-core/app/feature_extraction.py:15-60`
+- Training: Inline training, deterministic options, reproducibility
+- Model versioning: Model version storage, hard-coded versions
+
+### Inference Determinism (Non-LLM)
+- File paths: `services/ai-core/app/clustering.py:53`, `services/ai-core/app/feature_extraction.py:15-60`, `services/ai-core/app/shap_explainer.py:17-81`, `services/ai-core/app/main.py:153`
+- Inference determinism: random_state, deterministic operations
+- Input dependencies: Incidents from correlation engine
+
+### SHAP Explainability
+- File paths: `services/ai-core/app/main.py:338,360-361`, `services/ai-core/app/db.py:326-362,336-339,342,345-350`, `services/ai-core/app/shap_explainer.py:29,46-70`
+- SHAP generation: SHAP generation per inference, SHAP-like vs full SHAP
+- SHAP storage: Hash storage, top N features, associations
+
+### Replay & Auditability
+- File paths: `services/ai-core/app/main.py:153`, `services/ai-core/app/clustering.py:53-54`, `services/ai-core/app/db.py:336-339`
+- Replay: Model retraining, input dependencies, output recomputation
+- Audit trails: SHAP storage, model storage, input determinism
+
+### No Black-Box Paths
+- File paths: `services/ai-core/app/main.py:338,358-362`, `services/ai-core/app/feature_extraction.py:15-60`, `services/ai-core/app/clustering.py:18-56`, `services/ai-core/app/shap_explainer.py:17-81`
+- Explainability: SHAP generation, explicit operations, no black-box paths
+
+---
+
+## GA VERDICT
+
+### Overall: **FAIL**
+
+**Critical Blockers:**
+
+1. **FAIL:** Outputs cannot be re-derived from stored evidence
+   - **Impact:** SHAP explanation is not stored (only hash), models are not stored (retrained from scratch), inputs (incidents) may differ on replay
+   - **Location:** `services/ai-core/app/db.py:336-339` — SHAP stored as hash only, `services/ai-core/app/clustering.py:53-54` — Models retrained from scratch
+   - **Severity:** **CRITICAL** (violates auditability requirement)
+   - **Master Spec Violation:** AI outputs must be recomputable from stored evidence
+
+2. **FAIL:** Non-deterministic inputs break audit trails
+   - **Impact:** Inputs (incidents) may differ on replay (if correlation is non-deterministic), causing AI outputs to differ
+   - **Location:** `services/ai-core/app/main.py:153` — `get_unresolved_incidents(read_conn)` reads incidents (inputs may differ on replay)
+   - **Severity:** **CRITICAL** (violates auditability requirement)
+   - **Master Spec Violation:** Audit trails must not be broken by non-deterministic inputs
+
+3. **FAIL:** No separate training script found
+   - **Impact:** Training happens inline at runtime, not in separate script
+   - **Location:** `services/ai-core/app/clustering.py:53-54` — Training happens inline
+   - **Severity:** **CRITICAL** (violates training discipline requirement)
+   - **Master Spec Violation:** Training pipeline must be separate and reproducible
+
+4. **PARTIAL:** SHAP data cannot be verified later
+   - **Impact:** SHAP explanation is not stored (only hash), cannot be verified later
+   - **Location:** `services/ai-core/app/db.py:336-339` — SHAP stored as hash only
+   - **Severity:** **HIGH** (affects explainability verification)
+   - **Master Spec Violation:** SHAP data must be verifiable later
+
+5. **PARTIAL:** Model provenance is minimal
+   - **Impact:** Model versions exist but do not include training data references, training parameters, or model lineage
+   - **Location:** `services/ai-core/app/db.py:180-186` — Model versions do not include provenance fields
+   - **Severity:** **MEDIUM** (affects model traceability)
+   - **Master Spec Violation:** Model provenance must include training data and parameters
+
+**Non-Blocking Issues:**
+
+1. Inference is deterministic (random_state=42, no hidden randomness)
+2. All inferences generate SHAP explanations
+3. No black-box paths found (all operations are explicit)
+4. Feature extraction is deterministic
+5. SHAP explanation is deterministic (but SHAP-like, not full SHAP)
+
+**Strengths:**
+
+1. ✅ Inference is deterministic (random_state=42, no hidden randomness)
+2. ✅ All inferences generate SHAP explanations
+3. ✅ No black-box paths found (all operations are explicit)
+4. ✅ Feature extraction is deterministic
+5. ✅ SHAP explanation is deterministic
+6. ✅ Model versioning exists (but provenance is minimal)
+
+**Summary of Critical Blockers:**
+
+1. **CRITICAL:** Outputs cannot be re-derived from stored evidence — SHAP not stored, models not stored, inputs may differ on replay
+2. **CRITICAL:** Non-deterministic inputs break audit trails — Inputs may differ on replay, causing outputs to differ
+3. **CRITICAL:** No separate training script found — Training happens inline at runtime
+4. **HIGH:** SHAP data cannot be verified later — SHAP explanation not stored, only hash
+5. **MEDIUM:** Model provenance is minimal — Model versions do not include training data or parameters
+
+---
+
+**Validation Date:** 2025-01-13  
+**Validator:** Independent System Validator  
+**Next Step:** Validation Step 9 — Policy Engine (if applicable)  
+**GA Status:** **BLOCKED** (Critical failures in auditability and training discipline)
+
+---
+
+## DOWNSTREAM IMPACT STATEMENT
+
+**Documentation Only:** This section documents downstream impact of AI Core non-determinism and auditability failures on downstream validations.
+
+**Downstream Validations Impacted by AI Core Failures:**
+
+1. **Policy Engine (Validation Step 9, if applicable):**
+   - Policy Engine may read AI metadata (clusters, SHAP explanations)
+   - AI metadata may differ on replay (if inputs differ on replay)
+   - Policy Engine validation must NOT assume deterministic AI metadata
+
+2. **Reporting & Dashboards (Validation Step 18, if applicable):**
+   - Reporting may display AI metadata (clusters, SHAP explanations)
+   - AI metadata may differ on replay (if inputs differ on replay)
+   - Reporting validation must NOT assume deterministic AI metadata
+
+**Requirements for Downstream Validations:**
+
+- Downstream validations must NOT assume deterministic AI metadata (AI metadata may differ on replay)
+- Downstream validations must NOT assume replay fidelity for AI outputs (outputs may differ on replay)
+- Downstream validations must validate their components based on actual behavior, not assumptions about AI determinism
+- Downstream validations must explicitly document any dependencies on AI determinism if they exist
