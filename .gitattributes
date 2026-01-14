@@ -1,2 +1,4 @@
 *.safetensors filter=lfs diff=lfs merge=lfs -text
 *.pt filter=lfs diff=lfs merge=lfs -text
+mishka/training/models/**/*.safetensors filter=lfs diff=lfs merge=lfs -text
+mishka/training/models/**/*.pt filter=lfs diff=lfs merge=lfs -text
