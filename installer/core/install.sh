@@ -385,6 +385,145 @@ generate_component_instance_id() {
     fi
 }
 
+# Validate secret strength (fail-closed)
+validate_secret_strength() {
+    local secret="$1"
+    local secret_name="$2"
+    local min_length="${3:-8}"
+    
+    # Check if empty
+    if [[ -z "$secret" ]]; then
+        error_exit "SECURITY VIOLATION: ${secret_name} is required (no empty values allowed)"
+    fi
+    
+    # Check minimum length
+    if [[ ${#secret} -lt $min_length ]]; then
+        error_exit "SECURITY VIOLATION: ${secret_name} is too short (minimum ${min_length} characters required)"
+    fi
+    
+    # Check for weak secrets (all same character, insufficient entropy)
+    local unique_chars=$(echo -n "$secret" | fold -w1 | sort -u | wc -l)
+    if [[ $unique_chars -lt 3 ]]; then
+        error_exit "SECURITY VIOLATION: ${secret_name} is too weak (insufficient entropy, minimum 3 unique characters required)"
+    fi
+    
+    # Check for known weak/default values
+    local weak_patterns=("gagan" "password" "test" "changeme" "default" "secret" "admin" "12345678")
+    for pattern in "${weak_patterns[@]}"; do
+        if [[ "$secret" == "$pattern" ]] || [[ "$secret" == *"$pattern"* ]]; then
+            error_exit "SECURITY VIOLATION: ${secret_name} contains weak/default value '${pattern}' (not allowed)"
+        fi
+    done
+}
+
+# Validate signing key strength (fail-closed)
+validate_signing_key_strength() {
+    local key="$1"
+    local min_length="${2:-32}"
+    
+    # Check if empty
+    if [[ -z "$key" ]]; then
+        error_exit "SECURITY VIOLATION: Signing key is required (no empty values allowed)"
+    fi
+    
+    # Check minimum length
+    if [[ ${#key} -lt $min_length ]]; then
+        error_exit "SECURITY VIOLATION: Signing key is too short (minimum ${min_length} characters required)"
+    fi
+    
+    # Check for weak keys (all same character, insufficient entropy)
+    local unique_chars=$(echo -n "$key" | fold -w1 | sort -u | wc -l)
+    local min_unique=$(echo "scale=0; ${#key} * 0.3" | bc 2>/dev/null || echo "8")
+    if [[ $min_unique -lt 8 ]]; then
+        min_unique=8
+    fi
+    if [[ $unique_chars -lt $min_unique ]]; then
+        error_exit "SECURITY VIOLATION: Signing key has insufficient entropy (minimum ${min_unique} unique characters required)"
+    fi
+    
+    # Check for known weak/default values
+    local weak_patterns=("test_signing_key" "default" "changeme" "password" "secret" "phase7_minimal")
+    for pattern in "${weak_patterns[@]}"; do
+        if [[ "$key" == *"$pattern"* ]]; then
+            error_exit "SECURITY VIOLATION: Signing key contains weak/default pattern '${pattern}' (not allowed)"
+        fi
+    done
+    
+    # Check if key is alphabetic only (too weak)
+    if [[ "$key" =~ ^[a-zA-Z]+$ ]]; then
+        error_exit "SECURITY VIOLATION: Signing key format is too weak (alphabetic only, must include numbers/special characters)"
+    fi
+}
+
+# Prompt for database credentials (fail-closed, no defaults)
+prompt_database_credentials() {
+    echo ""
+    echo "Database configuration (REQUIRED):"
+    echo "  RansomEye requires PostgreSQL database credentials."
+    echo "  All credentials must be provided - no defaults allowed."
+    echo ""
+    
+    # Prompt for DB host
+    echo -n "Database host [localhost]: "
+    read -r db_host
+    db_host="${db_host:-localhost}"
+    RANSOMEYE_DB_HOST="$db_host"
+    
+    # Prompt for DB port
+    echo -n "Database port [5432]: "
+    read -r db_port
+    db_port="${db_port:-5432}"
+    RANSOMEYE_DB_PORT="$db_port"
+    
+    # Prompt for DB name
+    echo -n "Database name [ransomeye]: "
+    read -r db_name
+    db_name="${db_name:-ransomeye}"
+    RANSOMEYE_DB_NAME="$db_name"
+    
+    # Prompt for DB user (REQUIRED, no default)
+    echo -n "Database user (REQUIRED): "
+    read -r db_user
+    if [[ -z "$db_user" ]]; then
+        error_exit "SECURITY VIOLATION: Database user is required (no default allowed)"
+    fi
+    validate_secret_strength "$db_user" "Database user" 3
+    RANSOMEYE_DB_USER="$db_user"
+    
+    # Prompt for DB password (REQUIRED, no default)
+    echo -n "Database password (REQUIRED, minimum 8 characters): "
+    read -rs db_password
+    echo ""
+    if [[ -z "$db_password" ]]; then
+        error_exit "SECURITY VIOLATION: Database password is required (no default allowed)"
+    fi
+    validate_secret_strength "$db_password" "Database password" 8
+    RANSOMEYE_DB_PASSWORD="$db_password"
+    
+    echo -e "${GREEN}✓${NC} Database credentials validated"
+}
+
+# Prompt for signing key (fail-closed, no defaults)
+prompt_signing_key() {
+    echo ""
+    echo "Command signing key configuration (REQUIRED):"
+    echo "  RansomEye requires a signing key for command authentication."
+    echo "  Key must be at least 32 characters with sufficient entropy."
+    echo "  No defaults allowed - must be provided."
+    echo ""
+    
+    echo -n "Command signing key (REQUIRED, minimum 32 characters): "
+    read -rs signing_key
+    echo ""
+    if [[ -z "$signing_key" ]]; then
+        error_exit "SECURITY VIOLATION: Command signing key is required (no default allowed)"
+    fi
+    validate_signing_key_strength "$signing_key" 32
+    RANSOMEYE_COMMAND_SIGNING_KEY="$signing_key"
+    
+    echo -e "${GREEN}✓${NC} Signing key validated"
+}
+
 # Generate environment file
 generate_environment_file() {
     echo ""
