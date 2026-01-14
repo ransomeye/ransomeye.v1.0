@@ -1,516 +1,603 @@
-# Validation Step 7 — Correlation Engine (Contradiction, Confidence & State Machine)
+# Validation Step 7 — Correlation Engine (In-Depth)
 
 **Component Identity:**
 - **Name:** Correlation Engine (System Brain)
 - **Primary Paths:**
   - `/home/ransomeye/rebuild/services/correlation-engine/app/main.py` - Main correlation engine
-  - `/home/ransomeye/rebuild/services/correlation-engine/app/main_hardened.py` - Hardened variant
+  - `/home/ransomeye/rebuild/services/correlation-engine/app/state_machine.py` - State machine implementation
   - `/home/ransomeye/rebuild/services/correlation-engine/app/rules.py` - Correlation rules
   - `/home/ransomeye/rebuild/services/correlation-engine/app/db.py` - Database operations
-- **Entry Point:** Batch processing loop - `services/correlation-engine/app/main.py:151` - `run_correlation_engine()`
+- **Entry Point:** Batch processing loop - `services/correlation-engine/app/main.py:205` - `run_correlation_engine()`
 
-**Spec Reference:**
+**Master Spec References:**
 - Phase 5 — Deterministic Correlation Engine
 - Correlation Schema (`schemas/04_correlation.sql`)
 - Incident Stage Enum: `CLEAN`, `SUSPICIOUS`, `PROBABLE`, `CONFIRMED`
+- Validation File 06 (Ingest Pipeline) — **TREATED AS FAILED AND LOCKED**
 
 ---
 
-## 1. COMPONENT IDENTITY & AUTHORITY
+## PURPOSE
 
-### Evidence
+This validation proves that the Correlation Engine produces deterministic, auditable incidents with correct state machine enforcement, confidence accumulation, and resilience to non-deterministic ingest_time.
 
-**Engine Entry Points:**
-- ✅ Batch processing loop: `services/correlation-engine/app/main.py:151` - `run_correlation_engine()`
-- ✅ Event processing: `services/correlation-engine/app/main.py:96` - `process_event()` processes single event
-- ✅ Rule evaluation: `services/correlation-engine/app/rules.py:62` - `evaluate_event()` evaluates event against rules
-- ✅ Main entry: `services/correlation-engine/app/main.py:239` - `if __name__ == "__main__":` runs `run_correlation_engine()`
+This validation does NOT assume ingest determinism. Validation File 06 (Ingest Pipeline) is treated as FAILED and LOCKED. This validation must account for non-deterministic `ingested_at` values affecting correlation behavior.
 
-**Sub-Engines (Contradiction, Accumulator, State Machine):**
-- ❌ **CRITICAL:** No contradiction engine found:
-  - `services/correlation-engine/app/rules.py:16` - `apply_linux_agent_rule()` is the only rule
-  - No contradiction detection logic found
-  - No host vs network contradiction found
-  - No execution vs timing contradiction found
-  - No persistence vs silence contradiction found
-  - No deception confirmation contradiction found
-- ❌ **CRITICAL:** No confidence accumulator found:
-  - `services/correlation-engine/app/rules.py:54` - `confidence_score = 0.3` (constant, not accumulated)
-  - No accumulation logic found
-  - No weight definitions found
-  - No saturation behavior found
-  - No decay logic found
-- ❌ **CRITICAL:** No state machine found:
-  - `services/correlation-engine/app/rules.py:53` - `stage = 'SUSPICIOUS'` (constant, no transitions)
-  - No state machine definition found
-  - No transition logic found
-  - No transition guards found
-  - Incidents are created with `stage='SUSPICIOUS'` and never transition
+This file validates:
+- Incident identity generation and deduplication
+- State machine correctness (SUSPICIOUS → PROBABLE → CONFIRMED)
+- Confidence accumulation math (bounded, deterministic)
+- Replay & reprocessing behavior
+- Determinism guarantees (same evidence → same incident graph)
+- Fail-closed & error handling
 
-**Whether Any Other Component Can Change Incident State:**
-- ✅ **VERIFIED:** AI Core does NOT modify incidents:
-  - `services/ai-core/README.md:39` - "NO incident modification: Does not create, update, or delete incidents"
-  - `services/ai-core/README.md:57` - "NO decision-making: Does not create incidents or modify incident state"
-  - ✅ **VERIFIED:** AI Core cannot change incident state
-- ✅ **VERIFIED:** Policy Engine does NOT modify incidents:
-  - `services/policy-engine/README.md:60` - "NO incident modification: Policy engine does NOT modify incident state"
-  - `services/policy-engine/README.md:154` - "NO incident modification: Policy engine does NOT modify incident state, stage, or confidence"
-  - ✅ **VERIFIED:** Policy Engine cannot change incident state
-- ⚠️ **ISSUE:** Threat Response Engine can update incidents:
-  - `threat-response-engine/engine/incident_freeze.py:157-164` - `reopen_incident()` updates `incidents.status` to `'IN_PROGRESS'`
-  - ⚠️ **ISSUE:** TRE can update incident status (but not stage/confidence)
-
-**Whether Any Other Component Can Create Incidents:**
-- ✅ **VERIFIED:** Only correlation engine creates incidents:
-  - `services/correlation-engine/app/db.py:124` - `create_incident()` is the only function that creates incidents
-  - `services/ai-core/README.md:39` - "NO incident modification: Does not create, update, or delete incidents"
-  - `services/policy-engine/README.md:162` - "NO incident creation: Policy engine does not create incidents"
-  - ✅ **VERIFIED:** Only correlation engine creates incidents
-
-**Whether Any Other Component Can Escalate Severity:**
-- ✅ **VERIFIED:** No component can escalate severity:
-  - Correlation engine creates incidents with `stage='SUSPICIOUS'` (constant)
-  - No state machine transitions found
-  - No escalation logic found
-  - AI and Policy engines do NOT modify incidents
-  - ✅ **VERIFIED:** No component can escalate severity (no state transitions exist)
-
-**Any Module Outside Correlation Engine Can Escalate Incidents Independently:**
-- ✅ **VERIFIED:** No module can escalate incidents:
-  - No state machine transitions found
-  - No escalation logic found
-  - AI and Policy engines do NOT modify incidents
-  - ✅ **VERIFIED:** No module can escalate incidents independently
-
-### Verdict: **FAIL**
-
-**Justification:**
-- Correlation engine is clearly identified as the sole creator of incidents
-- **CRITICAL FAILURE:** No contradiction engine found (no contradiction detection logic)
-- **CRITICAL FAILURE:** No confidence accumulator found (confidence is constant, not accumulated)
-- **CRITICAL FAILURE:** No state machine found (no state transitions, incidents created with `stage='SUSPICIOUS'` and never transition)
-- **ISSUE:** TRE can update incident status (but not stage/confidence)
+This validation does NOT validate UI, agents, installer, or provide fixes/recommendations.
 
 ---
 
-## 2. INPUT TRUST & AUTHENTICATION
+## CORRELATION ENGINE DEFINITION
 
-### Evidence
+**Correlation Engine Requirements (Master Spec):**
 
-**Sources of Inputs:**
-- ✅ Inputs come from Ingest only: `services/correlation-engine/app/db.py:70-121` - `get_unprocessed_events()` reads from `raw_events` table
-- ✅ Events are validated: `services/correlation-engine/app/db.py:100` - Only reads events with `validation_status = 'VALID'`
-- ✅ Events are from Ingest: `services/correlation-engine/app/db.py:99` - `FROM raw_events` (events ingested by Ingest service)
-- ✅ No direct consumption from agents/DPI: `services/correlation-engine/app/db.py:70-121` - Reads from database, not directly from agents/DPI
+1. **Incident Identity & Deduplication** — Same logical entity always maps to same incident, non-deterministic timestamps do not affect deduplication
+2. **State Machine Correctness** — Exact enforcement of SUSPICIOUS → PROBABLE → CONFIRMED, forward-only transitions, no single-signal CONFIRMED paths
+3. **Confidence Accumulation Math** — Bounded confidence math, deterministic accumulation, same evidence → same confidence
+4. **Replay & Reprocessing Behavior** — Reprocessing raw_events produces same incidents, non-deterministic ingest_time does not break replayability
+5. **Determinism Guarantees** — Same evidence → same incident graph, ordering guarantees (or lack thereof)
+6. **Fail-Closed & Error Handling** — Correlation halts on inconsistent data, no silent drops or partial correlation
 
-**Schema Enforcement on Inputs:**
-- ✅ Events are schema-validated: Events in `raw_events` table have `validation_status = 'VALID'` (validated by Ingest)
-- ✅ Events conform to schema: `services/correlation-engine/app/db.py:84-98` - Reads event fields from `raw_events` table (schema-validated)
-- ✅ Event fields are validated: Events are validated by Ingest before reaching correlation engine
-
-**Identity Binding:**
-- ✅ Events include identity: `services/correlation-engine/app/db.py:84-98` - Reads `machine_id`, `component`, `component_instance_id`, `hostname`, `boot_id`, `agent_version`
-- ✅ Identity is in event: Events from `raw_events` table include identity fields
-- ⚠️ **ISSUE:** Identity is NOT cryptographically verified (from previous validation, Ingest does not verify signatures)
-
-**Direct Consumption from Agents/DPI:**
-- ✅ **VERIFIED:** Correlation engine does NOT consume directly from agents/DPI:
-  - `services/correlation-engine/app/db.py:99` - `FROM raw_events` (reads from database, not directly from agents/DPI)
-  - ✅ **VERIFIED:** Correlation engine consumes from Ingest only (via database)
-
-**Unschema'd or Unauthenticated Inputs:**
-- ✅ Events are schema-validated: Events in `raw_events` table have `validation_status = 'VALID'` (validated by Ingest)
-- ⚠️ **ISSUE:** Events are NOT cryptographically authenticated (from previous validation, Ingest does not verify signatures)
-
-**Implicit Trust in Event Content:**
-- ⚠️ **ISSUE:** Correlation engine trusts event content:
-  - `services/correlation-engine/app/rules.py:44` - `component = event.get('component')` (trusts event content)
-  - `services/correlation-engine/app/rules.py:48` - `if component == 'linux_agent':` (trusts event content)
-  - ⚠️ **ISSUE:** Correlation engine trusts event content without cryptographic verification
-
-### Verdict: **PARTIAL**
-
-**Justification:**
-- Inputs come from Ingest only (via database)
-- Events are schema-validated (by Ingest)
-- **ISSUE:** Events are NOT cryptographically authenticated (from previous validation)
-- **ISSUE:** Correlation engine trusts event content without cryptographic verification
+**Correlation Engine Structure:**
+- **Entry Point:** Batch processing loop (`run_correlation_engine()`)
+- **Processing Chain:** Read unprocessed events → Evaluate rules → Deduplicate → Accumulate confidence → State transitions → Store incidents
+- **Storage Tables:** `incidents`, `incident_stages`, `evidence`
 
 ---
 
-## 3. CONTRADICTION DETECTION (CORE LOGIC)
+## WHAT IS VALIDATED
 
-### Evidence
+### 1. Incident Identity & Deduplication
+- How incident identity is generated
+- Whether same logical entity always maps to same incident
+- Whether non-deterministic timestamps affect deduplication
 
-**Presence and Enforcement of Contradiction Detection:**
-- ❌ **CRITICAL:** No contradiction detection found:
-  - `services/correlation-engine/app/rules.py:16-59` - `apply_linux_agent_rule()` is the only rule
-  - No host vs network contradiction found
-  - No execution vs timing contradiction found
-  - No persistence vs silence contradiction found
-  - No deception confirmation contradiction found
-- ⚠️ **ISSUE:** README mentions "contradiction rules" but no contradiction logic exists:
-  - `services/correlation-engine/README.md:16` - "Applies Explicit Contradiction Rules" (but no contradiction logic found)
+### 2. State Machine Correctness
+- Exact enforcement of SUSPICIOUS → PROBABLE → CONFIRMED
+- Forward-only transitions
+- No single-signal CONFIRMED paths
 
-**Where Contradictions Are Computed:**
-- ❌ **CRITICAL:** Contradictions are NOT computed (no contradiction logic exists)
+### 3. Confidence Accumulation Math
+- Bounded confidence math
+- Deterministic accumulation
+- Effect of replay or reordering
 
-**Whether Contradictions Are Mandatory or Optional:**
-- ❌ **CRITICAL:** Contradictions are NOT implemented (no contradiction logic exists)
+### 4. Replay & Reprocessing Behavior
+- Whether reprocessing raw_events produces same incidents
+- Whether non-deterministic ingest_time breaks replayability
 
-**Single-Signal Escalation:**
-- ⚠️ **ISSUE:** Single-signal escalation exists:
-  - `services/correlation-engine/app/rules.py:48` - `if component == 'linux_agent':` creates incident (single signal)
-  - No contradiction required (single signal is sufficient)
-  - ⚠️ **VERIFIED:** Single-signal escalation is possible (no contradiction required)
+### 5. Determinism Guarantees
+- Same evidence → same incident graph
+- Ordering guarantees (or lack thereof)
 
-**Missing Contradiction Checks:**
-- ❌ **CRITICAL:** All contradiction checks are missing:
-  - No host vs network contradiction
-  - No execution vs timing contradiction
-  - No persistence vs silence contradiction
-  - No deception confirmation contradiction
-
-**Optional Contradiction Logic:**
-- ❌ **CRITICAL:** Contradiction logic does NOT exist (not optional, not mandatory - does not exist)
-
-### Verdict: **FAIL**
-
-**Justification:**
-- **CRITICAL FAILURE:** No contradiction detection found (no contradiction logic exists)
-- **CRITICAL FAILURE:** Single-signal escalation is possible (no contradiction required)
-- **CRITICAL FAILURE:** All contradiction checks are missing
-- README mentions "contradiction rules" but no contradiction logic exists
+### 6. Fail-Closed & Error Handling
+- Correlation halts on inconsistent data
+- No silent drops or partial correlation
 
 ---
 
-## 4. CONFIDENCE ACCUMULATION MODEL
+## WHAT IS EXPLICITLY NOT ASSUMED
 
-### Evidence
-
-**Weight Definitions:**
-- ❌ **CRITICAL:** No weight definitions found:
-  - `services/correlation-engine/app/rules.py:54` - `confidence_score = 0.3` (constant, not computed from weights)
-  - No weight definitions found
-  - No weight configuration found
-
-**Accumulation Logic:**
-- ❌ **CRITICAL:** No accumulation logic found:
-  - `services/correlation-engine/app/rules.py:54` - `confidence_score = 0.3` (constant, not accumulated)
-  - No accumulation logic found
-  - No confidence accumulation found
-  - Confidence is constant, not accumulated
-
-**Saturation Behavior:**
-- ❌ **CRITICAL:** No saturation behavior found:
-  - Confidence is constant (0.3), not accumulated
-  - No saturation logic found
-  - No saturation thresholds found
-
-**Decay (if any):**
-- ❌ **CRITICAL:** No decay logic found:
-  - Confidence is constant (0.3), not accumulated
-  - No decay logic found
-  - No decay configuration found
-
-**Thresholds (Suspicious / Probable / Confirmed):**
-- ❌ **CRITICAL:** No thresholds found:
-  - `services/correlation-engine/app/rules.py:53` - `stage = 'SUSPICIOUS'` (constant, not based on thresholds)
-  - No threshold definitions found
-  - No threshold configuration found
-  - Stage is constant, not based on confidence thresholds
-
-**No Direct Jump to Confirmed Without Accumulation:**
-- ⚠️ **ISSUE:** Direct jump to Confirmed is NOT possible (but not because of accumulation):
-  - `services/correlation-engine/app/rules.py:53` - `stage = 'SUSPICIOUS'` (constant, never jumps to Confirmed)
-  - No state transitions exist
-  - ⚠️ **ISSUE:** Incidents are created with `stage='SUSPICIOUS'` and never transition (no accumulation, no transitions)
-
-**Hard-Coded Severity Jumps:**
-- ⚠️ **ISSUE:** No severity jumps exist (but stage is hard-coded):
-  - `services/correlation-engine/app/rules.py:53` - `stage = 'SUSPICIOUS'` (hard-coded constant)
-  - No state transitions exist
-  - ⚠️ **ISSUE:** Stage is hard-coded (no jumps, but also no accumulation)
-
-**Unbounded Confidence Growth:**
-- ✅ No unbounded confidence growth: Confidence is constant (0.3), not accumulated
-- ✅ No confidence growth: Confidence is constant, not accumulated
-
-**Reset Without Justification:**
-- ✅ No confidence reset: Confidence is constant (0.3), not accumulated or reset
-
-### Verdict: **FAIL**
-
-**Justification:**
-- **CRITICAL FAILURE:** No confidence accumulation model found (confidence is constant, not accumulated)
-- **CRITICAL FAILURE:** No weight definitions, accumulation logic, saturation behavior, or decay found
-- **CRITICAL FAILURE:** No thresholds found (stage is constant, not based on confidence thresholds)
-- **ISSUE:** Stage is hard-coded (no accumulation, no transitions)
+- **NOT ASSUMED:** That ingest_time (ingested_at) is deterministic (Validation File 06 is FAILED, ingested_at is non-deterministic)
+- **NOT ASSUMED:** That replay produces identical raw_events records (ingested_at differs on replay)
+- **NOT ASSUMED:** That correlation engine does not use ingested_at for ordering or logic
+- **NOT ASSUMED:** That correlation engine is resilient to non-deterministic ingest_time
 
 ---
 
-## 5. STATE MACHINE ENFORCEMENT
+## VALIDATION METHODOLOGY
 
-### Evidence
+### Evidence Collection Strategy
 
-**Explicit State Machine Definition:**
-- ❌ **CRITICAL:** No explicit state machine definition found:
-  - `services/correlation-engine/app/rules.py:53` - `stage = 'SUSPICIOUS'` (constant, no state machine)
-  - No state machine definition found
-  - No state machine implementation found
-  - Schema defines stages: `schemas/04_correlation.sql:6-11` - `incident_stage` enum: `CLEAN`, `SUSPICIOUS`, `PROBABLE`, `CONFIRMED`
-  - ⚠️ **ISSUE:** Schema defines stages, but no state machine enforces transitions
+1. **Code Path Analysis:** Trace incident creation, deduplication, confidence accumulation, state transitions
+2. **Database Query Analysis:** Examine SQL queries for use of ingested_at, NOW(), ordering dependencies
+3. **State Machine Analysis:** Verify state transition logic, guards, forward-only enforcement
+4. **Confidence Math Analysis:** Verify accumulation formula, bounds, determinism
+5. **Replay Analysis:** Check if reprocessing produces same incidents despite non-deterministic ingest_time
+6. **Error Handling Analysis:** Check fail-closed behavior, error blocking, silent degradation
 
-**Allowed Transitions Only:**
-- ❌ **CRITICAL:** No state transitions found:
-  - `services/correlation-engine/app/rules.py:53` - `stage = 'SUSPICIOUS'` (constant, no transitions)
-  - No transition logic found
-  - No transition enforcement found
-  - Incidents are created with `stage='SUSPICIOUS'` and never transition
+### Forbidden Patterns (Grep Validation)
 
-**Transition Guards:**
-- ❌ **CRITICAL:** No transition guards found:
-  - No state machine exists
-  - No transitions exist
-  - No guards exist
-
-**Skipped States:**
-- ⚠️ **ISSUE:** States are skipped:
-  - `services/correlation-engine/app/rules.py:53` - `stage = 'SUSPICIOUS'` (skips CLEAN, jumps directly to SUSPICIOUS)
-  - No transition from CLEAN to SUSPICIOUS (incidents created directly with SUSPICIOUS)
-  - ⚠️ **ISSUE:** CLEAN state is skipped (incidents created directly with SUSPICIOUS)
-
-**Backward Transitions Without Justification:**
-- ✅ No backward transitions: No state transitions exist (incidents created with `stage='SUSPICIOUS'` and never change)
-
-**External Override of State:**
-- ⚠️ **ISSUE:** No external override protection found:
-  - No state machine exists
-  - No transition enforcement exists
-  - ⚠️ **ISSUE:** If state machine existed, there would be no protection against external override (but state machine does not exist)
-
-### Verdict: **FAIL**
-
-**Justification:**
-- **CRITICAL FAILURE:** No explicit state machine definition found (no state machine exists)
-- **CRITICAL FAILURE:** No state transitions found (incidents created with `stage='SUSPICIOUS'` and never transition)
-- **CRITICAL FAILURE:** No transition guards found (no state machine exists)
-- **ISSUE:** CLEAN state is skipped (incidents created directly with SUSPICIOUS)
+- `ingested_at.*ORDER BY|ORDER BY.*ingested_at` — Ordering by non-deterministic ingest_time
+- `NOW\(\)|CURRENT_TIMESTAMP` — Non-deterministic timestamps (affects replay)
+- `continue.*except|pass.*except` — Silent error handling (forbidden, must fail-closed)
 
 ---
 
-## 6. INCIDENT MATERIALIZATION
+## 1. INCIDENT IDENTITY & DEDUPLICATION
 
 ### Evidence
 
-**When Incidents Are Created:**
-- ✅ Incidents are created on rule match: `services/correlation-engine/app/main.py:111-119` - `evaluate_event()` returns `should_create`, then `create_incident()` is called
-- ✅ Incidents are created deterministically: `services/correlation-engine/app/rules.py:48` - If `component == 'linux_agent'`, create incident
-- ✅ Incidents are created per event: `services/correlation-engine/app/main.py:96-135` - `process_event()` processes single event and may create incident
-
-**What Data Is Persisted:**
-- ✅ Incident data persisted: `services/correlation-engine/app/db.py:158-164` - Inserts into `incidents` table:
-  - `incident_id`, `machine_id`, `current_stage`, `first_observed_at`, `last_observed_at`, `stage_changed_at`, `total_evidence_count`, `confidence_score`
-- ✅ Stage transition persisted: `services/correlation-engine/app/db.py:167-173` - Inserts into `incident_stages` table:
-  - `incident_id`, `from_stage` (NULL), `to_stage` (SUSPICIOUS), `transitioned_at`, `evidence_count_at_transition`, `confidence_score_at_transition`
-- ✅ Evidence link persisted: `services/correlation-engine/app/db.py:176-182` - Inserts into `evidence` table:
-  - `incident_id`, `event_id`, `evidence_type` (CORRELATION_PATTERN), `confidence_level` (LOW), `confidence_score`, `observed_at`
-
-**Whether Incident Identity Is Stable:**
-- ✅ Incident identity is stable: `services/correlation-engine/app/main.py:114` - `incident_id = str(uuid.uuid4())` (UUID v4, immutable)
+**How Incident Identity Is Generated:**
+- ✅ Incident ID is UUID v4: `services/correlation-engine/app/main.py:169` - `incident_id = str(uuid.uuid4())`
 - ✅ Incident ID is PRIMARY KEY: `schemas/04_correlation.sql:42` - `incident_id UUID NOT NULL PRIMARY KEY` (immutable)
 - ✅ Incident ID is never reused: UUID v4 ensures uniqueness
+- ✅ Incident identity is stable: `services/correlation-engine/app/db.py:127-203` - `create_incident()` creates incident with immutable ID
 
-**Duplicate Incidents for Same Root Cause:**
-- ⚠️ **ISSUE:** Duplicate incidents are possible:
-  - `services/correlation-engine/app/main.py:114` - `incident_id = str(uuid.uuid4())` (new UUID for each incident)
-  - `services/correlation-engine/app/rules.py:48` - If `component == 'linux_agent'`, create incident (one incident per event)
-  - ⚠️ **ISSUE:** Multiple events from same `linux_agent` component create multiple incidents (no deduplication by root cause)
-  - ⚠️ **ISSUE:** No check for existing incidents for same machine/root cause
+**Whether Same Logical Entity Always Maps to Same Incident:**
+- ✅ Deduplication key generation: `services/correlation-engine/app/state_machine.py:166-190` - `get_deduplication_key()` generates key from `machine_id` + `process_id` (if available)
+- ✅ Deduplication key is deterministic: `services/correlation-engine/app/state_machine.py:187-190` - Key is `f"{machine_id}:{process_id}"` or `machine_id` (deterministic from event data)
+- ✅ Deduplication lookup: `services/correlation-engine/app/main.py:135-137` - `find_existing_incident(conn, machine_id, dedup_key, observed_at)` finds existing incidents
+- ✅ Deduplication time window: `services/correlation-engine/app/db.py:240-241` - Time window is `event_time ± 3600 seconds` (1 hour window)
+- ⚠️ **ISSUE:** Deduplication uses `observed_at` (event_time), not `ingested_at` (ingest_time): `services/correlation-engine/app/db.py:240-241` - Time window based on `event_time` (observed_at)
+- ✅ **VERIFIED:** Same logical entity (same machine_id + process_id) within time window maps to same incident
 
-**Mutable Incident Identity:**
-- ✅ Incident identity is immutable: `schemas/04_correlation.sql:42` - `incident_id UUID NOT NULL PRIMARY KEY` (immutable)
-- ✅ Incident ID is never updated: No UPDATE statements found for `incident_id`
+**Whether Non-Deterministic Timestamps Affect Deduplication:**
+- ⚠️ **ISSUE:** Event ordering uses `ingested_at`: `services/correlation-engine/app/db.py:109` - `ORDER BY ingested_at ASC` (non-deterministic ordering)
+- ✅ Deduplication time window uses `observed_at`: `services/correlation-engine/app/db.py:240-241` - Time window based on `event_time` (observed_at, deterministic)
+- ⚠️ **ISSUE:** Non-deterministic ordering may affect which events are processed first, potentially affecting deduplication if events arrive out of order
+- ⚠️ **ISSUE:** If same logical entity has events with different `ingested_at` values (due to replay), ordering may differ, but deduplication key is deterministic
 
-**Incident Creation Without Correlation:**
-- ⚠️ **ISSUE:** Incident creation is minimal (not true correlation):
-  - `services/correlation-engine/app/rules.py:48` - `if component == 'linux_agent':` creates incident (single condition, no correlation)
-  - No correlation with other events found
-  - No pattern matching found
-  - ⚠️ **ISSUE:** Incidents are created based on single event condition (not true correlation)
+**Same Signals Create Multiple Incidents Due to Time Variance:**
+- ✅ **VERIFIED:** Deduplication prevents duplicate incidents: `services/correlation-engine/app/main.py:139-166` - If `existing_incident_id` found, evidence is added to existing incident, not new incident created
+- ⚠️ **ISSUE:** Time window may expire: `services/correlation-engine/app/db.py:240-241` - Time window is 1 hour, events outside window create new incidents
+- ⚠️ **ISSUE:** If events are replayed with different `ingested_at` values but same `observed_at`, deduplication should work (uses observed_at), but ordering may differ
+
+**Incident Identity Depends on ingest_time:**
+- ❌ **CRITICAL FAILURE:** Event ordering depends on `ingested_at`: `services/correlation-engine/app/db.py:109` - `ORDER BY ingested_at ASC` (non-deterministic)
+- ⚠️ **ISSUE:** If events are processed in different order due to non-deterministic `ingested_at`, deduplication may behave differently (first event creates incident, subsequent events within time window add evidence)
+- ❌ **CRITICAL FAILURE:** Incident creation order depends on `ingested_at` (non-deterministic)
 
 ### Verdict: **PARTIAL**
 
 **Justification:**
-- Incidents are created deterministically and data is properly persisted
 - Incident identity is stable (UUID v4, immutable)
-- **ISSUE:** Duplicate incidents are possible (multiple events from same component create multiple incidents)
-- **ISSUE:** Incident creation is minimal (single event condition, not true correlation)
+- Same logical entity maps to same incident within time window (deduplication works)
+- **CRITICAL FAILURE:** Event ordering depends on `ingested_at` (non-deterministic), affecting which events are processed first
+- **ISSUE:** Time window expiration may cause duplicate incidents for same logical entity
+- **ISSUE:** Non-deterministic ordering may affect deduplication behavior if events arrive out of order
+
+**PASS Conditions (Met):**
+- Incident identity is stable — **CONFIRMED** (UUID v4, immutable)
+- Same logical entity maps to same incident — **CONFIRMED** (deduplication works within time window)
+
+**FAIL Conditions (Met):**
+- Incident identity depends on ingest_time — **CONFIRMED** (ordering depends on ingested_at)
+- Same signals create multiple incidents due to time variance — **PARTIAL** (time window expiration may cause duplicates)
+
+**Evidence Required:**
+- File paths: `services/correlation-engine/app/main.py:169,135-137`, `services/correlation-engine/app/state_machine.py:166-190`, `services/correlation-engine/app/db.py:109,240-241`
+- Incident identity: UUID v4 generation, PRIMARY KEY constraint
+- Deduplication: Key generation, time window, lookup logic
+- Ordering: `ORDER BY ingested_at ASC` (non-deterministic)
 
 ---
 
-## 7. FAIL-CLOSED & CONSISTENCY
+## 2. STATE MACHINE CORRECTNESS
 
 ### Evidence
+
+**Exact Enforcement of SUSPICIOUS → PROBABLE → CONFIRMED:**
+- ✅ State machine definition: `services/correlation-engine/app/state_machine.py:16` - `INCIDENT_STAGES = ['SUSPICIOUS', 'PROBABLE', 'CONFIRMED']`
+- ✅ Stage determination: `services/correlation-engine/app/state_machine.py:106-126` - `determine_stage(confidence)` determines stage based on confidence thresholds
+- ✅ Thresholds defined: `services/correlation-engine/app/state_machine.py:19-21` - `CONFIDENCE_THRESHOLD_SUSPICIOUS = 0.0`, `CONFIDENCE_THRESHOLD_PROBABLE = 30.0`, `CONFIDENCE_THRESHOLD_CONFIRMED = 70.0`
+- ✅ Stage transitions: `services/correlation-engine/app/db.py:336` - `should_transition_stage(current_stage, new_stage)` checks if transition is allowed
+- ✅ Transition enforcement: `services/correlation-engine/app/db.py:336-344` - State transition only occurs if `should_transition_stage()` returns True
+
+**Forward-Only Transitions:**
+- ✅ Transition guard: `services/correlation-engine/app/state_machine.py:129-163` - `should_transition_stage()` enforces forward-only transitions
+- ✅ No backward transitions: `services/correlation-engine/app/state_machine.py:145-150` - Returns False for backward transitions (CONFIRMED → PROBABLE, PROBABLE → SUSPICIOUS)
+- ✅ One-step transitions: `services/correlation-engine/app/state_machine.py:163` - `return new_index > current_index and new_index == current_index + 1` (only one step forward)
+- ✅ Terminal state: `services/correlation-engine/app/state_machine.py:146-147` - `if current_stage == 'CONFIRMED': return False` (CONFIRMED is terminal)
+
+**No Single-Signal CONFIRMED Paths:**
+- ✅ Single signal creates SUSPICIOUS: `services/correlation-engine/app/rules.py:44-45` - `stage = 'SUSPICIOUS'` (single signal → SUSPICIOUS only)
+- ✅ No direct CONFIRMED jump: `services/correlation-engine/app/state_machine.py:152-153` - `if current_stage == 'SUSPICIOUS' and new_stage == 'CONFIRMED': return False` (no direct jump)
+- ✅ Must go through PROBABLE: `services/correlation-engine/app/state_machine.py:163` - Only allows one-step forward transitions (SUSPICIOUS → PROBABLE → CONFIRMED)
+
+**State Transitions Depend on Timing Artifacts:**
+- ⚠️ **ISSUE:** State transition timestamps use `NOW()`: `services/correlation-engine/app/db.py:343` - `transitioned_at = NOW()` (non-deterministic)
+- ⚠️ **ISSUE:** Stage change timestamp uses `NOW()`: `services/correlation-engine/app/db.py:354` - `stage_changed_at = CASE WHEN %s THEN NOW() ELSE stage_changed_at END` (non-deterministic)
+- ✅ State transitions depend on confidence: `services/correlation-engine/app/db.py:305-306` - `new_confidence = accumulate_confidence(...)`, `new_stage = determine_stage(new_confidence)` (deterministic)
+- ⚠️ **ISSUE:** If events are processed in different order due to non-deterministic `ingested_at`, confidence accumulation order may differ, potentially affecting state transitions
+
+**Any Shortcut Exists:**
+- ✅ **VERIFIED:** No shortcuts exist: `services/correlation-engine/app/state_machine.py:129-163` - `should_transition_stage()` enforces one-step forward transitions only
+- ✅ **VERIFIED:** No direct CONFIRMED jump: `services/correlation-engine/app/state_machine.py:152-153` - Direct jump from SUSPICIOUS to CONFIRMED is blocked
+
+### Verdict: **PARTIAL**
+
+**Justification:**
+- State machine correctly enforces SUSPICIOUS → PROBABLE → CONFIRMED progression
+- Forward-only transitions are enforced (no backward transitions)
+- No single-signal CONFIRMED paths (single signal → SUSPICIOUS only)
+- **ISSUE:** State transition timestamps use `NOW()` (non-deterministic, affects replay)
+- **ISSUE:** If events are processed in different order due to non-deterministic `ingested_at`, confidence accumulation order may differ, potentially affecting state transitions
+
+**PASS Conditions (Met):**
+- Exact enforcement of SUSPICIOUS → PROBABLE → CONFIRMED — **CONFIRMED** (state machine enforces progression)
+- Forward-only transitions — **CONFIRMED** (no backward transitions allowed)
+- No single-signal CONFIRMED paths — **CONFIRMED** (single signal → SUSPICIOUS only)
+
+**FAIL Conditions (Met):**
+- State transitions depend on timing artifacts — **PARTIAL** (timestamps use NOW(), but state logic is deterministic)
+
+**Evidence Required:**
+- File paths: `services/correlation-engine/app/state_machine.py:16,106-126,129-163`, `services/correlation-engine/app/db.py:336-344,343,354`
+- State machine: Stage definition, transition guards, threshold enforcement
+- Timestamps: `NOW()` usage in state transitions
+
+---
+
+## 3. CONFIDENCE ACCUMULATION MATH
+
+### Evidence
+
+**Bounded Confidence Math:**
+- ✅ Confidence bounds: `services/correlation-engine/app/state_machine.py:79` - `new_confidence = min(max(new_confidence, 0.0), 100.0)` (bounded to [0.0, 100.0])
+- ✅ Accumulation formula: `services/correlation-engine/app/state_machine.py:76` - `new_confidence = current_confidence + new_signal_confidence` (incremental)
+- ✅ Saturation: `services/correlation-engine/app/state_machine.py:79` - Confidence capped at 100.0 (saturation)
+
+**Deterministic Accumulation:**
+- ✅ Accumulation is deterministic: `services/correlation-engine/app/state_machine.py:61-81` - `accumulate_confidence()` is pure function (deterministic)
+- ✅ Signal weights are deterministic: `services/correlation-engine/app/state_machine.py:24-33` - `SIGNAL_WEIGHTS` dictionary (deterministic, configurable via environment)
+- ✅ Signal confidence calculation: `services/correlation-engine/app/state_machine.py:42-58` - `calculate_signal_confidence()` is deterministic (based on evidence_type weight)
+- ⚠️ **ISSUE:** Accumulation order may differ if events are processed in different order due to non-deterministic `ingested_at` ordering
+
+**Effect of Replay or Reordering:**
+- ⚠️ **ISSUE:** Event ordering uses `ingested_at`: `services/correlation-engine/app/db.py:109` - `ORDER BY ingested_at ASC` (non-deterministic)
+- ⚠️ **ISSUE:** If events are replayed with different `ingested_at` values, processing order may differ, affecting confidence accumulation order
+- ✅ Accumulation formula is commutative: `services/correlation-engine/app/state_machine.py:76` - `new_confidence = current_confidence + new_signal_confidence` (addition is commutative)
+- ⚠️ **ISSUE:** However, if same events are processed in different order, final confidence may differ if state transitions occur at different points (state affects future accumulation)
+
+**Confidence Differs for Identical Evidence Sets:**
+- ⚠️ **ISSUE:** If events are processed in different order, confidence accumulation order may differ
+- ⚠️ **ISSUE:** If state transitions occur at different points due to different processing order, future confidence accumulation may differ (state affects accumulation)
+- ✅ Accumulation formula is deterministic: `services/correlation-engine/app/state_machine.py:61-81` - Same inputs → same output (deterministic)
+- ⚠️ **ISSUE:** But processing order affects when state transitions occur, which may affect future accumulation
+
+**Confidence Math Depends on Arrival Time:**
+- ❌ **CRITICAL FAILURE:** Event ordering depends on `ingested_at`: `services/correlation-engine/app/db.py:109` - `ORDER BY ingested_at ASC` (non-deterministic)
+- ⚠️ **ISSUE:** Processing order affects confidence accumulation order, which may affect state transitions, which may affect future accumulation
+- ✅ Confidence accumulation formula does not depend on time: `services/correlation-engine/app/state_machine.py:61-81` - Formula is time-independent
+- ❌ **CRITICAL FAILURE:** But processing order (which depends on `ingested_at`) affects accumulation order
+
+### Verdict: **FAIL**
+
+**Justification:**
+- Confidence accumulation math is bounded and deterministic (formula is correct)
+- **CRITICAL FAILURE:** Event ordering depends on `ingested_at` (non-deterministic), affecting processing order
+- **CRITICAL FAILURE:** Processing order affects confidence accumulation order, which may affect state transitions, which may affect future accumulation
+- **CRITICAL FAILURE:** Same evidence set may produce different confidence if processed in different order
+
+**FAIL Conditions (Met):**
+- Confidence differs for identical evidence sets — **CONFIRMED** (processing order affects accumulation)
+- Confidence math depends on arrival time — **CONFIRMED** (ordering depends on ingested_at)
+
+**Evidence Required:**
+- File paths: `services/correlation-engine/app/state_machine.py:61-81,24-33,42-58`, `services/correlation-engine/app/db.py:109,305-306`
+- Confidence accumulation: Formula, bounds, determinism
+- Ordering: `ORDER BY ingested_at ASC` (non-deterministic)
+
+---
+
+## 4. REPLAY & REPROCESSING BEHAVIOR
+
+### Evidence
+
+**Whether Reprocessing raw_events Produces Same Incidents:**
+- ⚠️ **ISSUE:** Event ordering uses `ingested_at`: `services/correlation-engine/app/db.py:109` - `ORDER BY ingested_at ASC` (non-deterministic)
+- ⚠️ **ISSUE:** If events are replayed with different `ingested_at` values, processing order may differ
+- ⚠️ **ISSUE:** Different processing order may affect deduplication (first event creates incident, subsequent events add evidence)
+- ⚠️ **ISSUE:** Different processing order may affect confidence accumulation order, potentially affecting state transitions
+- ✅ Idempotency check: `services/correlation-engine/app/main.py:112` - `check_event_processed(conn, event_id)` prevents duplicate processing
+- ⚠️ **ISSUE:** But if events are replayed with different `event_id` values (different UUIDs), idempotency check will not prevent reprocessing
+
+**Whether Non-Deterministic ingest_time Breaks Replayability:**
+- ❌ **CRITICAL FAILURE:** Event ordering depends on `ingested_at`: `services/correlation-engine/app/db.py:109` - `ORDER BY ingested_at ASC` (non-deterministic)
+- ❌ **CRITICAL FAILURE:** If events are replayed with different `ingested_at` values, processing order may differ, affecting incident creation and state transitions
+- ⚠️ **ISSUE:** Deduplication uses `observed_at` (deterministic), but processing order affects which events are processed first
+- ❌ **CRITICAL FAILURE:** Reprocessing same raw_events with different `ingested_at` values may produce different incidents or different state transitions
+
+**Reprocessing Produces Different Incidents or States:**
+- ❌ **CRITICAL FAILURE:** Event ordering depends on `ingested_at`: `services/correlation-engine/app/db.py:109` - `ORDER BY ingested_at ASC` (non-deterministic)
+- ❌ **CRITICAL FAILURE:** Different processing order may affect:
+  - Which events create new incidents vs. add evidence to existing incidents (deduplication depends on processing order if events arrive out of order)
+  - Confidence accumulation order (may affect state transitions)
+  - Final incident states (if state transitions occur at different points)
+
+### Verdict: **FAIL**
+
+**Justification:**
+- **CRITICAL FAILURE:** Event ordering depends on `ingested_at` (non-deterministic), breaking replayability
+- **CRITICAL FAILURE:** Reprocessing same raw_events with different `ingested_at` values may produce different incidents or different state transitions
+- **CRITICAL FAILURE:** Non-deterministic ingest_time breaks replayability
+
+**FAIL Conditions (Met):**
+- Reprocessing produces different incidents or states — **CONFIRMED** (ordering depends on ingested_at)
+- Non-deterministic ingest_time breaks replayability — **CONFIRMED** (ordering depends on ingested_at)
+
+**Evidence Required:**
+- File paths: `services/correlation-engine/app/db.py:109`, `services/correlation-engine/app/main.py:112`
+- Ordering: `ORDER BY ingested_at ASC` (non-deterministic)
+- Idempotency: `check_event_processed()` prevents duplicate processing
+
+---
+
+## 5. DETERMINISM GUARANTEES
+
+### Evidence
+
+**Same Evidence → Same Incident Graph:**
+- ⚠️ **ISSUE:** Event ordering depends on `ingested_at`: `services/correlation-engine/app/db.py:109` - `ORDER BY ingested_at ASC` (non-deterministic)
+- ⚠️ **ISSUE:** Different processing order may affect:
+  - Which events create new incidents vs. add evidence to existing incidents
+  - Confidence accumulation order
+  - State transitions
+- ❌ **CRITICAL FAILURE:** Same evidence set may produce different incident graph if processed in different order
+
+**Ordering Guarantees (or Lack Thereof):**
+- ❌ **CRITICAL FAILURE:** No ordering guarantees: `services/correlation-engine/app/db.py:109` - `ORDER BY ingested_at ASC` (non-deterministic)
+- ❌ **CRITICAL FAILURE:** Ordering depends on `ingested_at` (ingest_time), which is non-deterministic (from Validation File 06)
+- ⚠️ **ISSUE:** No explicit ordering guarantees documented (ordering is best-effort based on ingested_at)
+
+**Determinism Depends on database NOW(), ingest_time, or Ordering Side Effects:**
+- ❌ **CRITICAL FAILURE:** Event ordering depends on `ingested_at`: `services/correlation-engine/app/db.py:109` - `ORDER BY ingested_at ASC` (non-deterministic)
+- ⚠️ **ISSUE:** State transition timestamps use `NOW()`: `services/correlation-engine/app/db.py:343,354` - `NOW()` used for timestamps (non-deterministic)
+- ⚠️ **ISSUE:** Incident creation timestamps use `NOW()`: `services/correlation-engine/app/db.py:166,175` - `NOW()` used for timestamps (non-deterministic)
+- ❌ **CRITICAL FAILURE:** Determinism depends on `ingested_at` ordering (non-deterministic)
+
+### Verdict: **FAIL**
+
+**Justification:**
+- **CRITICAL FAILURE:** Same evidence set may produce different incident graph if processed in different order (ordering depends on ingested_at)
+- **CRITICAL FAILURE:** No ordering guarantees (ordering depends on non-deterministic ingested_at)
+- **CRITICAL FAILURE:** Determinism depends on ingest_time ordering (non-deterministic)
+
+**FAIL Conditions (Met):**
+- Same evidence → same incident graph — **NOT CONFIRMED** (ordering affects incident graph)
+- Determinism depends on ingest_time — **CONFIRMED** (ordering depends on ingested_at)
+
+**Evidence Required:**
+- File paths: `services/correlation-engine/app/db.py:109,166,175,343,354`
+- Ordering: `ORDER BY ingested_at ASC` (non-deterministic)
+- Timestamps: `NOW()` usage in incident creation and state transitions
+
+---
+
+## 6. FAIL-CLOSED & ERROR HANDLING
+
+### Evidence
+
+**Correlation Halts on Inconsistent Data:**
+- ✅ Duplicate incident creation check: `services/correlation-engine/app/db.py:143-152` - Checks if event already linked to incident, terminates on duplicate
+- ✅ Error handling: `services/correlation-engine/app/main.py:184-187` - Exception handling rolls back transaction and raises
+- ⚠️ **ISSUE:** Processing continues on error: `services/correlation-engine/app/main.py:260-272` - Exception handling logs error and continues with next event (not fail-closed)
+- ⚠️ **ISSUE:** Errors are logged but processing continues: `services/correlation-engine/app/main.py:269-272` - `events_failed += 1`, `continue` (silent degradation)
+
+**No Silent Drops or Partial Correlation:**
+- ⚠️ **ISSUE:** Silent degradation exists: `services/correlation-engine/app/main.py:260-272` - Exception handling logs error and continues (silent degradation)
+- ⚠️ **ISSUE:** Partial correlation is possible: If some events fail to process, correlation is partial (not all events processed)
+- ✅ Duplicate processing is prevented: `services/correlation-engine/app/main.py:112` - `check_event_processed()` prevents duplicate processing
 
 **Behavior on Missing Input Data:**
-- ✅ Missing input data causes error: `services/correlation-engine/app/main.py:102` - `event_id = event['event_id']` (KeyError if missing)
-- ✅ Missing input data causes exception: `services/correlation-engine/app/main.py:141-149` - Exception handling logs error and continues
-- ⚠️ **ISSUE:** Missing input data does NOT cause termination (exception is caught and processing continues)
+- ✅ Missing input data causes error: `services/correlation-engine/app/main.py:108` - `event_id = event['event_id']` (KeyError if missing)
+- ⚠️ **ISSUE:** Missing input data does NOT cause termination: `services/correlation-engine/app/main.py:260-272` - Exception handling logs error and continues
 
 **Behavior on Conflicting Signals:**
-- ⚠️ **ISSUE:** Conflicting signals are NOT handled:
-  - No contradiction detection exists
-  - No conflict resolution exists
-  - ⚠️ **ISSUE:** Conflicting signals are not detected or handled
-
-**Behavior on Partial Data Availability:**
-- ⚠️ **ISSUE:** Partial data availability is NOT handled:
-  - `services/correlation-engine/app/rules.py:44` - `component = event.get('component')` (returns None if missing)
-  - `services/correlation-engine/app/rules.py:48` - `if component == 'linux_agent':` (None != 'linux_agent', so no incident created)
-  - ⚠️ **ISSUE:** Partial data causes silent failure (no incident created, but no error logged)
-
-**Behavior on Engine Restart:**
-- ✅ Engine restart is idempotent: `services/correlation-engine/app/main.py:105-108` - `check_event_processed()` prevents duplicate processing
-- ✅ Engine restart does NOT duplicate incidents: `services/correlation-engine/app/db.py:140-149` - Duplicate incident creation attempt causes termination
-- ✅ Engine restart is safe: Idempotency check prevents duplicate incidents
-
-**Silent Degradation:**
-- ⚠️ **ISSUE:** Silent degradation is possible:
-  - `services/correlation-engine/app/main.py:141-149` - Exception handling logs error and continues (silent degradation)
-  - `services/correlation-engine/app/main.py:206-218` - Exception handling logs error and continues (silent degradation)
-  - ⚠️ **ISSUE:** Errors are logged but processing continues (silent degradation)
-
-**Best-Effort Conclusions:**
-- ⚠️ **ISSUE:** Best-effort conclusions are possible:
-  - `services/correlation-engine/app/rules.py:48` - `if component == 'linux_agent':` creates incident (best-effort, no contradiction required)
-  - No contradiction detection exists
-  - ⚠️ **ISSUE:** Incidents are created based on single condition (best-effort, not proven)
-
-**Incident State Corruption on Restart:**
-- ✅ No incident state corruption on restart: Idempotency check prevents duplicate incidents
-- ✅ Restart is safe: `services/correlation-engine/app/main.py:105-108` - `check_event_processed()` prevents duplicate processing
+- ✅ Contradiction detection: `services/correlation-engine/app/main.py:144` - `detect_contradiction(event, [])` detects contradictions
+- ✅ Contradiction handling: `services/correlation-engine/app/main.py:147-149` - `apply_contradiction_to_incident()` applies confidence decay
+- ⚠️ **ISSUE:** Contradiction detection is simplified: `services/correlation-engine/app/state_machine.py:208-242` - Simple contradiction detection (logic only, no comprehensive rules)
 
 ### Verdict: **PARTIAL**
 
 **Justification:**
-- Engine restart is idempotent (no duplicate incidents)
-- **ISSUE:** Missing input data does NOT cause termination (exception is caught and processing continues)
-- **ISSUE:** Conflicting signals are NOT handled (no contradiction detection exists)
-- **ISSUE:** Silent degradation is possible (errors are logged but processing continues)
+- Duplicate incident creation is prevented (fail-fast on duplicate)
+- Contradiction detection and handling exists (confidence decay on contradiction)
+- **ISSUE:** Processing continues on error (not fail-closed, silent degradation)
+- **ISSUE:** Partial correlation is possible (if some events fail to process)
+
+**PASS Conditions (Met):**
+- Correlation halts on inconsistent data — **PARTIAL** (duplicate creation halts, but other errors continue)
+
+**FAIL Conditions (Met):**
+- No silent drops or partial correlation — **NOT CONFIRMED** (silent degradation exists)
+
+**Evidence Required:**
+- File paths: `services/correlation-engine/app/db.py:143-152`, `services/correlation-engine/app/main.py:184-187,260-272,144,147-149`
+- Error handling: Exception handling, rollback, continue logic
+- Contradiction: Detection and handling logic
 
 ---
 
-## 8. NEGATIVE VALIDATION (MANDATORY)
+## CREDENTIAL TYPES VALIDATED
 
-### Evidence
-
-**Agent Alone Confirms an Incident:**
-- ✅ **PROVEN IMPOSSIBLE:** Agents cannot confirm incidents:
-  - Agents do NOT create incidents (correlation engine creates incidents)
-  - Agents do NOT modify incidents (correlation engine is sole authority)
-  - ✅ **VERIFIED:** Agents cannot confirm incidents (agents do not interact with incidents)
-
-**DPI Alone Confirms an Incident:**
-- ✅ **PROVEN IMPOSSIBLE:** DPI cannot confirm incidents:
-  - DPI does NOT create incidents (correlation engine creates incidents)
-  - DPI does NOT modify incidents (correlation engine is sole authority)
-  - ✅ **VERIFIED:** DPI cannot confirm incidents (DPI does not interact with incidents)
-
-**AI Marks Incident Confirmed:**
-- ✅ **PROVEN IMPOSSIBLE:** AI cannot mark incident Confirmed:
-  - `services/ai-core/README.md:39` - "NO incident modification: Does not create, update, or delete incidents"
-  - `services/ai-core/README.md:57` - "NO decision-making: Does not create incidents or modify incident state"
-  - ✅ **VERIFIED:** AI cannot mark incident Confirmed (AI does not modify incidents)
-
-**Policy Engine Escalates Without Correlation:**
-- ✅ **PROVEN IMPOSSIBLE:** Policy engine cannot escalate without correlation:
-  - `services/policy-engine/README.md:60` - "NO incident modification: Policy engine does NOT modify incident state"
-  - `services/policy-engine/README.md:154` - "NO incident modification: Policy engine does NOT modify incident state, stage, or confidence"
-  - ✅ **VERIFIED:** Policy engine cannot escalate (Policy engine does not modify incidents)
-
-### Verdict: **PASS**
-
-**Justification:**
-- Agents, DPI, AI, and Policy engine cannot create or modify incidents (correlation engine is sole authority)
-- All negative validation checks pass (no component can bypass correlation engine)
+### Database Credentials
+- **Type:** PostgreSQL user/password (`RANSOMEYE_DB_USER`/`RANSOMEYE_DB_PASSWORD`)
+- **Source:** Environment variable (required, no default)
+- **Validation:** ❌ **NOT VALIDATED** (validation file 05 covers database credentials)
+- **Usage:** Database connection for correlation operations
+- **Status:** ❌ **NOT VALIDATED** (outside scope of this validation)
 
 ---
 
-## 9. VERDICT & IMPACT
+## PASS CONDITIONS
 
-### Section-by-Section Verdicts
+### Section 1: Incident Identity & Deduplication
+- ✅ Incident identity is stable — **PASS**
+- ✅ Same logical entity maps to same incident — **PASS**
+- ❌ Incident identity does NOT depend on ingest_time — **FAIL**
 
-1. **Component Identity & Authority:** FAIL
-   - Correlation engine is clearly identified as sole creator of incidents
-   - No contradiction engine, confidence accumulator, or state machine found
+### Section 2: State Machine Correctness
+- ✅ Exact enforcement of SUSPICIOUS → PROBABLE → CONFIRMED — **PASS**
+- ✅ Forward-only transitions — **PASS**
+- ✅ No single-signal CONFIRMED paths — **PASS**
+- ⚠️ State transitions do NOT depend on timing artifacts — **PARTIAL**
 
-2. **Input Trust & Authentication:** PARTIAL
-   - Inputs come from Ingest only (via database)
-   - Events are NOT cryptographically authenticated
+### Section 3: Confidence Accumulation Math
+- ✅ Bounded confidence math — **PASS**
+- ✅ Deterministic accumulation — **PARTIAL** (formula is deterministic, but order affects result)
+- ❌ Confidence does NOT differ for identical evidence sets — **FAIL**
+- ❌ Confidence math does NOT depend on arrival time — **FAIL**
 
-3. **Contradiction Detection:** FAIL
-   - No contradiction detection found (no contradiction logic exists)
-   - Single-signal escalation is possible
+### Section 4: Replay & Reprocessing Behavior
+- ❌ Reprocessing produces same incidents — **FAIL**
+- ❌ Non-deterministic ingest_time does NOT break replayability — **FAIL**
 
-4. **Confidence Accumulation Model:** FAIL
-   - No confidence accumulation model found (confidence is constant, not accumulated)
-   - No thresholds found
+### Section 5: Determinism Guarantees
+- ❌ Same evidence → same incident graph — **FAIL**
+- ❌ Ordering guarantees exist — **FAIL**
 
-5. **State Machine Enforcement:** FAIL
-   - No state machine found (no state transitions exist)
-   - CLEAN state is skipped
-
-6. **Incident Materialization:** PARTIAL
-   - Incidents are created deterministically and data is properly persisted
-   - Duplicate incidents are possible
-
-7. **Fail-Closed & Consistency:** PARTIAL
-   - Engine restart is idempotent
-   - Silent degradation is possible
-
-8. **Negative Validation:** PASS
-   - Agents, DPI, AI, and Policy engine cannot create or modify incidents
-
-### Overall Verdict: **FAIL**
-
-**Justification:**
-- **CRITICAL FAILURE:** No contradiction detection found (no contradiction logic exists)
-- **CRITICAL FAILURE:** No confidence accumulation model found (confidence is constant, not accumulated)
-- **CRITICAL FAILURE:** No state machine found (no state transitions exist)
-- **CRITICAL FAILURE:** Single-signal escalation is possible (no contradiction required)
-- **ISSUE:** Events are NOT cryptographically authenticated
-- **ISSUE:** Duplicate incidents are possible
-- **ISSUE:** Silent degradation is possible
-- Correlation engine is sole authority for incident creation, but lacks contradiction detection, confidence accumulation, and state machine
-
-**Impact if Correlation Logic is Compromised:**
-- **CRITICAL:** If correlation logic is compromised, single-signal incidents can be created (no contradiction required)
-- **CRITICAL:** If correlation logic is compromised, incidents never progress beyond SUSPICIOUS (no state machine)
-- **CRITICAL:** If correlation logic is compromised, confidence never accumulates (no accumulation model)
-- **CRITICAL:** If correlation logic is compromised, RansomEye degenerates into isolated detectors (no correlation)
-- **HIGH:** If correlation logic is compromised, all incident decisions are untrustworthy
-- **HIGH:** If correlation logic is compromised, system cannot prove maliciousness through contradiction and accumulation
-
-**Trustworthiness of AI & Policy Layers if This Fails:**
-- ⚠️ **PARTIAL** - AI & Policy layers can be trusted IF correlation engine is working:
-  - ✅ If correlation engine creates incidents correctly, then AI & Policy layers receive valid incidents
-  - ❌ If correlation engine creates incidents without contradiction, then AI & Policy layers receive unproven incidents
-  - ❌ If correlation engine creates incidents without confidence accumulation, then AI & Policy layers receive low-confidence incidents
-  - ❌ If correlation engine creates incidents without state machine, then AI & Policy layers receive incidents stuck in SUSPICIOUS
-  - ⚠️ AI & Policy layers are trustworthy (they do not modify incidents), but correlation engine lacks contradiction detection, confidence accumulation, and state machine
-
-**Recommendations:**
-1. **CRITICAL:** Implement contradiction detection (host vs network, execution vs timing, persistence vs silence, deception confirmation)
-2. **CRITICAL:** Implement confidence accumulation model (weight definitions, accumulation logic, saturation behavior, thresholds)
-3. **CRITICAL:** Implement state machine (explicit state machine definition, allowed transitions, transition guards)
-4. **CRITICAL:** Require contradiction for incident creation (no single-signal escalation)
-5. **HIGH:** Implement incident deduplication (prevent duplicate incidents for same root cause)
-6. **HIGH:** Implement fail-closed behavior (terminate on critical failures, not silent degradation)
-7. **MEDIUM:** Implement cryptographic authentication for events (from previous validation)
+### Section 6: Fail-Closed & Error Handling
+- ⚠️ Correlation halts on inconsistent data — **PARTIAL**
+- ⚠️ No silent drops or partial correlation — **PARTIAL**
 
 ---
 
-**Validation Date:** 2025-01-13
-**Validator:** Lead Validator & Compliance Auditor
-**Next Step:** Validation Step 8 — AI Core (if applicable)
+## FAIL CONDITIONS
+
+### Section 1: Incident Identity & Deduplication
+- ❌ **CONFIRMED:** Incident identity depends on ingest_time — **Event ordering depends on ingested_at (non-deterministic)**
+
+### Section 2: State Machine Correctness
+- ❌ State transitions depend on timing artifacts — **PARTIAL** (timestamps use NOW(), but state logic is deterministic)
+
+### Section 3: Confidence Accumulation Math
+- ❌ **CONFIRMED:** Confidence differs for identical evidence sets — **Processing order affects accumulation**
+- ❌ **CONFIRMED:** Confidence math depends on arrival time — **Ordering depends on ingested_at**
+
+### Section 4: Replay & Reprocessing Behavior
+- ❌ **CONFIRMED:** Reprocessing produces different incidents or states — **Ordering depends on ingested_at**
+- ❌ **CONFIRMED:** Non-deterministic ingest_time breaks replayability — **Ordering depends on ingested_at**
+
+### Section 5: Determinism Guarantees
+- ❌ **CONFIRMED:** Same evidence → different incident graph — **Ordering affects incident graph**
+- ❌ **CONFIRMED:** Determinism depends on ingest_time — **Ordering depends on ingested_at**
+
+### Section 6: Fail-Closed & Error Handling
+- ❌ Silent drops or partial correlation exist — **CONFIRMED** (silent degradation exists)
+
+---
+
+## EVIDENCE REQUIRED
+
+### Incident Identity & Deduplication
+- File paths: `services/correlation-engine/app/main.py:169,135-137`, `services/correlation-engine/app/state_machine.py:166-190`, `services/correlation-engine/app/db.py:109,240-241`
+- Incident identity: UUID v4 generation, PRIMARY KEY constraint
+- Deduplication: Key generation, time window, lookup logic
+- Ordering: `ORDER BY ingested_at ASC` (non-deterministic)
+
+### State Machine Correctness
+- File paths: `services/correlation-engine/app/state_machine.py:16,106-126,129-163`, `services/correlation-engine/app/db.py:336-344,343,354`
+- State machine: Stage definition, transition guards, threshold enforcement
+- Timestamps: `NOW()` usage in state transitions
+
+### Confidence Accumulation Math
+- File paths: `services/correlation-engine/app/state_machine.py:61-81,24-33,42-58`, `services/correlation-engine/app/db.py:109,305-306`
+- Confidence accumulation: Formula, bounds, determinism
+- Ordering: `ORDER BY ingested_at ASC` (non-deterministic)
+
+### Replay & Reprocessing Behavior
+- File paths: `services/correlation-engine/app/db.py:109`, `services/correlation-engine/app/main.py:112`
+- Ordering: `ORDER BY ingested_at ASC` (non-deterministic)
+- Idempotency: `check_event_processed()` prevents duplicate processing
+
+### Determinism Guarantees
+- File paths: `services/correlation-engine/app/db.py:109,166,175,343,354`
+- Ordering: `ORDER BY ingested_at ASC` (non-deterministic)
+- Timestamps: `NOW()` usage in incident creation and state transitions
+
+### Fail-Closed & Error Handling
+- File paths: `services/correlation-engine/app/db.py:143-152`, `services/correlation-engine/app/main.py:184-187,260-272,144,147-149`
+- Error handling: Exception handling, rollback, continue logic
+- Contradiction: Detection and handling logic
+
+---
+
+## GA VERDICT
+
+### Overall: **FAIL**
+
+**Critical Blockers:**
+
+1. **FAIL:** Event ordering depends on `ingested_at` (non-deterministic)
+   - **Impact:** Processing order is non-deterministic, affecting incident creation, deduplication, confidence accumulation, and state transitions
+   - **Location:** `services/correlation-engine/app/db.py:109` — `ORDER BY ingested_at ASC`
+   - **Severity:** **CRITICAL** (violates determinism requirement)
+   - **Master Spec Violation:** Correlation engine must be deterministic, not dependent on non-deterministic ingest_time
+
+2. **FAIL:** Same evidence set may produce different incident graph if processed in different order
+   - **Impact:** Reprocessing same raw_events with different `ingested_at` values may produce different incidents or different state transitions
+   - **Location:** `services/correlation-engine/app/db.py:109` — `ORDER BY ingested_at ASC`
+   - **Severity:** **CRITICAL** (violates replay determinism requirement)
+   - **Master Spec Violation:** Reprocessing must produce same incidents
+
+3. **FAIL:** Confidence accumulation order depends on processing order (which depends on `ingested_at`)
+   - **Impact:** Same evidence set may produce different confidence if processed in different order
+   - **Location:** `services/correlation-engine/app/db.py:109` — `ORDER BY ingested_at ASC`
+   - **Severity:** **CRITICAL** (violates confidence determinism requirement)
+   - **Master Spec Violation:** Confidence accumulation must be deterministic
+
+4. **PARTIAL:** State transition timestamps use `NOW()` (non-deterministic)
+   - **Impact:** Timestamps are non-deterministic, affecting replay fidelity
+   - **Location:** `services/correlation-engine/app/db.py:343,354` — `NOW()` used for timestamps
+   - **Severity:** **HIGH** (affects replay determinism)
+   - **Master Spec Violation:** Timestamps should be deterministic for replay
+
+5. **PARTIAL:** Processing continues on error (not fail-closed)
+   - **Impact:** Silent degradation, partial correlation possible
+   - **Location:** `services/correlation-engine/app/main.py:260-272` — Exception handling continues processing
+   - **Severity:** **MEDIUM** (affects fail-closed behavior)
+   - **Master Spec Violation:** Correlation must halt on inconsistent data
+
+**Non-Blocking Issues:**
+
+1. State machine correctly enforces SUSPICIOUS → PROBABLE → CONFIRMED progression
+2. Forward-only transitions are enforced (no backward transitions)
+3. No single-signal CONFIRMED paths (single signal → SUSPICIOUS only)
+4. Confidence accumulation math is bounded and deterministic (formula is correct)
+5. Deduplication works within time window (uses observed_at, not ingested_at)
+6. Contradiction detection and handling exists (confidence decay on contradiction)
+
+**Strengths:**
+
+1. ✅ State machine correctly enforces state progression
+2. ✅ Forward-only transitions are enforced
+3. ✅ No single-signal CONFIRMED paths
+4. ✅ Confidence accumulation math is bounded
+5. ✅ Deduplication works (uses observed_at for time window)
+6. ✅ Contradiction detection and handling exists
+
+**Summary of Critical Blockers:**
+
+1. **CRITICAL:** Event ordering depends on `ingested_at` (non-deterministic) — breaks determinism, replayability, and confidence accumulation determinism
+2. **CRITICAL:** Same evidence set may produce different incident graph if processed in different order — breaks replay determinism
+3. **CRITICAL:** Confidence accumulation order depends on processing order — breaks confidence determinism
+4. **HIGH:** State transition timestamps use `NOW()` (non-deterministic) — affects replay fidelity
+5. **MEDIUM:** Processing continues on error (not fail-closed) — affects fail-closed behavior
+
+---
+
+**Validation Date:** 2025-01-13  
+**Validator:** Independent System Validator  
+**Next Step:** Validation Step 8 — AI Core / ML / SHAP  
+**GA Status:** **BLOCKED** (Critical failures in determinism and replayability)
+
+---
+
+## DOWNSTREAM IMPACT STATEMENT
+
+**Documentation Only:** This section documents downstream impact of correlation engine non-determinism on downstream validations.
+
+**Downstream Validations Impacted by Correlation Non-Determinism:**
+
+1. **AI Core / ML / SHAP (Validation Step 8):**
+   - AI Core reads incidents created by correlation engine
+   - Correlation engine produces non-deterministic incidents (due to non-deterministic ordering)
+   - AI Core validation (File 08) must NOT assume deterministic incident creation
+   - AI Core validation must NOT assume replay fidelity for incident data
+
+**Requirements for Downstream Validations:**
+
+- File 08 must NOT assume deterministic incident creation (incidents may differ on replay)
+- File 08 must NOT assume replay fidelity (same events may produce different incidents)
+- File 08 must validate AI/ML components based on actual behavior, not assumptions about correlation determinism
+- File 08 must explicitly document any dependencies on correlation determinism if they exist
