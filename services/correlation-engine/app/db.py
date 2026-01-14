@@ -163,22 +163,24 @@ def create_incident(conn, incident_id: str, machine_id: str, event: Dict[str, An
                 observed_at = parser.isoparse(observed_at)
             
             # Contract compliance: Insert into incidents table
+            # PHASE 2: Use deterministic timestamp from event (observed_at)
             cur.execute("""
                 INSERT INTO incidents (
                     incident_id, machine_id, current_stage, first_observed_at, last_observed_at,
                     stage_changed_at, total_evidence_count, confidence_score
                 )
-                VALUES (%s, %s, %s, %s, %s, NOW(), 1, %s)
-            """, (incident_id, machine_id, stage, observed_at, observed_at, confidence_score))
+                VALUES (%s, %s, %s, %s, %s, %s, 1, %s)
+            """, (incident_id, machine_id, stage, observed_at, observed_at, observed_at, confidence_score))
             
             # Contract compliance: Insert initial stage into incident_stages table
+            # PHASE 2: Use deterministic timestamp from event (observed_at)
             cur.execute("""
                 INSERT INTO incident_stages (
                     incident_id, from_stage, to_stage, transitioned_at,
                     evidence_count_at_transition, confidence_score_at_transition
                 )
-                VALUES (%s, NULL, %s, NOW(), 1, %s)
-            """, (incident_id, stage, confidence_score))
+                VALUES (%s, NULL, %s, %s, 1, %s)
+            """, (incident_id, stage, observed_at, confidence_score))
             
             # Contract compliance: Link triggering event in evidence table
             cur.execute("""
