@@ -54,7 +54,18 @@ async def get_metrics_endpoint() -> Dict[str, Any]:
     db_reachable = False
     try:
         # Import here to avoid circular dependencies
-        from services.ingest.app.main import get_db_connection, put_db_connection
+        import sys
+        import os
+        _current_file = os.path.abspath(__file__)
+        _project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(_current_file)))))
+        if _project_root not in sys.path:
+            sys.path.insert(0, _project_root)
+        
+        # Import from main module (same package)
+        import importlib
+        main_module = importlib.import_module('services.ingest.app.main')
+        get_db_connection = main_module.get_db_connection
+        put_db_connection = main_module.put_db_connection
         
         # Quick DB check with timeout (non-blocking)
         conn = None
@@ -77,8 +88,6 @@ async def get_metrics_endpoint() -> Dict[str, Any]:
     heartbeat_lag_sec = None
     if db_reachable:
         try:
-            from services.ingest.app.main import get_db_connection, put_db_connection
-            
             conn = None
             try:
                 conn = get_db_connection()
