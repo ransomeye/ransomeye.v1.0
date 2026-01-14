@@ -86,9 +86,10 @@ CREATE TABLE raw_events (
     -- NULL if not late arrival
     -- INTEGER sufficient for ~68 years of latency (unlikely)
     
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMPTZ NOT NULL,
+    -- PHASE 2: Deterministic timestamp - must be provided explicitly (use observed_at from envelope)
     -- Schema-level timestamp (immutable)
-    -- When event was inserted into database
+    -- When event was inserted into database (deterministic, from envelope)
     
     -- Constraints
     CONSTRAINT raw_events_sequence_non_negative CHECK (sequence >= 0),
@@ -135,8 +136,9 @@ CREATE TABLE event_validation_log (
     validation_status event_validation_status NOT NULL,
     -- Validation status (same enum as raw_events)
     
-    validation_timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    -- When validation occurred
+    validation_timestamp TIMESTAMPTZ NOT NULL,
+    -- PHASE 2: Deterministic timestamp - must be provided explicitly (use observed_at from envelope)
+    -- When validation occurred (deterministic, from envelope)
     
     error_code VARCHAR(255),
     -- Error code from failure semantics contract (NULL if validation passed)
