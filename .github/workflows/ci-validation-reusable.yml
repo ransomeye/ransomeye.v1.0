@@ -4,6 +4,10 @@ name: CI Validation - PHASE 6 (Reusable)
 # GA gating, validation execution, signing, and SBOM verification are FINAL.
 # Any modification requires Phase-6 re-certification.
 
+# PHASE 7 LOCKED
+# Reusable workflow is explicitly push/PR-suppressed.
+# Any trigger change requires Phase-7 re-certification.
+
 # PURE REUSABLE WORKFLOW
 # This workflow contains ONLY workflow_call trigger and validation logic.
 # It is called by:
@@ -19,6 +23,14 @@ on:
       ga_ready:
         description: "GA readiness flag"
         value: ${{ jobs.aggregate-ga-verdict.outputs.ga_ready }}
+
+  # HARD BLOCK: prevent GitHub from creating phantom runs
+  push:
+    branches-ignore:
+      - '**'
+  pull_request:
+    branches-ignore:
+      - '**'
 
 permissions:
   contents: read
