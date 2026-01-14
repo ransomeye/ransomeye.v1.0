@@ -402,6 +402,7 @@ def store_shap_explanation(conn, incident_id: str, model_version_id: str,
                 from datetime import datetime, timezone
                 computed_at = datetime.now(timezone.utc)
             
+            # PHASE 3: Store full SHAP explanation (for replay support)
             cur.execute("""
                 INSERT INTO shap_explanations (
                     event_id, model_version_id, shap_explanation_hash_sha256,
