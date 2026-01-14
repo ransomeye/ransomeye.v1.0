@@ -1,526 +1,571 @@
-# Validation Step 19 — System-Wide Architecture Consistency, Coupling & Production Readiness
+# Validation Step 19 — System Architecture & Production Readiness Meta-Validation
 
 **Component Identity:**
-- **Name:** Entire RansomEye System (Cross-Cutting Review)
-- **Primary References:**
-  - Master Architecture Spec: `10th_jan_promot/master.txt`
-  - Microservices & Repository Map: Project structure
-  - All Validation Reports: Steps 1–18
-- **Cross-Cutting Concerns:**
-  - Architectural layering
-  - Dependency direction
-  - Data flow consistency
-  - Trust boundary alignment
-  - Failure domain isolation
-  - Scalability assumptions
-  - Operational complexity
+- **Name:** System Architecture & Production Readiness Assessment
+- **Primary Paths:**
+  - All system components (services, agents, dashboards, reports)
+  - Failure handling and error paths
+  - Operator interfaces and warnings
+- **Entry Points:**
+  - System startup: All services start and continue operating
+  - Runtime operation: System processes events, creates incidents, generates reports
+  - Operator interfaces: Dashboards and reports present data to operators
 
-**Spec Reference:**
-- Validation Step 2: `validation/02-core-kernel-trust-root.md` - Core trust root
-- Validation Step 3: `validation/03-secure-bus-interservice-trust.md` - Inter-service trust
-- Validation Step 7: `validation/07-correlation-engine.md` - Correlation engine
-- Validation Step 16: `validation/16-end-to-end-threat-scenarios.md` - End-to-end flows
-- Validation Step 17: `validation/17-end-to-end-credential-chain.md` - Credential chain
-- Data Plane Hardening: `schemas/DATA_PLANE_HARDENING.md` - Database architecture
-
----
-
-## 1. ARCHITECTURAL LAYERING CONSISTENCY
-
-### Evidence
-
-**Intended Layering:**
-```
-Sensors (Agents / DPI)
-        ↓
-Secure Bus
-        ↓
-Ingest
-        ↓
-Intel DB
-        ↓
-Correlation Engine
-        ↓
-AI Core (Advisory)
-        ↓
-Policy Engine
-        ↓
-Agents
-```
-
-**Actual Data Flow:**
-- ✅ Agents → Ingest: `services/ingest/app/main.py:504` - HTTP POST endpoint (agents send to ingest)
-- ✅ Ingest → Database: `services/ingest/app/main.py:392-502` - `store_event()` writes to `raw_events` table
-- ✅ Database → Correlation: `services/correlation-engine/app/db.py:70-121` - `get_unprocessed_events()` reads from `raw_events` table
-- ✅ Correlation → Database: `services/correlation-engine/app/db.py:124-199` - `create_incident()` writes to `incidents` table
-- ✅ Database → AI Core: `services/ai-core/app/db.py:149-198` - `get_unresolved_incidents()` reads from `incidents` table
-- ✅ AI Core → Database: `services/ai-core/app/db.py:199-283` - `store_feature_vector()` writes to AI metadata tables
-- ✅ Database → Policy Engine: `services/policy-engine/app/db.py:36-62` - Reads from `incidents` table
-- ✅ Policy Engine → Agents: `services/policy-engine/app/signer.py:110-136` - Signs commands for agents
-
-**Upward Calls:**
-- ❌ **CRITICAL:** No secure bus exists: `validation/03-secure-bus-interservice-trust.md:24-45` - No explicit secure telemetry bus exists (HTTP POST and direct database access instead)
-- ⚠️ **ISSUE:** Services can start independently: `validation/02-core-kernel-trust-root.md:35-40` - All services have `if __name__ == "__main__"` blocks allowing standalone execution
-- ⚠️ **ISSUE:** Services bypass Core: Services can start independently, bypassing Core's trust root validation
-
-**Side-Channel Bypass:**
-- ❌ **CRITICAL:** UI can write to database: `services/ui/backend/main.py:251-300` - `query_view()` verifies view_name is a view, but no enforcement if view is missing
-- ⚠️ **ISSUE:** UI reads from views only: `services/ui/README.md:78-87` - UI reads from views only (enforced), but enforcement may be bypassed if views are missing
-
-**Layer Violations Hidden via Shared Libraries:**
-- ✅ Common libraries are shared: `common/` directory contains shared utilities
-- ⚠️ **ISSUE:** Common libraries may create hidden dependencies: `grep` found `from common` imports in all services (shared libraries create implicit coupling)
-
-### Verdict: **FAIL**
-
-**Justification:**
-- Intended layering exists (agents → ingest → correlation → AI → policy → agents)
-- ❌ **CRITICAL:** No secure bus exists (HTTP POST and direct database access instead)
-- ❌ **CRITICAL:** Services can start independently (bypassing Core's trust root validation)
-- ⚠️ **ISSUE:** Shared libraries create hidden dependencies (common/ directory creates implicit coupling)
+**Master Spec References:**
+- Validation Step 3: `validation/03-secure-bus-interservice-trust.md` - Inter-service trust (binding, GA verdict: **FAIL**)
+- Validation Step 4: `validation/04-ingest-normalization-db-write.md` - Ingest determinism (binding, GA verdict: **FAIL**)
+- Validation Step 7: `validation/07-correlation-engine.md` - Correlation determinism (binding, GA verdict: **FAIL**)
+- Validation Step 8: `validation/08-ai-core-ml-shap.md` - AI determinism (binding, GA verdict: **FAIL**)
+- Validation Step 13: `validation/13-installer-bootstrap-systemd.md` - Installer validation (binding, GA verdict: **FAIL**)
+- Validation Step 14: `validation/14-ui-api-access-control.md` - UI authentication (binding, GA verdict: **FAIL**)
+- Validation Step 16: `validation/16-end-to-end-threat-scenarios.md` - E2E validation validity (binding, GA verdict: **NOT VALID**)
+- Validation Step 17: `validation/17-end-to-end-credential-chain.md` - Credential chain (binding, GA verdict: **FAIL**)
+- Validation Step 18: `validation/18-reporting-dashboards-evidence.md` - Reporting/dashboards evidence (binding, GA verdict: **NOT VALID**)
 
 ---
 
-## 2. COUPLING & DEPENDENCY DIRECTION
+## PURPOSE
 
-### Evidence
+This meta-validation answers one question only:
 
-**One-Way Dependencies:**
-- ✅ Agents → Ingest: One-way (agents send to ingest, ingest does not call agents)
-- ✅ Ingest → Database: One-way (ingest writes to database, database does not call ingest)
-- ✅ Database → Correlation: One-way (correlation reads from database, database does not call correlation)
-- ✅ Correlation → Database: One-way (correlation writes to database, database does not call correlation)
-- ✅ Database → AI Core: One-way (AI Core reads from database, database does not call AI Core)
-- ✅ AI Core → Database: One-way (AI Core writes to database, database does not call AI Core)
-- ✅ Database → Policy Engine: One-way (Policy Engine reads from database, database does not call Policy Engine)
-- ✅ Policy Engine → Agents: One-way (Policy Engine signs commands for agents, agents do not call Policy Engine)
+**"Given the current failures, is RansomEye safe to deploy and operate without creating false confidence or silent security risk?"**
 
-**Circular Imports or Runtime Dependencies:**
-- ✅ No circular imports found: `grep` search found no circular import patterns
-- ⚠️ **ISSUE:** Shared database creates coupling: All services share same database (shared state creates coupling)
-- ⚠️ **ISSUE:** Shared common libraries create coupling: All services import from `common/` directory (shared libraries create coupling)
+This validation does NOT validate threat detection effectiveness. This validation determines whether the system can be safely deployed and operated given the documented failures in validation files 01-18.
 
-**Clear Ownership of Shared Libraries:**
-- ✅ Common libraries exist: `common/` directory contains shared utilities (`common/config/`, `common/security/`, `common/db/`, etc.)
-- ✅ Common libraries are utilities: `common/config/loader.py` - Configuration loader (utility, not business logic)
-- ⚠️ **ISSUE:** Common libraries may contain business logic: `common/` directory structure suggests utilities, but may contain business logic
-
-**Bidirectional Trust Between Services:**
-- ❌ **CRITICAL:** No service-to-service authentication: `validation/03-secure-bus-interservice-trust.md:24-45` - Services communicate without authentication (HTTP POST, direct database access)
-- ❌ **CRITICAL:** Implicit trust: Services assume database access implies authorization (no explicit trust boundaries)
-
-**"God" Modules in `common/`:**
-- ⚠️ **ISSUE:** Common libraries may be "god" modules: `common/config/loader.py` - Configuration loader used by all services (potential "god" module)
-- ⚠️ **ISSUE:** Common security may be "god" module: `common/security/secrets.py` - Secret validation used by all services (potential "god" module)
-
-### Verdict: **FAIL**
-
-**Justification:**
-- One-way dependencies exist (agents → ingest → correlation → AI → policy → agents)
-- No circular imports found
-- ❌ **CRITICAL:** No service-to-service authentication (services communicate without authentication)
-- ❌ **CRITICAL:** Implicit trust (services assume database access implies authorization)
-- ⚠️ **ISSUE:** Shared database creates coupling (all services share same database)
-- ⚠️ **ISSUE:** Shared common libraries create coupling (all services import from common/)
+This validation does NOT validate threat logic, correlation, or AI. This validation validates deployment safety and operational honesty.
 
 ---
 
-## 3. DATA FLOW & SOURCE-OF-TRUTH CONSISTENCY
+## MASTER SPEC REFERENCES
 
-### Evidence
-
-**Single Source of Truth for Telemetry:**
-- ✅ Telemetry source: `raw_events` table is single source of truth for telemetry
-- ✅ Agents write to raw_events: `schemas/DATA_PLANE_HARDENING.md:29-31` - Agents write to `raw_events` table only
-- ✅ DPI writes to raw_events: `schemas/DATA_PLANE_HARDENING.md:31` - DPI writes to `raw_events` table only
-- ✅ Ingest writes to raw_events: `schemas/DATA_PLANE_HARDENING.md:32` - Ingest writes to `raw_events` table only
-
-**Single Source of Truth for Incidents:**
-- ✅ Incidents source: `incidents` table is single source of truth for incidents
-- ✅ Correlation creates incidents: `services/correlation-engine/app/db.py:124-199` - `create_incident()` is the only function that creates incidents
-- ✅ No other component creates incidents: `validation/07-correlation-engine.md:64-65` - Only correlation engine creates incidents
-
-**Single Source of Truth for Confidence:**
-- ❌ **CRITICAL:** No confidence accumulation: `validation/07-correlation-engine.md:192-248` - Confidence is constant (0.3), not accumulated
-- ❌ **CRITICAL:** No single source of truth for confidence: Confidence is hardcoded, not computed from evidence
-
-**Single Source of Truth for Evidence:**
-- ✅ Evidence source: `evidence` table is single source of truth for evidence
-- ✅ Correlation creates evidence: `services/correlation-engine/app/db.py:175-182` - `create_incident()` links events to incidents in `evidence` table
-
-**No Duplicated State Machines:**
-- ❌ **CRITICAL:** No state machine exists: `validation/07-correlation-engine.md:257-298` - No state machine definition, no transition logic, no transition guards found
-- ❌ **CRITICAL:** State is hardcoded: `services/correlation-engine/app/rules.py:53` - `stage = 'SUSPICIOUS'` (constant, no state machine)
-
-**No Parallel Interpretations of the Same Data:**
-- ✅ Single interpretation: Correlation engine is sole interpreter of events (creates incidents)
-- ✅ AI does not interpret: `services/ai-core/README.md:39` - "NO incident modification: Does not create, update, or delete incidents"
-- ✅ Policy does not interpret: `services/policy-engine/README.md:60` - "NO incident modification: Policy engine does NOT modify incident state"
-
-**Conflicting Confidence Calculations:**
-- ❌ **CRITICAL:** No confidence calculation: `services/correlation-engine/app/rules.py:54` - `confidence_score = 0.3` (constant, not calculated)
-- ❌ **CRITICAL:** No confidence model: No confidence accumulation model found (confidence is constant, not accumulated)
-
-**Divergent Schemas for Same Concept:**
-- ✅ Consistent schemas: `schemas/` directory contains consistent schema definitions
-- ✅ Schema validation: `contracts/event-envelope.schema.json` - Event envelope schema is consistent
-
-### Verdict: **FAIL**
-
-**Justification:**
-- Single source of truth exists for telemetry, incidents, and evidence
-- ❌ **CRITICAL:** No confidence accumulation (confidence is constant, not accumulated)
-- ❌ **CRITICAL:** No state machine exists (state is hardcoded, no transitions)
-- ❌ **CRITICAL:** No confidence calculation (confidence is constant, not calculated)
+**Binding Validation Files (Treated as Authoritative):**
+- Validation Step 3: `validation/03-secure-bus-interservice-trust.md` - Inter-service trust (binding, GA verdict: **FAIL**)
+- Validation Step 4: `validation/04-ingest-normalization-db-write.md` - Ingest determinism (binding, GA verdict: **FAIL**)
+- Validation Step 7: `validation/07-correlation-engine.md` - Correlation determinism (binding, GA verdict: **FAIL**)
+- Validation Step 8: `validation/08-ai-core-ml-shap.md` - AI determinism (binding, GA verdict: **FAIL**)
+- Validation Step 13: `validation/13-installer-bootstrap-systemd.md` - Installer validation (binding, GA verdict: **FAIL**)
+- Validation Step 14: `validation/14-ui-api-access-control.md` - UI authentication (binding, GA verdict: **FAIL**)
+- Validation Step 16: `validation/16-end-to-end-threat-scenarios.md` - E2E validation validity (binding, GA verdict: **NOT VALID**)
+- Validation Step 17: `validation/17-end-to-end-credential-chain.md` - Credential chain (binding, GA verdict: **FAIL**)
+- Validation Step 18: `validation/18-reporting-dashboards-evidence.md` - Reporting/dashboards evidence (binding, GA verdict: **NOT VALID**)
 
 ---
 
-## 4. TRUST BOUNDARY ALIGNMENT
+## DEFINITION OF "PRODUCTION READINESS" VS "SECURITY READINESS"
 
-### Evidence
+**Production Readiness Definition:**
 
-**Credential Boundaries Align with Architectural Boundaries:**
-- ❌ **CRITICAL:** No credential boundaries: `validation/17-end-to-end-credential-chain.md:140-155` - All services use same DB user `ransomeye` (no credential scoping)
-- ❌ **CRITICAL:** No role separation: `validation/05-intel-db-layer.md:140-155` - All services use same DB user (no role separation)
-- ❌ **CRITICAL:** Shared credentials: All services share same `RANSOMEYE_DB_PASSWORD` (no credential boundaries)
+For a system to be production-ready, the following must be true:
 
-**No Component Has More Authority Than Intended:**
-- ❌ **CRITICAL:** Correlation engine has too much authority: `services/correlation-engine/app/rules.py:48` - Single agent signal creates incident (no correlation required)
-- ❌ **CRITICAL:** Single component decides alone: Correlation engine creates incidents from single signals (no multi-sensor correlation required)
+1. **Infrastructure Readiness** — System can run reliably (startup, shutdown, error handling)
+2. **Operational Honesty** — System clearly signals when guarantees are missing
+3. **Fail-Closed Behavior** — System stops or degrades safely when trust boundaries fail
+4. **Operator Safety** — Operators are not misled about system capabilities
+5. **Deployment Safety** — Deployment does not create false assurance or mask compromise
 
-**Trust Escalation Requires Explicit, Verifiable Transitions:**
-- ❌ **CRITICAL:** No trust escalation: No code found for trust escalation or verifiable transitions
-- ❌ **CRITICAL:** No explicit transitions: State machine does not exist (no transitions, no escalation)
+**Security Readiness Definition:**
 
-**Credential Reuse Across Layers:**
-- ❌ **CRITICAL:** Credential reuse: All services use same `RANSOMEYE_DB_PASSWORD` (credential reused across all layers)
-- ❌ **CRITICAL:** No layer separation: No credential separation between layers (all services share same credentials)
+For a system to be security-ready, the following must be true:
 
-**Implicit Trust Due to Deployment Proximity:**
-- ❌ **CRITICAL:** Implicit trust: `validation/03-secure-bus-interservice-trust.md:40-45` - Services communicate without authentication (implicit trust due to deployment proximity)
-- ❌ **CRITICAL:** "Because it's internal" trust: Services assume database access implies authorization (implicit trust assumption)
+1. **Trust Boundaries Enforced** — All trust boundaries are cryptographically enforced
+2. **Deterministic Processing** — All processing is deterministic and reproducible
+3. **Evidence-Grade Output** — All outputs are evidence-grade and legally admissible
+4. **Credential Isolation** — All credentials are scoped and isolated
+5. **Audit Trail Integrity** — All audit trails are complete and verifiable
 
-### Verdict: **FAIL**
+**A system can be production-ready as infrastructure but NOT security-ready as a security control.**
 
-**Justification:**
-- ❌ **CRITICAL:** No credential boundaries (all services use same credentials)
-- ❌ **CRITICAL:** No role separation (all services use same DB user)
-- ❌ **CRITICAL:** Credential reuse across layers (all services share same password)
-- ❌ **CRITICAL:** Implicit trust (services communicate without authentication)
-- ❌ **CRITICAL:** Single component decides alone (correlation engine creates incidents from single signals)
+**A system that continues operating when guarantees are missing is NOT production-ready (creates false confidence).**
 
 ---
 
-## 5. FAILURE DOMAIN ISOLATION
+## CURRENT PLATFORM STATE SUMMARY (FILES 01-18)
 
-### Evidence
+### Critical Failures (Binding)
 
-**Failure in One Component Does Not Corrupt Others:**
-- ✅ Database isolation: `schemas/DATA_PLANE_HARDENING.md:16-38` - Write/read ownership matrix prevents cross-module corruption
-- ✅ View-only access: `services/ui/backend/main.py:251-300` - UI reads from views only (cannot corrupt base tables)
-- ⚠️ **ISSUE:** Shared database creates coupling: All services share same database (failure in one service may affect others)
-- ⚠️ **ISSUE:** Database failure affects all: `schemas/DATA_PLANE_HARDENING.md:490-493` - Database connection failure affects all services
+**File 03 — Inter-Service Trust: FAIL**
+- No service-to-service authentication
+- Ingest does NOT verify agent signatures
+- No service identity verification
+- Plain HTTP used (no TLS)
+- No replay protection
 
-**Failure Does Not Cause Silent System-Wide Degradation:**
-- ⚠️ **ISSUE:** Silent degradation possible: `validation/07-correlation-engine.md:468-470` - Silent degradation is possible (no fail-closed behavior)
-- ⚠️ **ISSUE:** Partial data accepted: `validation/18-reporting-dashboards-evidence.md:7` - Reports may omit critical context silently (no completeness check)
+**File 04 — Ingest Determinism: FAIL**
+- `ingested_at` is NOT deterministic (uses `datetime.now()`)
+- SQL `NOW()` is NOT deterministic
 
-**Clear Blast-Radius Containment:**
-- ✅ Component failure isolation: `schemas/DATA_PLANE_HARDENING.md:500-513` - Component failures are isolated (normalization failure does not affect correlation)
-- ⚠️ **ISSUE:** Database failure affects all: Database connection failure affects all services (no blast-radius containment)
+**File 07 — Correlation Determinism: FAIL**
+- Event ordering depends on `ingested_at` (non-deterministic)
+- Same evidence set may produce different incident graph
+- Confidence accumulation order depends on processing order
 
-**One Service Failure Collapses System:**
-- ⚠️ **ISSUE:** Database failure collapses system: `schemas/DATA_PLANE_HARDENING.md:490-493` - Database connection failure affects all services
-- ⚠️ **ISSUE:** Core failure may collapse system: `core/runtime.py:491-542` - Core loads all components as modules (Core failure may collapse all components)
+**File 08 — AI Determinism: FAIL**
+- Outputs cannot be re-derived from stored evidence
+- Non-deterministic inputs break audit trails
 
-**Shared State Without Isolation:**
-- ❌ **CRITICAL:** Shared database state: All services share same database (shared state without isolation)
-- ❌ **CRITICAL:** Shared credentials: All services share same credentials (shared state without isolation)
-- ⚠️ **ISSUE:** Global variables: `grep` found `global db_pool` in services (shared state via global variables)
+**File 13 — Installer: FAIL**
+- Hardcoded weak credentials
+- Installer bypasses runtime validation
 
-**Retry Storms or Cascading Failures:**
-- ✅ No retry storms: `common/db/safety.py:280-344` - `execute_write_operation()` has no retries (fail-fast)
-- ⚠️ **ISSUE:** Cascading failures possible: Database connection failure may cascade to all services (no circuit breaker)
+**File 14 — UI/API Access Control: FAIL**
+- No authentication
+- No RBAC enforcement
 
-### Verdict: **FAIL**
+**File 16 — E2E Validation Validity: NOT VALID**
+- E2E threat scenario validation is NOT VALID
+- E2E validation cannot produce valid evidence
 
-**Justification:**
-- Database isolation exists (write/read ownership matrix)
-- ❌ **CRITICAL:** Shared database state (all services share same database, no isolation)
-- ❌ **CRITICAL:** Shared credentials (all services share same credentials, no isolation)
-- ⚠️ **ISSUE:** Database failure affects all (no blast-radius containment)
-- ⚠️ **ISSUE:** Silent degradation possible (no fail-closed behavior)
+**File 17 — Credential Chain: FAIL**
+- All credential types have critical failures
+- No credential scoping
+- No rotation/revocation
 
----
+**File 18 — Reporting/Dashboards Evidence: NOT VALID**
+- Dashboards are presentation-only (not evidence-grade)
+- Reports are signed presentation of unverifiable data (not evidence-grade)
 
-## 6. SCALABILITY & MULTI-TENANT READINESS
+### System Behavior When Guarantees Are Missing
 
-### Evidence
+**Ingest Service:**
+- ✅ Schema validation fails-closed: `services/ingest/app/main.py:571-602` - Returns HTTP 400 BAD REQUEST on schema validation failure
+- ✅ Hash integrity validation fails-closed: `services/ingest/app/main.py:604-630` - Returns HTTP 400 BAD REQUEST on hash mismatch
+- ❌ **CRITICAL:** Ingest accepts unsigned telemetry: `services/ingest/app/main.py:549-698` - No signature verification code found
+- ❌ **CRITICAL:** Ingest continues processing non-deterministic timestamps: `services/ingest/app/main.py:633` - `datetime.now(timezone.utc)` uses current time (non-deterministic)
+- ❌ **CRITICAL:** No warnings to operators about missing authentication
 
-**Horizontal Scaling:**
-- ⚠️ **ISSUE:** Single-instance assumptions: `core/runtime.py:491-542` - Core loads all components as modules (single-instance assumption)
-- ⚠️ **ISSUE:** Global state: `grep` found `global db_pool` in services (global state prevents horizontal scaling)
-- ⚠️ **ISSUE:** Shared database: All services share same database (shared state prevents horizontal scaling)
+**Correlation Engine:**
+- ❌ **CRITICAL:** Correlation continues processing non-deterministic events: `services/correlation-engine/app/db.py:109` - `ORDER BY ingested_at ASC` (non-deterministic ordering)
+- ❌ **CRITICAL:** Correlation continues processing even when determinism is broken: `services/correlation-engine/app/main.py:260-272` - Exception handling continues processing
+- ❌ **CRITICAL:** No warnings to operators about non-deterministic processing
 
-**Event Volume Growth:**
-- ✅ Partitioning strategy: `schemas/DATA_PLANE_HARDENING.md:100-105` - Monthly partitions for high-volume tables
-- ✅ Indexing strategy: `schemas/DATA_PLANE_HARDENING.md:108-149` - Write-optimized indexes (BRIN for time-range queries)
-- ✅ Connection pooling: `schemas/DATA_PLANE_HARDENING.md:300-304` - Connection pooling (100 connections per worker)
-- ⚠️ **ISSUE:** Single-instance correlation: `services/correlation-engine/app/main.py:151-237` - Correlation engine processes events sequentially (may not scale)
-
-**Large Enterprise Deployment:**
-- ⚠️ **ISSUE:** Hardcoded paths: `core/runtime.py:78-82` - Default paths (`/opt/ransomeye`, `/tmp/ransomeye/policy`) may not work in all deployments
-- ⚠️ **ISSUE:** Single-instance assumptions: Core loads all components as modules (single-instance assumption)
-- ⚠️ **ISSUE:** No multi-tenant support: No code found for multi-tenant deployment
-
-**Customer-Controlled Install Paths:**
-- ✅ Install paths configurable: `installer/core/install.sh:48-73` - Install root is configurable (user-specified)
-- ✅ Environment variables: `common/config/loader.py:61-86` - Configuration via environment variables (paths configurable)
-- ⚠️ **ISSUE:** Default paths hardcoded: `core/runtime.py:78-82` - Default paths may not work in all deployments
-
-**Hardcoded Paths:**
-- ⚠️ **ISSUE:** Default paths exist: `core/runtime.py:78-82` - Default paths (`/opt/ransomeye`, `/tmp/ransomeye/policy`) are hardcoded
-- ✅ Paths are overridable: `common/config/loader.py:61-86` - Default paths can be overridden via environment variables
-
-**Single-Instance Assumptions:**
-- ❌ **CRITICAL:** Single-instance correlation: `services/correlation-engine/app/main.py:151-237` - Correlation engine processes events sequentially (single-instance assumption)
-- ❌ **CRITICAL:** Single-instance Core: `core/runtime.py:491-542` - Core loads all components as modules (single-instance assumption)
-
-**Global Mutable State:**
-- ❌ **CRITICAL:** Global database pool: `grep` found `global db_pool` in services (global mutable state)
-- ❌ **CRITICAL:** Global signing key: `services/policy-engine/app/signer.py:24` - `_SIGNING_KEY` is global variable (global mutable state)
-
-### Verdict: **FAIL**
-
-**Justification:**
-- Partitioning and indexing strategies exist (support event volume growth)
-- ❌ **CRITICAL:** Single-instance assumptions (Core loads all components as modules, correlation processes sequentially)
-- ❌ **CRITICAL:** Global mutable state (global db_pool, global _SIGNING_KEY)
-- ⚠️ **ISSUE:** Hardcoded default paths (may not work in all deployments)
-- ⚠️ **ISSUE:** No multi-tenant support (no code found for multi-tenant deployment)
+**Dashboards/Reports:**
+- ❌ **CRITICAL:** Dashboards display data as if it were valid: `services/ui/backend/views.sql:12-25` - Displays incidents, timelines, confidence scores (no warnings about non-determinism)
+- ❌ **CRITICAL:** Reports claim "court-admissible" but depend on non-deterministic data: `signed-reporting/README.md:7` - Claims "court-admissible, regulator-verifiable reports" but depends on non-deterministic incidents
+- ❌ **CRITICAL:** No warnings to operators about missing guarantees
 
 ---
 
-## 7. OPERATIONAL COMPLEXITY & SUPPORTABILITY
+## ARCHITECTURAL SAFETY ANALYSIS
 
-### Evidence
+### 1. Architectural Honesty
 
-**Observability of Each Component:**
-- ✅ Structured logging: `common/logging/logger.py` - Structured logging with component identification
-- ✅ Audit ledger: `audit-ledger/README.md` - Audit ledger for all operations
-- ⚠️ **ISSUE:** Logging may be insufficient: No centralized log aggregation found (logs may be scattered)
+**Does the System Clearly Signal When Guarantees Are Missing?**
 
-**Debuggability Without Unsafe Access:**
-- ✅ Read-only views: `services/ui/backend/views.sql:1-134` - Read-only views for debugging
-- ✅ Read-only UI: `services/ui/README.md:34-50` - UI is read-only (safe for debugging)
-- ⚠️ **ISSUE:** No debug mode: No code found for safe debug mode (may require unsafe access)
+**Ingest Service:**
+- ❌ **CRITICAL:** Ingest does NOT signal when authentication is missing: `services/ingest/app/main.py:549-698` - No signature verification, no warnings, no operator notifications
+- ❌ **CRITICAL:** Ingest does NOT signal when determinism is broken: `services/ingest/app/main.py:633` - Uses `datetime.now()` (non-deterministic), no warnings
+- ❌ **CRITICAL:** Ingest continues operating as if valid: `services/ingest/app/main.py:549-698` - Accepts and processes events without signaling missing guarantees
 
-**Upgrade & Rollback Feasibility:**
-- ⚠️ **ISSUE:** No upgrade mechanism: No code found for upgrade or rollback
-- ⚠️ **ISSUE:** Schema changes: Schema changes may require manual migration (no automated upgrade)
+**Correlation Engine:**
+- ❌ **CRITICAL:** Correlation does NOT signal when determinism is broken: `services/correlation-engine/app/db.py:109` - Uses `ORDER BY ingested_at ASC` (non-deterministic), no warnings
+- ❌ **CRITICAL:** Correlation continues operating as if valid: `services/correlation-engine/app/main.py:96-290` - Processes events and creates incidents without signaling missing guarantees
 
-**Reasonable Operational Burden for Customers:**
-- ✅ Installer exists: `installer/core/install.sh` - Installer automates installation
-- ✅ Systemd services: `installer/core/ransomeye-core.service` - Systemd service for Core
-- ⚠️ **ISSUE:** Manual configuration: Many configuration steps are manual (database setup, credential configuration)
-- ⚠️ **ISSUE:** Operational complexity: Multiple services, shared database, manual configuration (high operational burden)
+**Dashboards/Reports:**
+- ❌ **CRITICAL:** Dashboards do NOT signal when guarantees are missing: `services/ui/backend/views.sql:12-25` - Displays incidents, timelines, confidence scores without warnings about non-determinism
+- ❌ **CRITICAL:** Reports do NOT signal when guarantees are missing: `signed-reporting/README.md:7` - Claims "court-admissible" without warnings about non-deterministic upstream data
+- ❌ **CRITICAL:** Dashboards/reports continue operating as if valid: No warnings, no operator notifications about missing guarantees
 
-**Black-Box Components:**
-- ⚠️ **ISSUE:** Correlation engine is black-box: `services/correlation-engine/app/rules.py:16-59` - Only ONE rule exists (minimal, but may be black-box)
-- ⚠️ **ISSUE:** AI Core may be black-box: `services/ai-core/app/main.py:95-395` - AI processing may be black-box (ML model inference)
+**Or Does It Continue Operating as If Valid?**
 
-**Manual Fixes Required in Production:**
-- ⚠️ **ISSUE:** Manual fixes may be required: No automated recovery mechanisms found (manual fixes may be required)
-- ⚠️ **ISSUE:** Dead letter queue: `schemas/DATA_PLANE_HARDENING.md:677-686` - Dead letter queue requires manual review
+**Binding Evidence:**
+- ❌ **CRITICAL:** System continues operating when authentication is missing: `validation/03-secure-bus-interservice-trust.md:151` - "Ingest service does NOT verify agent signatures" (system continues processing)
+- ❌ **CRITICAL:** System continues operating when determinism is broken: `validation/04-ingest-normalization-db-write.md:185` - "`ingested_at` is NOT deterministic" (system continues processing)
+- ❌ **CRITICAL:** System continues operating when trust boundaries are broken: `validation/03-secure-bus-interservice-trust.md:485` - "No service-to-service authentication exists" (system continues processing)
+- ❌ **CRITICAL:** System continues operating when evidence is not valid: `validation/18-reporting-dashboards-evidence.md` - "Dashboards are presentation-only" (system continues displaying data)
 
-**Unsafe Debug Modes:**
-- ⚠️ **ISSUE:** No debug mode found: No code found for safe debug mode (may require unsafe access)
-- ⚠️ **ISSUE:** Fallback paths: `services/correlation-engine/app/db.py:57-65` - Fallback paths may allow unsafe access
-
-### Verdict: **PARTIAL**
+**Verdict: FAIL**
 
 **Justification:**
-- Observability exists (structured logging, audit ledger)
-- Read-only views for debugging
-- ⚠️ **ISSUE:** No upgrade mechanism (no code found for upgrade or rollback)
-- ⚠️ **ISSUE:** High operational burden (multiple services, shared database, manual configuration)
-- ⚠️ **ISSUE:** Manual fixes may be required (no automated recovery mechanisms)
+- **CRITICAL:** System does NOT clearly signal when guarantees are missing (no warnings, no operator notifications)
+- **CRITICAL:** System continues operating as if valid (processes events, creates incidents, displays data without signaling missing guarantees)
+- **CRITICAL:** Architectural honesty is broken (system presents itself as valid when guarantees are missing)
 
 ---
 
-## 8. SPEC ADHERENCE & PHILOSOPHY CHECK
+### 2. Fail-Closed vs Fail-Misleading
 
-### Evidence
+**When Trust Boundaries Fail, Does the System Stop, Degrade Safely, or Continue Silently?**
 
-**Behavior > Signature:**
-- ❌ **CRITICAL:** Signature verification missing: `validation/03-secure-bus-interservice-trust.md:61-67` - Ingest does NOT verify cryptographic signatures (signature verification missing)
-- ❌ **CRITICAL:** Behavior not verified: Events are accepted without signature verification (behavior not verified)
+**Ingest Service:**
+- ✅ Schema validation fails-closed: `services/ingest/app/main.py:571-602` - Returns HTTP 400 BAD REQUEST on schema validation failure
+- ✅ Hash integrity validation fails-closed: `services/ingest/app/main.py:604-630` - Returns HTTP 400 BAD REQUEST on hash mismatch
+- ❌ **CRITICAL:** Authentication failure does NOT fail-closed: `services/ingest/app/main.py:549-698` - No signature verification, accepts unsigned telemetry (continues silently)
+- ❌ **CRITICAL:** Determinism failure does NOT fail-closed: `services/ingest/app/main.py:633` - Uses `datetime.now()` (non-deterministic), continues processing (continues silently)
 
-**Correlation > Isolation:**
-- ❌ **CRITICAL:** Correlation > Isolation violated: `validation/16-end-to-end-threat-scenarios.md:1039-1055` - Single sensor can confirm attack (isolation, not correlation)
-- ❌ **CRITICAL:** No correlation required: `services/correlation-engine/app/rules.py:48` - Single agent signal creates incident (no correlation required)
+**Correlation Engine:**
+- ❌ **CRITICAL:** Determinism failure does NOT fail-closed: `services/correlation-engine/app/db.py:109` - Uses `ORDER BY ingested_at ASC` (non-deterministic), continues processing (continues silently)
+- ❌ **CRITICAL:** Processing continues on error: `services/correlation-engine/app/main.py:260-272` - Exception handling continues processing (not fail-closed)
 
-**No Single Module Decides Alone:**
-- ❌ **CRITICAL:** Single module decides alone: `services/correlation-engine/app/rules.py:48` - Correlation engine creates incidents from single signals (single module decides alone)
-- ❌ **CRITICAL:** No multi-sensor correlation: No code found for multi-sensor correlation (single module decides alone)
+**Dashboards/Reports:**
+- ❌ **CRITICAL:** Missing guarantees do NOT fail-closed: `services/ui/backend/views.sql:12-25` - Displays data without warnings (continues silently)
+- ❌ **CRITICAL:** Reports continue generating when guarantees are missing: `signed-reporting/api/reporting_api.py:161-176` - Generates reports from non-deterministic data (continues silently)
 
-**Fail-Closed Everywhere:**
-- ⚠️ **ISSUE:** Fail-closed inconsistent: `validation/17-end-to-end-credential-chain.md:600-889` - Installer allows weak defaults (fail-closed violated)
-- ⚠️ **ISSUE:** Silent degradation: `validation/07-correlation-engine.md:468-470` - Silent degradation is possible (fail-closed violated)
+**Binding Evidence:**
+- ❌ **CRITICAL:** System continues silently when authentication is missing: `validation/03-secure-bus-interservice-trust.md:151` - "Ingest service does NOT verify agent signatures" (system continues processing)
+- ❌ **CRITICAL:** System continues silently when determinism is broken: `validation/04-ingest-normalization-db-write.md:185` - "`ingested_at` is NOT deterministic" (system continues processing)
+- ❌ **CRITICAL:** System continues silently when trust boundaries are broken: `validation/03-secure-bus-interservice-trust.md:485` - "No service-to-service authentication exists" (system continues processing)
 
-**Any Single Component Acting as Final Authority:**
-- ❌ **CRITICAL:** Correlation engine is final authority: `services/correlation-engine/app/rules.py:48` - Correlation engine creates incidents from single signals (final authority)
-- ❌ **CRITICAL:** No multi-sensor verification: No code found for multi-sensor verification (single component is final authority)
-
-**Heuristic Shortcuts Bypassing Architecture:**
-- ❌ **CRITICAL:** Single-signal escalation: `services/correlation-engine/app/rules.py:48` - Single agent signal creates incident (heuristic shortcut)
-- ❌ **CRITICAL:** No correlation required: No code found for multi-sensor correlation (heuristic shortcut)
-
-**Convenience Over Correctness:**
-- ❌ **CRITICAL:** Weak defaults for convenience: `installer/core/install.sh:289-290` - Weak defaults (`"gagan"` password) for convenience
-- ❌ **CRITICAL:** Placeholder implementations: `signed-reporting/engine/render_engine.py:98-100` - PDF is text representation (placeholder for convenience)
-
-### Verdict: **FAIL**
+**Verdict: FAIL**
 
 **Justification:**
-- ❌ **CRITICAL:** Behavior > Signature violated (signature verification missing)
-- ❌ **CRITICAL:** Correlation > Isolation violated (single sensor can confirm attack)
-- ❌ **CRITICAL:** Single module decides alone (correlation engine creates incidents from single signals)
-- ❌ **CRITICAL:** Fail-closed inconsistent (installer allows weak defaults, silent degradation possible)
-- ❌ **CRITICAL:** Heuristic shortcuts (single-signal escalation, no correlation required)
-- ❌ **CRITICAL:** Convenience over correctness (weak defaults, placeholder implementations)
+- **CRITICAL:** System continues silently when trust boundaries fail (authentication missing, determinism broken, trust boundaries broken)
+- **CRITICAL:** System does NOT stop or degrade safely (continues processing, creating incidents, displaying data)
+- **CRITICAL:** Fail-closed behavior is broken (system fails-misleading, not fail-closed)
 
 ---
 
-## 9. NEGATIVE VALIDATION (MANDATORY)
+### 3. Operator Safety
 
-### Evidence
+**Could an Operator Reasonably Believe Incidents Are Real, Alerts Are Accurate, Reports Are Admissible When They Are Not?**
 
-**System Behaves Differently Than Documented Architecture:**
-- ❌ **CRITICAL:** No secure bus: `validation/03-secure-bus-interservice-trust.md:24-45` - Documentation may mention secure bus, but implementation uses HTTP POST and direct database access
-- ❌ **CRITICAL:** Services can start independently: `validation/02-core-kernel-trust-root.md:35-40` - Documentation says Core coordinates, but services can start independently
+**Incidents:**
+- ❌ **CRITICAL:** Operators could believe incidents are real: `services/ui/backend/views.sql:12-25` - Displays incidents with `incident_id`, `stage`, `confidence` (no warnings about non-determinism)
+- ❌ **CRITICAL:** Operators could believe incidents are stable: `services/ui/backend/views.sql:14` - Displays `incident_id` (no warnings that same evidence → different incidents on replay)
+- ❌ **CRITICAL:** Operators could believe confidence scores are accurate: `services/ui/backend/views.sql:17` - Displays `confidence_score AS confidence` (no warnings that confidence is non-deterministic)
+- ❌ **CRITICAL:** Operators could believe timelines are accurate: `services/ui/backend/views.sql:39` - Displays `transitioned_at` (no warnings that timelines are non-deterministic)
 
-**Hidden Control Planes Exist:**
-- ✅ **VERIFIED:** No hidden control planes: No code found for hidden control planes
-- ✅ **VERIFIED:** All control is explicit: Core runtime, services, agents are all explicit
+**Alerts:**
+- ❌ **CRITICAL:** Operators could believe alerts are accurate: `services/ui/backend/views.sql:12-25` - Displays incidents as if they were accurate (no warnings about unauthenticated telemetry)
+- ❌ **CRITICAL:** Operators could believe alerts are from authentic sources: `services/ui/backend/views.sql:12-25` - Displays incidents without warnings about spoofable component identity
 
-**Production Install Deviates from Validated Design:**
-- ❌ **CRITICAL:** Installer allows weak defaults: `validation/17-end-to-end-credential-chain.md:600-889` - Installer hardcodes weak defaults (`"gagan"` password) that bypass runtime validation
-- ❌ **CRITICAL:** Production install may be insecure: Installer allows weak credentials (production install may be insecure)
+**Reports:**
+- ❌ **CRITICAL:** Operators could believe reports are admissible: `signed-reporting/README.md:7` - Claims "court-admissible, regulator-verifiable reports" (no warnings about non-deterministic upstream data)
+- ❌ **CRITICAL:** Operators could believe reports are deterministic: `signed-reporting/README.md:116` - Claims "**Deterministic**: Same inputs → same outputs (reproducible)" (no warnings that inputs are non-deterministic)
+- ❌ **CRITICAL:** Operators could believe reports are verifiable: `signed-reporting/README.md:114` - Claims "**Verifiable**: Offline verification without RansomEye system" (no warnings that underlying data is non-deterministic)
 
-**Validation Reports Contradict Actual Runtime Behavior:**
-- ❌ **CRITICAL:** Validation reports contradict runtime: `validation/16-end-to-end-threat-scenarios.md:1039-1055` - Validation reports show "Correlation > Isolation" is violated (contradicts documented architecture)
-- ❌ **CRITICAL:** Validation reports show failures: All validation reports show critical failures (contradicts production readiness claims)
+**Binding Evidence:**
+- ❌ **CRITICAL:** Dashboards display non-deterministic data as if it were stable: `validation/18-reporting-dashboards-evidence.md` - "Dashboards may mislead operators (displays non-deterministic data as if it were stable)"
+- ❌ **CRITICAL:** Reports claim evidence-grade guarantees: `validation/18-reporting-dashboards-evidence.md` - "Reports claim 'court-admissible' but depend on non-deterministic upstream components"
+- ❌ **CRITICAL:** Operators could be misled: `validation/18-reporting-dashboards-evidence.md` - "Dashboards imply guarantees that do not exist"
 
-### Verdict: **FAIL**
+**Verdict: FAIL**
 
 **Justification:**
-- ❌ **CRITICAL:** System behaves differently (no secure bus, services can start independently)
-- ✅ **VERIFIED:** No hidden control planes (all control is explicit)
-- ❌ **CRITICAL:** Production install deviates (installer allows weak defaults)
-- ❌ **CRITICAL:** Validation reports contradict runtime (all reports show critical failures)
+- **CRITICAL:** Operators could reasonably believe incidents are real (dashboards display incidents without warnings)
+- **CRITICAL:** Operators could reasonably believe alerts are accurate (dashboards display incidents without warnings about unauthenticated telemetry)
+- **CRITICAL:** Operators could reasonably believe reports are admissible (reports claim "court-admissible" without warnings)
+- **CRITICAL:** Operator safety is broken (operators are misled about system capabilities)
 
 ---
 
-## FINAL SYSTEM VERDICT
+### 4. Deployment Risk
 
-### Architecture Verdict: **FAIL**
+**Could Deploying This System Create False Assurance, Mask Active Compromise, or Mislead Auditors or SOCs?**
 
-**Justification:**
-- **CRITICAL:** Architectural layering violated (no secure bus, services can start independently)
-- **CRITICAL:** Coupling violations (shared database, shared credentials, implicit trust)
-- **CRITICAL:** Data flow violations (no confidence accumulation, no state machine)
-- **CRITICAL:** Trust boundary violations (no credential boundaries, no role separation)
-- **CRITICAL:** Failure domain violations (shared state, no isolation)
-- **CRITICAL:** Scalability violations (single-instance assumptions, global mutable state)
-- **CRITICAL:** Spec adherence violations (Correlation > Isolation violated, single module decides alone)
+**False Assurance:**
+- ❌ **CRITICAL:** Deployment could create false assurance: `services/ui/backend/views.sql:12-25` - Displays incidents, timelines, confidence scores (operators may believe system is working correctly)
+- ❌ **CRITICAL:** Reports could create false assurance: `signed-reporting/README.md:7` - Claims "court-admissible, regulator-verifiable reports" (operators may believe reports are evidence-grade)
+- ❌ **CRITICAL:** Dashboards could create false assurance: `services/ui/backend/views.sql:12-25` - Displays data as if it were valid (operators may believe system is producing valid evidence)
 
-### Top 5 Systemic Risks
+**Mask Active Compromise:**
+- ❌ **CRITICAL:** Deployment could mask active compromise: `validation/03-secure-bus-interservice-trust.md:151` - "Ingest service does NOT verify agent signatures" (spoofed telemetry could mask compromise)
+- ❌ **CRITICAL:** Deployment could mask active compromise: `validation/03-secure-bus-interservice-trust.md:197` - "Component field can be spoofed" (component identity spoofing could mask compromise)
+- ❌ **CRITICAL:** Deployment could mask active compromise: `validation/17-end-to-end-credential-chain.md` - "No credential scoping" (shared credentials could mask compromise)
 
-1. **No Cross-Domain Correlation (ALL SCENARIOS):**
-   - **Evidence:** `validation/16-end-to-end-threat-scenarios.md:1004-1007` - Agent events and DPI events are never linked
-   - **Impact:** Single-sensor confirmation is possible. "Correlation > Isolation" principle is violated.
-   - **Severity:** CRITICAL
+**Mislead Auditors or SOCs:**
+- ❌ **CRITICAL:** Deployment could mislead auditors: `validation/18-reporting-dashboards-evidence.md` - "Reports claim 'court-admissible' but depend on non-deterministic upstream components" (auditors may believe reports are evidence-grade)
+- ❌ **CRITICAL:** Deployment could mislead SOCs: `services/ui/backend/views.sql:12-25` - Displays incidents without warnings (SOCs may believe incidents are valid)
+- ❌ **CRITICAL:** Deployment could mislead regulators: `signed-reporting/README.md:7` - Claims "regulator-verifiable reports" (regulators may believe reports are verifiable)
 
-2. **No Service-to-Service Authentication:**
-   - **Evidence:** `validation/03-secure-bus-interservice-trust.md:24-45` - No explicit secure telemetry bus exists
-   - **Impact:** Services communicate without authentication. Any component can masquerade as another.
-   - **Severity:** CRITICAL
+**Binding Evidence:**
+- ❌ **CRITICAL:** System creates false assurance: `validation/18-reporting-dashboards-evidence.md` - "Dashboards may mislead operators (displays non-deterministic data as if it were stable)"
+- ❌ **CRITICAL:** System could mask compromise: `validation/03-secure-bus-interservice-trust.md:197` - "Component field can be spoofed" (spoofing could mask compromise)
+- ❌ **CRITICAL:** System could mislead auditors: `validation/18-reporting-dashboards-evidence.md` - "Reports imply guarantees that do not exist"
 
-3. **No Credential Boundaries:**
-   - **Evidence:** `validation/17-end-to-end-credential-chain.md:140-155` - All services use same DB user and password
-   - **Impact:** Single compromised credential grants full database access to all services.
-   - **Severity:** CRITICAL
-
-4. **Single-Instance Assumptions:**
-   - **Evidence:** `core/runtime.py:491-542` - Core loads all components as modules (single-instance assumption)
-   - **Impact:** System cannot scale horizontally. Global mutable state prevents multi-instance deployment.
-   - **Severity:** HIGH
-
-5. **No State Machine or Confidence Accumulation:**
-   - **Evidence:** `validation/07-correlation-engine.md:192-248` - No confidence accumulation, no state machine
-   - **Impact:** Incidents never progress beyond SUSPICIOUS. Confidence never accumulates.
-   - **Severity:** CRITICAL
-
-### Non-Negotiable Blockers for Production
-
-1. **CRITICAL:** Implement cross-domain correlation (Agent ↔ DPI linkage, host ↔ network correlation, identity binding)
-2. **CRITICAL:** Implement service-to-service authentication (secure bus or authenticated HTTP)
-3. **CRITICAL:** Implement credential scoping (separate DB users per service, role separation)
-4. **CRITICAL:** Implement confidence accumulation (weight definitions, accumulation logic, saturation behavior, thresholds)
-5. **CRITICAL:** Implement state machine (CLEAN → SUSPICIOUS → PROBABLE → CONFIRMED with transition guards)
-6. **CRITICAL:** Remove weak defaults from installer (require strong credentials at installation)
-7. **CRITICAL:** Enforce "Correlation > Isolation" principle (require multi-sensor correlation, no single-sensor confirmation)
-8. **HIGH:** Remove single-instance assumptions (enable horizontal scaling)
-9. **HIGH:** Remove global mutable state (enable multi-instance deployment)
-10. **HIGH:** Implement fail-closed behavior (terminate on critical failures, not silent degradation)
-
-### Areas Safe to Defer
-
-1. **MEDIUM:** Multi-tenant support (can be deferred if single-tenant deployment is acceptable)
-2. **MEDIUM:** Automated upgrade mechanism (can be deferred if manual upgrade is acceptable)
-3. **MEDIUM:** Centralized log aggregation (can be deferred if distributed logs are acceptable)
-4. **MEDIUM:** Advanced observability (can be deferred if basic logging is sufficient)
-
-### Whether RansomEye is Architecturally Production-Ready
-
-**Verdict: ❌ FAIL**
+**Verdict: FAIL**
 
 **Justification:**
-- **CRITICAL:** RansomEye is NOT architecturally production-ready:
-  - No cross-domain correlation (single-sensor confirmation possible)
-  - No service-to-service authentication (services communicate without authentication)
-  - No credential boundaries (all services share same credentials)
-  - No confidence accumulation (confidence is constant, not accumulated)
-  - No state machine (incidents never progress beyond SUSPICIOUS)
-  - Single-instance assumptions (cannot scale horizontally)
-  - Global mutable state (prevents multi-instance deployment)
-  - "Correlation > Isolation" principle violated (single module decides alone)
-  - Fail-closed inconsistent (installer allows weak defaults, silent degradation possible)
-- **CRITICAL:** Production readiness claims are NOT valid:
-  - No end-to-end threat scenario detection (only generic rule)
-  - No cross-domain correlation (agent events and DPI events never linked)
-  - No confidence accumulation (confidence is constant)
-  - No state machine transitions (incidents stuck in SUSPICIOUS)
-  - No credential scoping (all services share same credentials)
-  - No service-to-service authentication (implicit trust)
-  - Single-instance assumptions (cannot scale)
-  - Global mutable state (prevents multi-instance deployment)
+- **CRITICAL:** Deployment could create false assurance (dashboards/reports present data as if valid)
+- **CRITICAL:** Deployment could mask active compromise (unauthenticated telemetry, spoofable identity, shared credentials)
+- **CRITICAL:** Deployment could mislead auditors or SOCs (reports claim evidence-grade guarantees, dashboards display data without warnings)
+- **CRITICAL:** Deployment risk is high (system creates false confidence, masks compromise, misleads operators)
 
-**Recommendations:**
-1. **CRITICAL:** Implement cross-domain correlation (Agent ↔ DPI linkage, host ↔ network correlation)
-2. **CRITICAL:** Implement service-to-service authentication (secure bus or authenticated HTTP)
-3. **CRITICAL:** Implement credential scoping (separate DB users per service)
-4. **CRITICAL:** Implement confidence accumulation (weight definitions, accumulation logic, thresholds)
-5. **CRITICAL:** Implement state machine (CLEAN → SUSPICIOUS → PROBABLE → CONFIRMED)
-6. **CRITICAL:** Remove weak defaults from installer (require strong credentials)
-7. **CRITICAL:** Enforce "Correlation > Isolation" principle (require multi-sensor correlation)
-8. **HIGH:** Remove single-instance assumptions (enable horizontal scaling)
-9. **HIGH:** Remove global mutable state (enable multi-instance deployment)
-10. **HIGH:** Implement fail-closed behavior (terminate on critical failures)
+---
+
+### 5. Production Readiness Definition
+
+**Is the System Production-Ready as Infrastructure, but Not as Security Control, or Not Production-Ready at All?**
+
+**Infrastructure Readiness:**
+- ✅ System can start: All services have startup logic
+- ✅ System can shutdown: `common/shutdown/handler.py` - Graceful shutdown handlers exist
+- ✅ System handles errors: `services/ingest/app/main.py:571-602` - Error handling exists (schema validation, hash integrity)
+- ⚠️ **ISSUE:** System continues operating when guarantees are missing (not fail-closed for missing guarantees)
+
+**Security Readiness:**
+- ❌ **CRITICAL:** System is NOT security-ready: `validation/03-secure-bus-interservice-trust.md` - Inter-service trust (GA verdict: **FAIL**)
+- ❌ **CRITICAL:** System is NOT security-ready: `validation/04-ingest-normalization-db-write.md` - Ingest determinism (GA verdict: **FAIL**)
+- ❌ **CRITICAL:** System is NOT security-ready: `validation/07-correlation-engine.md` - Correlation determinism (GA verdict: **FAIL**)
+- ❌ **CRITICAL:** System is NOT security-ready: `validation/18-reporting-dashboards-evidence.md` - Reporting/dashboards evidence (GA verdict: **NOT VALID**)
+
+**Operational Honesty:**
+- ❌ **CRITICAL:** System is NOT operationally honest: System does NOT signal when guarantees are missing
+- ❌ **CRITICAL:** System is NOT operationally honest: System continues operating as if valid
+- ❌ **CRITICAL:** System is NOT operationally honest: System misleads operators about capabilities
+
+**Verdict: NOT PRODUCTION-READY**
+
+**Justification:**
+- System can start and shutdown (infrastructure readiness: PARTIAL)
+- **CRITICAL:** System is NOT security-ready (all security validations FAIL or NOT VALID)
+- **CRITICAL:** System is NOT operationally honest (does not signal when guarantees are missing, continues operating as if valid)
+- **CRITICAL:** System is NOT production-ready (creates false confidence, masks compromise, misleads operators)
+- **CRITICAL:** System is NOT safe to deploy (deployment risk is high)
+
+---
+
+## FAIL-CLOSED VS FAIL-MISLEADING ANALYSIS
+
+### Fail-Closed Behavior (When It Exists)
+
+**Schema Validation:**
+- ✅ Schema validation fails-closed: `services/ingest/app/main.py:571-602` - Returns HTTP 400 BAD REQUEST on schema validation failure
+- ✅ Invalid events are rejected: `services/ingest/app/main.py:599-602` - Raises HTTPException with error code
+
+**Hash Integrity Validation:**
+- ✅ Hash integrity validation fails-closed: `services/ingest/app/main.py:604-630` - Returns HTTP 400 BAD REQUEST on hash mismatch
+- ✅ Invalid events are rejected: `services/ingest/app/main.py:627-630` - Raises HTTPException with error code
+
+**Duplicate Detection:**
+- ✅ Duplicate detection fails-closed: `services/ingest/app/main.py:677-692` - Returns HTTP 409 CONFLICT on duplicate event
+- ✅ Duplicate events are rejected: `services/ingest/app/main.py:689-692` - Raises HTTPException with error code
+
+### Fail-Misleading Behavior (When Guarantees Are Missing)
+
+**Authentication Missing:**
+- ❌ **CRITICAL:** Authentication failure does NOT fail-closed: `services/ingest/app/main.py:549-698` - No signature verification, accepts unsigned telemetry (continues silently)
+- ❌ **CRITICAL:** System continues processing when authentication is missing: `validation/03-secure-bus-interservice-trust.md:151` - "Ingest service does NOT verify agent signatures" (system continues processing)
+
+**Determinism Broken:**
+- ❌ **CRITICAL:** Determinism failure does NOT fail-closed: `services/ingest/app/main.py:633` - Uses `datetime.now()` (non-deterministic), continues processing (continues silently)
+- ❌ **CRITICAL:** System continues processing when determinism is broken: `validation/04-ingest-normalization-db-write.md:185` - "`ingested_at` is NOT deterministic" (system continues processing)
+
+**Trust Boundaries Broken:**
+- ❌ **CRITICAL:** Trust boundary failure does NOT fail-closed: `validation/03-secure-bus-interservice-trust.md:485` - "No service-to-service authentication exists" (system continues processing)
+- ❌ **CRITICAL:** System continues processing when trust boundaries are broken: System processes events, creates incidents, displays data without signaling missing guarantees
+
+**Verdict: FAIL**
+
+**Justification:**
+- **CRITICAL:** System fails-misleading, not fail-closed (continues operating when guarantees are missing)
+- **CRITICAL:** System does NOT stop or degrade safely (continues processing, creating incidents, displaying data)
+- **CRITICAL:** Fail-closed behavior is broken (system fails-misleading for missing guarantees)
+
+---
+
+## OPERATOR RISK & HUMAN FACTORS
+
+### Operator Risk Analysis
+
+**Could Operators Be Misled About System Capabilities?**
+
+**Incidents:**
+- ❌ **CRITICAL:** Operators could believe incidents are real: `services/ui/backend/views.sql:12-25` - Displays incidents with `incident_id`, `stage`, `confidence` (no warnings about non-determinism)
+- ❌ **CRITICAL:** Operators could believe incidents are stable: `services/ui/backend/views.sql:14` - Displays `incident_id` (no warnings that same evidence → different incidents on replay)
+- ❌ **CRITICAL:** Operators could believe confidence scores are accurate: `services/ui/backend/views.sql:17` - Displays `confidence_score AS confidence` (no warnings that confidence is non-deterministic)
+
+**Alerts:**
+- ❌ **CRITICAL:** Operators could believe alerts are accurate: `services/ui/backend/views.sql:12-25` - Displays incidents as if they were accurate (no warnings about unauthenticated telemetry)
+- ❌ **CRITICAL:** Operators could believe alerts are from authentic sources: `services/ui/backend/views.sql:12-25` - Displays incidents without warnings about spoofable component identity
+
+**Reports:**
+- ❌ **CRITICAL:** Operators could believe reports are admissible: `signed-reporting/README.md:7` - Claims "court-admissible, regulator-verifiable reports" (no warnings about non-deterministic upstream data)
+- ❌ **CRITICAL:** Operators could believe reports are deterministic: `signed-reporting/README.md:116` - Claims "**Deterministic**: Same inputs → same outputs (reproducible)" (no warnings that inputs are non-deterministic)
+
+**Binding Evidence:**
+- ❌ **CRITICAL:** Dashboards may mislead operators: `validation/18-reporting-dashboards-evidence.md` - "Dashboards may mislead operators (displays non-deterministic data as if it were stable)"
+- ❌ **CRITICAL:** Reports may mislead operators: `validation/18-reporting-dashboards-evidence.md` - "Reports may mislead operators (claims evidence-grade guarantees, but depends on non-deterministic upstream components)"
+- ❌ **CRITICAL:** Operators could be misled: `validation/18-reporting-dashboards-evidence.md` - "Dashboards imply guarantees that do not exist"
+
+**Verdict: FAIL**
+
+**Justification:**
+- **CRITICAL:** Operators could be misled about incidents (dashboards display incidents without warnings)
+- **CRITICAL:** Operators could be misled about alerts (dashboards display incidents without warnings about unauthenticated telemetry)
+- **CRITICAL:** Operators could be misled about reports (reports claim evidence-grade guarantees without warnings)
+- **CRITICAL:** Operator risk is high (operators are misled about system capabilities)
+
+---
+
+## DEPLOYMENT RISK ANALYSIS
+
+### Deployment Risk Assessment
+
+**Could Deploying This System Create False Assurance?**
+
+**False Assurance:**
+- ❌ **CRITICAL:** Deployment could create false assurance: `services/ui/backend/views.sql:12-25` - Displays incidents, timelines, confidence scores (operators may believe system is working correctly)
+- ❌ **CRITICAL:** Reports could create false assurance: `signed-reporting/README.md:7` - Claims "court-admissible, regulator-verifiable reports" (operators may believe reports are evidence-grade)
+- ❌ **CRITICAL:** Dashboards could create false assurance: `services/ui/backend/views.sql:12-25` - Displays data as if it were valid (operators may believe system is producing valid evidence)
+
+**Could Deploying This System Mask Active Compromise?**
+
+**Mask Active Compromise:**
+- ❌ **CRITICAL:** Deployment could mask active compromise: `validation/03-secure-bus-interservice-trust.md:151` - "Ingest service does NOT verify agent signatures" (spoofed telemetry could mask compromise)
+- ❌ **CRITICAL:** Deployment could mask active compromise: `validation/03-secure-bus-interservice-trust.md:197` - "Component field can be spoofed" (component identity spoofing could mask compromise)
+- ❌ **CRITICAL:** Deployment could mask active compromise: `validation/17-end-to-end-credential-chain.md` - "No credential scoping" (shared credentials could mask compromise)
+
+**Could Deploying This System Mislead Auditors or SOCs?**
+
+**Mislead Auditors or SOCs:**
+- ❌ **CRITICAL:** Deployment could mislead auditors: `validation/18-reporting-dashboards-evidence.md` - "Reports claim 'court-admissible' but depend on non-deterministic upstream components" (auditors may believe reports are evidence-grade)
+- ❌ **CRITICAL:** Deployment could mislead SOCs: `services/ui/backend/views.sql:12-25` - Displays incidents without warnings (SOCs may believe incidents are valid)
+- ❌ **CRITICAL:** Deployment could mislead regulators: `signed-reporting/README.md:7` - Claims "regulator-verifiable reports" (regulators may believe reports are verifiable)
+
+**Verdict: FAIL**
+
+**Justification:**
+- **CRITICAL:** Deployment could create false assurance (dashboards/reports present data as if valid)
+- **CRITICAL:** Deployment could mask active compromise (unauthenticated telemetry, spoofable identity, shared credentials)
+- **CRITICAL:** Deployment could mislead auditors or SOCs (reports claim evidence-grade guarantees, dashboards display data without warnings)
+- **CRITICAL:** Deployment risk is high (system creates false confidence, masks compromise, misleads operators)
+
+---
+
+## WHAT IS EXPLICITLY NOT ASSUMED
+
+- **NOT ASSUMED:** That threat detection works (it is validated as non-deterministic)
+- **NOT ASSUMED:** That alerts are accurate (they are validated as non-deterministic)
+- **NOT ASSUMED:** That reports are evidence (they are validated as presentation-only)
+- **NOT ASSUMED:** That system signals when guarantees are missing (it is validated as not signaling)
+- **NOT ASSUMED:** That system fails-closed when guarantees are missing (it is validated as failing-misleading)
+- **NOT ASSUMED:** That operators are not misled (they are validated as misled)
+- **NOT ASSUMED:** That deployment is safe (it is validated as unsafe)
+
+---
+
+## EVIDENCE REQUIRED
+
+For each validation area:
+- File and line numbers from binding validation files (01-18)
+- Explicit citation of upstream failures
+- Explicit citation of fail-misleading behavior
+- Explicit citation of operator risk
+- Explicit citation of deployment risk
+
+---
+
+## GA VERDICT
+
+### Section-by-Section Verdicts
+
+1. **Architectural Honesty:** FAIL
+   - System does NOT clearly signal when guarantees are missing (no warnings, no operator notifications)
+   - System continues operating as if valid (processes events, creates incidents, displays data without signaling missing guarantees)
+   - Architectural honesty is broken (system presents itself as valid when guarantees are missing)
+
+2. **Fail-Closed vs Fail-Misleading:** FAIL
+   - System continues silently when trust boundaries fail (authentication missing, determinism broken, trust boundaries broken)
+   - System does NOT stop or degrade safely (continues processing, creating incidents, displaying data)
+   - Fail-closed behavior is broken (system fails-misleading, not fail-closed)
+
+3. **Operator Safety:** FAIL
+   - Operators could reasonably believe incidents are real (dashboards display incidents without warnings)
+   - Operators could reasonably believe alerts are accurate (dashboards display incidents without warnings about unauthenticated telemetry)
+   - Operators could reasonably believe reports are admissible (reports claim "court-admissible" without warnings)
+   - Operator safety is broken (operators are misled about system capabilities)
+
+4. **Deployment Risk:** FAIL
+   - Deployment could create false assurance (dashboards/reports present data as if valid)
+   - Deployment could mask active compromise (unauthenticated telemetry, spoofable identity, shared credentials)
+   - Deployment could mislead auditors or SOCs (reports claim evidence-grade guarantees, dashboards display data without warnings)
+   - Deployment risk is high (system creates false confidence, masks compromise, misleads operators)
+
+5. **Production Readiness Definition:** NOT PRODUCTION-READY
+   - System can start and shutdown (infrastructure readiness: PARTIAL)
+   - System is NOT security-ready (all security validations FAIL or NOT VALID)
+   - System is NOT operationally honest (does not signal when guarantees are missing, continues operating as if valid)
+   - System is NOT production-ready (creates false confidence, masks compromise, misleads operators)
+   - System is NOT safe to deploy (deployment risk is high)
+
+### Overall Verdict: **NOT SAFE TO DEPLOY**
+
+**Justification:**
+- **CRITICAL:** All 5 validation areas are FAIL or NOT PRODUCTION-READY
+- **CRITICAL:** Architectural honesty is broken (system does not signal when guarantees are missing)
+- **CRITICAL:** Fail-closed behavior is broken (system fails-misleading, not fail-closed)
+- **CRITICAL:** Operator safety is broken (operators are misled about system capabilities)
+- **CRITICAL:** Deployment risk is high (system creates false confidence, masks compromise, misleads operators)
+- **CRITICAL:** System is NOT production-ready (creates false confidence, masks compromise, misleads operators)
+
+**Explicit Statement:** RansomEye is **NOT SAFE TO DEPLOY** given the current failures. The system creates false confidence, masks active compromise, and misleads operators, auditors, and SOCs. The system continues operating when guarantees are missing, fails-misleading (not fail-closed), and does not signal when guarantees are missing.
+
+**Reasons System Is NOT SAFE TO DEPLOY:**
+
+1. **System Does Not Signal When Guarantees Are Missing:**
+   - No warnings when authentication is missing (`validation/03-secure-bus-interservice-trust.md:151`)
+   - No warnings when determinism is broken (`validation/04-ingest-normalization-db-write.md:185`)
+   - No warnings when trust boundaries are broken (`validation/03-secure-bus-interservice-trust.md:485`)
+   - System continues operating as if valid
+
+2. **System Fails-Misleading, Not Fail-Closed:**
+   - System continues processing when authentication is missing (accepts unsigned telemetry)
+   - System continues processing when determinism is broken (uses non-deterministic timestamps)
+   - System continues processing when trust boundaries are broken (no service-to-service authentication)
+   - System does NOT stop or degrade safely
+
+3. **System Misleads Operators:**
+   - Dashboards display incidents without warnings about non-determinism
+   - Reports claim "court-admissible" without warnings about non-deterministic upstream data
+   - Operators could believe incidents are real, alerts are accurate, reports are admissible
+
+4. **System Creates False Assurance:**
+   - Dashboards/reports present data as if valid
+   - Reports claim evidence-grade guarantees without warnings
+   - Operators may believe system is working correctly
+
+5. **System Masks Active Compromise:**
+   - Unauthenticated telemetry (spoofed telemetry could mask compromise)
+   - Spoofable component identity (component identity spoofing could mask compromise)
+   - Shared credentials (shared credentials could mask compromise)
+
+6. **System Misleads Auditors or SOCs:**
+   - Reports claim "court-admissible" but depend on non-deterministic upstream components
+   - Dashboards display incidents without warnings
+   - Regulators may believe reports are verifiable
+
+---
+
+## UPSTREAM IMPACT STATEMENT
+
+**Binding Results from Validation Files 01-18:**
+- Validation Step 3 (`validation/03-secure-bus-interservice-trust.md`): Inter-service trust (binding, GA verdict: **FAIL**)
+- Validation Step 4 (`validation/04-ingest-normalization-db-write.md`): Ingest determinism (binding, GA verdict: **FAIL**)
+- Validation Step 7 (`validation/07-correlation-engine.md`): Correlation determinism (binding, GA verdict: **FAIL**)
+- Validation Step 8 (`validation/08-ai-core-ml-shap.md`): AI determinism (binding, GA verdict: **FAIL**)
+- Validation Step 13 (`validation/13-installer-bootstrap-systemd.md`): Installer validation (binding, GA verdict: **FAIL**)
+- Validation Step 14 (`validation/14-ui-api-access-control.md`): UI authentication (binding, GA verdict: **FAIL**)
+- Validation Step 16 (`validation/16-end-to-end-threat-scenarios.md`): E2E validation validity (binding, GA verdict: **NOT VALID**)
+- Validation Step 17 (`validation/17-end-to-end-credential-chain.md`): Credential chain (binding, GA verdict: **FAIL**)
+- Validation Step 18 (`validation/18-reporting-dashboards-evidence.md`): Reporting/dashboards evidence (binding, GA verdict: **NOT VALID**)
+
+**Upstream Failures Make System Unsafe to Deploy:**
+- If authentication is missing (File 03: FAIL), system creates false assurance and masks compromise
+- If determinism is broken (File 04, 07, 08: FAIL), system misleads operators about system capabilities
+- If trust boundaries are broken (File 03: FAIL), system masks active compromise
+- If reports are not valid (File 18: NOT VALID), system misleads auditors and SOCs
+- If E2E validation is not valid (File 16: NOT VALID), system cannot produce valid evidence
+
+---
+
+## DOWNSTREAM IMPACT STATEMENT
+
+**Downstream Dependencies:**
+- Operators depend on system for incident visibility (downstream dependency)
+- SOCs depend on system for threat detection (downstream dependency)
+- Auditors depend on system for audit trails (downstream dependency)
+- Regulators depend on system for compliance reporting (downstream dependency)
+
+**System Unsafe to Deploy Impact:**
+- If system is not safe to deploy, operators may make decisions based on false confidence
+- If system is not safe to deploy, SOCs may miss active compromise
+- If system is not safe to deploy, auditors may rely on invalid evidence
+- If system is not safe to deploy, regulators may be misled about compliance
 
 ---
 
 **Validation Date:** 2025-01-13
 **Validator:** Lead Validator & Compliance Auditor
-**Next Step:** Validation complete (all 19 steps completed)
+**GA Verdict:** **NOT SAFE TO DEPLOY**
+
+**Explicit Statement:** RansomEye is **NOT SAFE TO DEPLOY** given the current failures. The system creates false confidence, masks active compromise, and misleads operators, auditors, and SOCs. The system continues operating when guarantees are missing, fails-misleading (not fail-closed), and does not signal when guarantees are missing. The system should NOT be deployed until architectural honesty, fail-closed behavior, operator safety, and deployment risk are addressed.
