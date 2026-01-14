@@ -73,16 +73,28 @@ function App() {
                       margin: '5px 0',
                       backgroundColor: selectedIncident === incident.incident_id ? '#e0e0e0' : '#f5f5f5',
                       cursor: 'pointer',
-                      borderRadius: '4px'
+                      borderRadius: '4px',
+                      borderLeft: incident.has_contradiction ? '4px solid #ff6b6b' : '4px solid transparent'
                     }}
                   >
                     <strong>{incident.incident_id.substring(0, 8)}...</strong>
                     <br />
                     Machine: {incident.machine_id}
                     <br />
-                    Stage: {incident.stage} | Confidence: {incident.confidence}
+                    {/* PHASE 5: Separate confidence from certainty */}
+                    <span>Stage: <strong>{incident.stage}</strong></span>
+                    <br />
+                    <span>Confidence: {incident.confidence}%</span>
+                    {incident.certainty_state && (
+                      <span style={{ marginLeft: '10px', color: incident.certainty_state === 'CONFIRMED' ? '#28a745' : '#ffc107' }}>
+                        ({incident.certainty_state})
+                      </span>
+                    )}
                     <br />
                     Evidence: {incident.total_evidence_count}
+                    {incident.has_contradiction && (
+                      <span style={{ color: '#ff6b6b', marginLeft: '10px' }}>⚠️ Contradiction</span>
+                    )}
                   </li>
                 ))}
               </ul>
