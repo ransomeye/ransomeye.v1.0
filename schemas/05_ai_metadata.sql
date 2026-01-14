@@ -59,7 +59,7 @@ CREATE TABLE ai_model_versions (
     -- PHASE 3: External storage path where model is persisted
     -- NULL if model is not stored externally
     -- TEXT for unlimited length (paths can be long)
-    -- NOTE: This is a reference, not the actual model
+    -- NOTE: Full model is stored at this path (for replay)
     
     deployed_at TIMESTAMPTZ NOT NULL,
     -- PHASE 3: Deterministic timestamp - must be provided explicitly
