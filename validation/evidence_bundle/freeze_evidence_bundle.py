@@ -9,7 +9,6 @@ import os
 import sys
 import json
 import hashlib
-import base64
 import socket
 import subprocess
 from datetime import datetime, timezone
