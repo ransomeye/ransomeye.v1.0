@@ -55,8 +55,13 @@ def get_db_connection():
         from common.shutdown import ExitCode, exit_fatal
         exit_fatal(error_msg, ExitCode.STARTUP_ERROR)
     
-    # v1.0 GA: Use gagan/gagan (Phase A.2 reverted)
-    db_user = os.getenv("RANSOMEYE_DB_USER", "gagan")
+    # PHASE 1: Per-service database user (required, no defaults)
+    db_user = os.getenv("RANSOMEYE_DB_USER")
+    if not db_user:
+        error_msg = "RANSOMEYE_DB_USER is required (PHASE 1: per-service user required, no defaults)"
+        print(f"FATAL: {error_msg}", file=sys.stderr)
+        from common.shutdown import ExitCode, exit_fatal
+        exit_fatal(error_msg, ExitCode.STARTUP_ERROR)
     
     conn = create_write_connection(
         host=os.getenv("RANSOMEYE_DB_HOST", "localhost"),
