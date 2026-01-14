@@ -803,7 +803,7 @@ async def ingest_event(request: Request):
                         event_id, validation_status, validation_timestamp,
                         error_code, error_message
                     )
-                    VALUES (%s, %s, NOW(), %s, %s)
+                    VALUES (%s, %s, %s, %s, %s)
                 """, (event_id, VALIDATION_STATUS_DUPLICATE_REJECTED, "DUPLICATE_EVENT_ID", "Event ID already exists"))
             conn.commit()
             logger.info(f"Duplicate event rejected", event_id=event_id)
@@ -834,7 +834,7 @@ async def ingest_event(request: Request):
                         event_id, validation_status, validation_timestamp,
                         error_code, error_message
                     )
-                    VALUES (%s, %s, NOW(), %s, %s)
+                    VALUES (%s, %s, %s, %s, %s)
                 """, (event_id, VALIDATION_STATUS_INTEGRITY_CHAIN_BROKEN, "INTEGRITY_VIOLATION", error_msg))
             conn.commit()
             
