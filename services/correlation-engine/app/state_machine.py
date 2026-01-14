@@ -12,8 +12,9 @@ from typing import Dict, Any, Optional, Tuple
 from datetime import datetime, timezone, timedelta
 from decimal import Decimal
 
-# GA-BLOCKING: State machine states (ordered progression)
-INCIDENT_STAGES = ['SUSPICIOUS', 'PROBABLE', 'CONFIRMED']
+# PHASE 3: State machine states (ordered progression)
+# CLEAN is implicit (no incident exists), incidents start at SUSPICIOUS
+INCIDENT_STAGES = ['CLEAN', 'SUSPICIOUS', 'PROBABLE', 'CONFIRMED']
 
 # GA-BLOCKING: Confidence thresholds (configurable via environment)
 CONFIDENCE_THRESHOLD_SUSPICIOUS = float(os.getenv('RANSOMEYE_CONFIDENCE_THRESHOLD_SUSPICIOUS', '0.0'))
