@@ -14,7 +14,10 @@
     "issued_at",
     "expires_at",
     "rollback_token",
-    "signature"
+    "signature",
+    "policy_id",
+    "policy_version",
+    "issuing_authority"
   ],
   "additionalProperties": false,
   "properties": {
