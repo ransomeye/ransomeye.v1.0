@@ -436,24 +436,27 @@ def apply_contradiction_to_incident(conn, incident_id: str, contradiction_type: 
             
             current_confidence, current_stage = result
             
-            # GA-BLOCKING: Apply contradiction decay
-            from state_machine import apply_contradiction_decay, determine_stage
+            # PHASE 3: Apply contradiction decay (deterministic)
+            from state_machine import apply_contradiction_decay, determine_stage, should_transition_stage
             decayed_confidence = apply_contradiction_decay(float(current_confidence))
-            new_stage = determine_stage(decayed_confidence)
+            proposed_stage = determine_stage(decayed_confidence)
             
-            # GA-BLOCKING: State does not escalate on contradiction (only decay)
-            # If new_stage would be lower, keep current stage (no backward transition)
-            if new_stage != current_stage:
-                # Only update if stage would remain same or if confidence decayed enough
-                # But we don't allow backward transitions, so keep current stage
+            # PHASE 3: State does not escalate on contradiction (blocks escalation)
+            # Contradictions can only decay confidence, not change stage forward
+            # Check if proposed stage transition is allowed
+            if should_transition_stage(current_stage, proposed_stage):
+                # Forward transition allowed (confidence increased enough)
+                new_stage = proposed_stage
+            else:
+                # PHASE 3: Block escalation - keep current stage (no forward transition on contradiction)
                 new_stage = current_stage
             
-            # Update incident confidence (but not stage)
+            # Update incident confidence and stage (stage may stay same if contradiction blocks escalation)
             cur.execute("""
                 UPDATE incidents
-                SET confidence_score = %s
+                SET confidence_score = %s, current_stage = %s
                 WHERE incident_id = %s
-            """, (decayed_confidence, incident_id))
+            """, (decayed_confidence, new_stage, incident_id))
             
             return True
         finally:
