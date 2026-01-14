@@ -120,7 +120,7 @@ def _validate_environment():
     """
     logger.startup("Validating environment variables")
     
-    required_vars = ['RANSOMEYE_DB_PASSWORD']
+    required_vars = ['RANSOMEYE_DB_PASSWORD', 'RANSOMEYE_DB_USER', 'RANSOMEYE_COMMAND_SIGNING_KEY']
     missing = []
     for var in required_vars:
         if not os.getenv(var):
@@ -131,7 +131,46 @@ def _validate_environment():
         logger.config_error(error_msg)
         exit_config_error(error_msg)
     
-    logger.startup("Environment variables validated")
+    # Validate secrets are not weak/default values
+    try:
+        from common.security.secrets import validate_secret_present, validate_signing_key
+        
+        # Validate DB password
+        db_password = validate_secret_present('RANSOMEYE_DB_PASSWORD', min_length=8)
+        
+        # Validate DB user (minimum 3 chars, not weak)
+        db_user = os.getenv('RANSOMEYE_DB_USER')
+        if not db_user:
+            exit_config_error("RANSOMEYE_DB_USER is required")
+        if len(db_user) < 3:
+            exit_config_error("RANSOMEYE_DB_USER is too short (minimum 3 characters)")
+        weak_users = ['gagan', 'test', 'admin', 'root', 'default']
+        if db_user.lower() in [u.lower() for u in weak_users]:
+            exit_config_error(f"SECURITY VIOLATION: RANSOMEYE_DB_USER uses weak/default value '{db_user}' (not allowed)")
+        
+        # Validate signing key
+        signing_key = validate_signing_key('RANSOMEYE_COMMAND_SIGNING_KEY', min_length=32, fail_on_default=True)
+        
+        logger.startup("Environment variables and secrets validated")
+    except ImportError:
+        # Fallback validation if common module not available
+        db_password = os.getenv('RANSOMEYE_DB_PASSWORD')
+        if not db_password:
+            exit_config_error("RANSOMEYE_DB_PASSWORD is required")
+        if len(db_password) < 8:
+            exit_config_error("RANSOMEYE_DB_PASSWORD is too short (minimum 8 characters)")
+        if db_password.lower() in ['gagan', 'password', 'test', 'changeme', 'default', 'secret']:
+            exit_config_error(f"SECURITY VIOLATION: RANSOMEYE_DB_PASSWORD uses weak/default value (not allowed)")
+        
+        signing_key = os.getenv('RANSOMEYE_COMMAND_SIGNING_KEY')
+        if not signing_key:
+            exit_config_error("RANSOMEYE_COMMAND_SIGNING_KEY is required")
+        if len(signing_key) < 32:
+            exit_config_error("RANSOMEYE_COMMAND_SIGNING_KEY is too short (minimum 32 characters)")
+        if 'test_signing_key' in signing_key.lower() or 'default' in signing_key.lower():
+            exit_config_error("SECURITY VIOLATION: RANSOMEYE_COMMAND_SIGNING_KEY uses weak/default value (not allowed)")
+        
+        logger.startup("Environment variables validated (basic validation)")
 
 def _validate_db_connectivity():
     """
