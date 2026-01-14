@@ -130,81 +130,28 @@ class PhaseCExecutor:
     
     def _enforce_os_boundaries(self):
         """
-        Enforce OS execution boundaries (PHASE B1: OS-Aware Validation).
-        
-        Hard-blocks incompatible tracks:
-        - ETW on Linux → refuse (ETW is Windows-only)
-        - eBPF on Windows → refuse (eBPF is Linux-only)
+        Enforce OS execution boundaries.
         
         Linux refuses --mode windows
         Windows refuses Linux tracks
-        Clear fatal errors when violated (no warnings, final errors)
+        Clear fatal errors when violated
         """
         current_os = platform.system().lower()
         
-        # PHASE B1: Hard-block ETW on Linux (Windows-only technology)
         if current_os == 'linux' and self.execution_mode == 'windows':
             error_msg = (
                 "FATAL: Cannot run Phase C-W (Windows mode) on Linux host.\n"
-                "ETW (Event Tracing for Windows) is Windows-only and cannot execute on Linux.\n"
                 "Windows Agent validation must be run on native Windows host.\n"
                 "Use --mode linux or omit --mode to auto-detect."
             )
             print(f"❌ {error_msg}", file=sys.stderr)
             sys.exit(1)
         
-        # PHASE B1: Hard-block eBPF on Windows (Linux-only technology)
         if current_os == 'windows' and self.execution_mode == 'linux':
             error_msg = (
                 "FATAL: Cannot run Phase C-L (Linux mode) on Windows host.\n"
-                "eBPF (extended Berkeley Packet Filter) is Linux-only and cannot execute on Windows.\n"
                 "Linux tracks must be run on Linux host.\n"
                 "Use --mode windows or omit --mode to auto-detect."
-            )
-            print(f"❌ {error_msg}", file=sys.stderr)
-            sys.exit(1)
-        
-        # PHASE B1: Additional technology-level checks
-        # Check for ETW-related imports or usage on Linux
-        if current_os == 'linux':
-            self._check_etw_usage()
-        
-        # Check for eBPF-related imports or usage on Windows
-        if current_os == 'windows':
-            self._check_ebpf_usage()
-    
-    def _check_etw_usage(self):
-        """
-        PHASE B1: Check for ETW usage on Linux (hard-block).
-        
-        ETW (Event Tracing for Windows) is Windows-only.
-        Any attempt to use ETW on Linux must be refused.
-        """
-        # Check if Windows agent track is being imported/executed
-        if self.execution_mode == 'windows':
-            # This should already be caught by _enforce_os_boundaries, but double-check
-            error_msg = (
-                "FATAL: ETW (Event Tracing for Windows) detected on Linux host.\n"
-                "ETW is Windows-only and cannot execute on Linux.\n"
-                "This is a hard block for audit integrity and legal defensibility."
-            )
-            print(f"❌ {error_msg}", file=sys.stderr)
-            sys.exit(1)
-    
-    def _check_ebpf_usage(self):
-        """
-        PHASE B1: Check for eBPF usage on Windows (hard-block).
-        
-        eBPF (extended Berkeley Packet Filter) is Linux-only.
-        Any attempt to use eBPF on Windows must be refused.
-        """
-        # Check if Linux DPI track with eBPF is being imported/executed
-        if self.execution_mode == 'linux':
-            # This should already be caught by _enforce_os_boundaries, but double-check
-            error_msg = (
-                "FATAL: eBPF (extended Berkeley Packet Filter) detected on Windows host.\n"
-                "eBPF is Linux-only and cannot execute on Windows.\n"
-                "This is a hard block for audit integrity and legal defensibility."
             )
             print(f"❌ {error_msg}", file=sys.stderr)
             sys.exit(1)
@@ -710,6 +657,17 @@ class PhaseCExecutor:
     
     def _run_windows_tracks(self):
         """Execute Phase C-W tracks (Track 6-B only)."""
+        # PHASE B1: Hard-block eBPF on Windows (Linux-only technology)
+        current_os = platform.system().lower()
+        if current_os != 'windows':
+            error_msg = (
+                "FATAL: Windows tracks can only run on Windows host.\n"
+                "eBPF (extended Berkeley Packet Filter) is Linux-only and cannot execute on Windows.\n"
+                "This is a hard block for audit integrity and legal defensibility."
+            )
+            print(f"❌ {error_msg}", file=sys.stderr)
+            sys.exit(1)
+        
         # Enforce: Linux tracks cannot run on Windows
         if self.execution_mode != 'windows':
             error_msg = "FATAL: Windows tracks can only run on Windows host."
