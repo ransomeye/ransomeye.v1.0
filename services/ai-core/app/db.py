@@ -281,6 +281,7 @@ def store_cluster(conn, cluster_id: str, model_version_id: str, cluster_label: s
     def _do_store():
         cur = conn.cursor()
         try:
+            # PHASE 3: Store training data hash and model hash if provided
             cur.execute("""
                 INSERT INTO clusters (
                     cluster_id, model_version_id, cluster_label, cluster_size,
@@ -290,6 +291,28 @@ def store_cluster(conn, cluster_id: str, model_version_id: str, cluster_label: s
                 ON CONFLICT (cluster_id) DO NOTHING
             """, (cluster_id, model_version_id, cluster_label, cluster_size,
                   cluster_created_at, cluster_updated_at))
+            
+            # PHASE 3: Update model version with training data hash and model hash
+            if training_data_hash or model_hash:
+                update_fields = []
+                update_values = []
+                if training_data_hash:
+                    update_fields.append("training_data_hash_sha256 = %s")
+                    update_values.append(training_data_hash)
+                if model_hash:
+                    update_fields.append("model_hash_sha256 = %s")
+                    update_values.append(model_hash)
+                if model_storage_path:
+                    update_fields.append("model_storage_path = %s")
+                    update_values.append(model_storage_path)
+                
+                if update_fields:
+                    update_values.append(model_version_id)
+                    cur.execute(f"""
+                        UPDATE ai_model_versions
+                        SET {', '.join(update_fields)}
+                        WHERE model_version_id = %s
+                    """, update_values)
             return True
         finally:
             cur.close()
