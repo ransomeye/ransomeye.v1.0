@@ -45,11 +45,24 @@ CREATE TABLE ai_model_versions (
     -- VARCHAR(255) sufficient for version strings
     
     model_hash_sha256 CHAR(64),
-    -- SHA256 hash of model artifact (weights, configuration, etc.)
+    -- PHASE 3: SHA256 hash of model artifact (weights, configuration, etc.)
     -- NULL if hash not computed
     -- CHAR(64) for exactly 64 hex characters
     
-    deployed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    training_data_hash_sha256 CHAR(64),
+    -- PHASE 3: SHA256 hash of training data (for replay support)
+    -- NULL if hash not computed
+    -- CHAR(64) for exactly 64 hex characters
+    -- Same training data → same model (deterministic)
+    
+    model_storage_path TEXT,
+    -- PHASE 3: External storage path where model is persisted
+    -- NULL if model is not stored externally
+    -- TEXT for unlimited length (paths can be long)
+    -- NOTE: This is a reference, not the actual model
+    
+    deployed_at TIMESTAMPTZ NOT NULL,
+    -- PHASE 3: Deterministic timestamp - must be provided explicitly
     -- When model was deployed
     
     deprecated_at TIMESTAMPTZ,
