@@ -26,7 +26,7 @@ from typing import Dict, Any, List
 _supply_chain_dir = Path(__file__).parent.parent / "supply-chain"
 sys.path.insert(0, str(_supply_chain_dir))
 
-from crypto.vendor_key_manager import VendorKeyManager, VendorKeyManagerError
+from crypto.persistent_signing_authority import PersistentSigningAuthority, PersistentSigningAuthorityError
 from crypto.artifact_signer import ArtifactSigner, ArtifactSigningError
 
 

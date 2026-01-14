@@ -92,25 +92,58 @@ jobs:
         # PHASE 9: Cargo.lock required for deterministic Rust builds
         continue-on-error: false
       
-      - name: Generate signing keypair (CI)
-        id: generate-keys
+      - name: Load persistent signing keys
+        env:
+          RANSOMEYE_KEY_VAULT_PASSPHRASE: ${{ secrets.RANSOMEYE_KEY_VAULT_PASSPHRASE }}
+          RANSOMEYE_KEY_VAULT_DIR: ${{ secrets.RANSOMEYE_KEY_VAULT_DIR || 'keys/vault' }}
+          RANSOMEYE_KEY_REGISTRY_PATH: ${{ secrets.RANSOMEYE_KEY_REGISTRY_PATH || 'keys/registry.json' }}
         run: |
-          mkdir -p /tmp/ci-signing-keys
+          # PHASE-9: Persistent signing authority (no ephemeral keys)
+          # Verify persistent keys are available
+          if [ -z "$RANSOMEYE_KEY_VAULT_PASSPHRASE" ]; then
+            echo "❌ ERROR: RANSOMEYE_KEY_VAULT_PASSPHRASE secret not set"
+            echo "Persistent signing keys must be configured before CI can sign artifacts"
+            exit 1
+          fi
+          
+          # Verify vault directory exists (should be mounted or checked out)
+          if [ ! -d "$RANSOMEYE_KEY_VAULT_DIR" ]; then
+            echo "❌ ERROR: Key vault directory not found: $RANSOMEYE_KEY_VAULT_DIR"
+            echo "Persistent key vault must be available for signing"
+            exit 1
+          fi
+          
+          # Verify registry exists
+          if [ ! -f "$RANSOMEYE_KEY_REGISTRY_PATH" ]; then
+            echo "❌ ERROR: Key registry not found: $RANSOMEYE_KEY_REGISTRY_PATH"
+            echo "Key registry must exist and contain registered keys"
+            exit 1
+          fi
+          
+          # Verify signing key exists in registry
           python3 << 'EOF'
           import sys
-          import os
-          sys.path.insert(0, '${{ github.workspace }}/supply-chain')
-          from crypto.vendor_key_manager import VendorKeyManager
+          import json
           from pathlib import Path
-          key_dir = Path('/tmp/ci-signing-keys')
-          key_manager = VendorKeyManager(key_dir)
-          private_key, public_key, key_id = key_manager.get_or_create_keypair('${{ env.SIGNING_KEY_ID }}')
-          print(f"key_id={key_id}")
-          # Export public key path for later steps
-          public_key_path = key_dir / f"vendor-signing-key-${{ env.SIGNING_KEY_ID }}.pub"
-          print(f"public_key_path={public_key_path}")
+          registry_path = Path('${{ env.RANSOMEYE_KEY_REGISTRY_PATH }}')
+          signing_key_id = '${{ env.SIGNING_KEY_ID }}'
+          
+          with open(registry_path) as f:
+              registry = json.load(f)
+          
+          if signing_key_id not in registry.get('keys', {}):
+              print(f"❌ ERROR: Signing key {signing_key_id} not found in registry")
+              sys.exit(1)
+          
+          key_entry = registry['keys'][signing_key_id]
+          if key_entry['status'] != 'active':
+              print(f"❌ ERROR: Signing key {signing_key_id} is not active (status: {key_entry['status']})")
+              sys.exit(1)
+          
+          print(f"✅ Signing key {signing_key_id} is active and available")
+          print(f"   Public key fingerprint: {key_entry['public_key_fingerprint']}")
           EOF
-        # PHASE 6: Fail-closed - key generation must succeed
+        # PHASE-9: Fail-closed - persistent keys must be available
         continue-on-error: false
       
       - name: Build Core (Python)
@@ -177,7 +210,9 @@ jobs:
       
       - name: Sign all artifacts
         env:
-          SIGNING_KEY_DIR: /tmp/ci-signing-keys
+          RANSOMEYE_KEY_VAULT_PASSPHRASE: ${{ secrets.RANSOMEYE_KEY_VAULT_PASSPHRASE }}
+          RANSOMEYE_KEY_VAULT_DIR: ${{ secrets.RANSOMEYE_KEY_VAULT_DIR || 'keys/vault' }}
+          RANSOMEYE_KEY_REGISTRY_PATH: ${{ secrets.RANSOMEYE_KEY_REGISTRY_PATH || 'keys/registry.json' }}
           SIGNING_KEY_ID: ${{ env.SIGNING_KEY_ID }}
         run: |
           cd build/artifacts
@@ -204,7 +239,8 @@ jobs:
                 --artifact-type "$ARTIFACT_TYPE" \
                 --version "${{ github.ref_name }}" \
                 --signing-key-id "${{ env.SIGNING_KEY_ID }}" \
-                --key-dir "$SIGNING_KEY_DIR" \
+                --vault-dir "$RANSOMEYE_KEY_VAULT_DIR" \
+                --registry-path "$RANSOMEYE_KEY_REGISTRY_PATH" \
                 --output-dir "$(dirname $artifact)/signed"
               
               if [ $? -ne 0 ]; then
@@ -218,7 +254,8 @@ jobs:
       
       - name: Verify all artifact signatures
         env:
-          SIGNING_KEY_DIR: /tmp/ci-signing-keys
+          RANSOMEYE_KEY_VAULT_DIR: ${{ secrets.RANSOMEYE_KEY_VAULT_DIR || 'keys/vault' }}
+          RANSOMEYE_KEY_REGISTRY_PATH: ${{ secrets.RANSOMEYE_KEY_REGISTRY_PATH || 'keys/registry.json' }}
           SIGNING_KEY_ID: ${{ env.SIGNING_KEY_ID }}
         run: |
           cd build/artifacts
@@ -241,8 +278,10 @@ jobs:
               python3 ${{ github.workspace }}/supply-chain/cli/verify_artifacts.py \
                 --artifact "$artifact" \
                 --manifest "$MANIFEST_PATH" \
-                --key-dir "$SIGNING_KEY_DIR" \
-                --signing-key-id "$SIGNING_KEY_ID"
+                --vault-dir "$RANSOMEYE_KEY_VAULT_DIR" \
+                --registry-path "$RANSOMEYE_KEY_REGISTRY_PATH" \
+                --signing-key-id "$SIGNING_KEY_ID" \
+                --check-revocation
               
               if [ $? -eq 0 ]; then
                 echo "✅ Signature verified: $artifact"
@@ -265,7 +304,9 @@ jobs:
       
       - name: Generate SBOM
         env:
-          SIGNING_KEY_DIR: /tmp/ci-signing-keys
+          RANSOMEYE_KEY_VAULT_PASSPHRASE: ${{ secrets.RANSOMEYE_KEY_VAULT_PASSPHRASE }}
+          RANSOMEYE_KEY_VAULT_DIR: ${{ secrets.RANSOMEYE_KEY_VAULT_DIR || 'keys/vault' }}
+          RANSOMEYE_KEY_REGISTRY_PATH: ${{ secrets.RANSOMEYE_KEY_REGISTRY_PATH || 'keys/registry.json' }}
           SIGNING_KEY_ID: ${{ env.SIGNING_KEY_ID }}
         run: |
           mkdir -p build/artifacts/sbom
