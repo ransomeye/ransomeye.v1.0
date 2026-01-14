@@ -522,21 +522,24 @@ def store_event(conn, envelope: dict, validation_status: str, late_arrival: bool
                 sequence, hash_sha256
             ))
             
+            # PHASE 2: Use observed_at for created_at (deterministic timestamp)
             cur.execute("""
                 INSERT INTO raw_events (
                     event_id, machine_id, component_instance_id, component,
                     observed_at, ingested_at, sequence, payload,
                     hostname, boot_id, agent_version,
                     hash_sha256, prev_hash_sha256,
-                    validation_status, late_arrival, arrival_latency_seconds
+                    validation_status, late_arrival, arrival_latency_seconds,
+                    created_at
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (
                 event_id, machine_id, component_instance_id, component,
                 observed_at, ingested_at, sequence, payload,
                 hostname, boot_id, agent_version,
                 hash_sha256, prev_hash_sha256,
-                validation_status, late_arrival, arrival_latency_seconds
+                validation_status, late_arrival, arrival_latency_seconds,
+                observed_at  # PHASE 2: created_at uses observed_at (deterministic)
             ))
             
             # PHASE 2: Use deterministic timestamp from envelope (observed_at)
