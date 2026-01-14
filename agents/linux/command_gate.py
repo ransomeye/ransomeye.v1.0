@@ -389,6 +389,44 @@ class CommandGate:
         if role not in valid_roles:
             raise CommandRejectionError(f"Invalid role: {role}")
     
+    def _validate_policy_authority(self, command: Dict[str, Any]):
+        """
+        PHASE 4: Step 10: Policy authority validation.
+        
+        Validates:
+        - policy_id is present and valid
+        - policy_version is present and valid
+        - issuing_authority is present and valid
+        
+        Args:
+            command: Command dictionary
+            
+        Raises:
+            CommandRejectionError: If policy authority validation fails
+        """
+        # PHASE 4: Validate policy_id
+        policy_id = command.get('policy_id', '')
+        if not policy_id:
+            raise CommandRejectionError("Missing policy_id (PHASE 4: Policy authority binding required)")
+        
+        # PHASE 4: Validate policy_version
+        policy_version = command.get('policy_version', '')
+        if not policy_version:
+            raise CommandRejectionError("Missing policy_version (PHASE 4: Policy version required)")
+        
+        # PHASE 4: Validate issuing_authority
+        issuing_authority = command.get('issuing_authority', '')
+        if not issuing_authority:
+            raise CommandRejectionError("Missing issuing_authority (PHASE 4: Issuing authority required)")
+        
+        # PHASE 4: Validate issuing_authority is valid
+        valid_authorities = {'policy-engine', 'threat-response-engine', 'human-authority'}
+        if issuing_authority not in valid_authorities:
+            raise CommandRejectionError(
+                f"Invalid issuing_authority: {issuing_authority} "
+                f"(must be one of: {', '.join(valid_authorities)})"
+            )
+    
     def _validate_haf_approval(self, command: Dict[str, Any]):
         """
         Step 6: HAF approval presence (if required).

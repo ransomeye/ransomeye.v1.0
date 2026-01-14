@@ -123,7 +123,9 @@ echo "Step 3: Checking for forbidden licenses..."
 echo "-----------------------------------"
 
 # Quick check: scan inventory for forbidden licenses
-FORBIDDEN_COUNT=$(python3 << 'PYTHON_SCRIPT'
+# Create temporary Python script
+TEMP_SCRIPT=$(mktemp)
+cat > "${TEMP_SCRIPT}" << 'PYEOF'
 import json
 import sys
 import os
@@ -156,8 +158,11 @@ if violations:
     sys.exit(1)
 else:
     print('0')
-PYTHON_SCRIPT
-SCRIPT_DIR="${SCRIPT_DIR}" 2>&1)
+PYEOF
+
+FORBIDDEN_COUNT=$(SCRIPT_DIR="${SCRIPT_DIR}" python3 "${TEMP_SCRIPT}" 2>&1)
+RM_EXIT=$?
+rm -f "${TEMP_SCRIPT}"
 
 if [[ "$FORBIDDEN_COUNT" != "0" ]] && [[ -n "$FORBIDDEN_COUNT" ]]; then
     echo -e "${RED}FAILED: Forbidden licenses detected in inventory:${NC}" >&2
