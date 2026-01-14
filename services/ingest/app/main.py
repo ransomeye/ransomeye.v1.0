@@ -211,6 +211,13 @@ def get_db_connection():
     
     # Pool exhausted
     logger.resource_error("database_connections", "Connection pool exhausted")
+    
+    # GA-BLOCKING: Track pool exhaustion for operational telemetry
+    if _metrics_available:
+        metrics = get_metrics()
+        if metrics:
+            metrics.record_pool_exhaustion()
+    
     raise RuntimeError("Database connection pool exhausted")
 
 def put_db_connection(conn):
@@ -504,20 +511,40 @@ def store_event(conn, envelope: dict, validation_status: str, late_arrival: bool
         finally:
             cur.close()
     
+    # GA-BLOCKING: Track DB write latency for operational telemetry
+    write_start_time = time.time()
+    
     # Use common database safety utilities for explicit transaction management
-    if _common_db_safety_available:
-        return execute_write_operation(conn, "store_event", _do_store_event, logger)
-    else:
-        # Fallback: Explicit transaction management
-        begin_transaction(conn, logger)
-        try:
-            result = _do_store_event()
-            commit_transaction(conn, logger, "store_event")
-            return result
-        except Exception as e:
-            rollback_transaction(conn, logger, "store_event")
-            logger.db_error(str(e), "store_event", event_id=envelope.get("event_id"))
-            raise
+    try:
+        if _common_db_safety_available:
+            result = execute_write_operation(conn, "store_event", _do_store_event, logger)
+        else:
+            # Fallback: Explicit transaction management
+            begin_transaction(conn, logger)
+            try:
+                result = _do_store_event()
+                commit_transaction(conn, logger, "store_event")
+            except Exception as e:
+                rollback_transaction(conn, logger, "store_event")
+                logger.db_error(str(e), "store_event", event_id=envelope.get("event_id"))
+                raise
+        
+        # Record DB write latency (non-blocking, lightweight)
+        if _metrics_available:
+            write_latency_ms = (time.time() - write_start_time) * 1000.0
+            metrics = get_metrics()
+            if metrics:
+                metrics.record_db_write(write_latency_ms)
+        
+        return result
+    except Exception:
+        # Record latency even on failure (for monitoring)
+        if _metrics_available:
+            write_latency_ms = (time.time() - write_start_time) * 1000.0
+            metrics = get_metrics()
+            if metrics:
+                metrics.record_db_write(write_latency_ms)
+        raise
 
 @app.post("/events")
 async def ingest_event(request: Request):
