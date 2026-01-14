@@ -1,30 +1,74 @@
 #!/usr/bin/env python3
 """
 RansomEye v1.0 Policy Engine - Command Signer Module
-AUTHORITATIVE: Cryptographic signing of policy commands
-Python 3.10+ only - aligns with Phase 7 requirements
+AUTHORITATIVE: Cryptographic signing of policy commands using ed25519
+Python 3.10+ only
+PHASE 4: ed25519 signing (replaces HMAC-SHA256)
 """
 
 from typing import Dict, Any, Optional
-import hashlib
-import hmac
 import os
 import sys
 import json
+import base64
 from datetime import datetime, timezone
 import uuid
+from pathlib import Path
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from cryptography.hazmat.backends import default_backend
+
+from key_manager import PolicyEngineKeyManager
 
 
-# Phase 7 requirement: Commands are cryptographically signed
-# Phase 7 requirement: Commands are NOT executed (simulation-first)
-# Phase 7 requirement: All commands are signed and auditable
+# PHASE 4: ed25519 signing (replaces HMAC-SHA256)
+# Signing keypair loaded once at startup (never reloaded, never logged)
+_SIGNER: Optional['PolicyEngineSigner'] = None
 
 
-# Signing key loaded once at startup (never reloaded, never logged)
-_SIGNING_KEY: Optional[bytes] = None
+class PolicyEngineSigner:
+    """
+    PHASE 4: Command signer for Policy Engine using ed25519.
+    
+    Replaces HMAC-SHA256 with ed25519 for consistency with TRE and agents.
+    """
+    
+    def __init__(self, private_key: Ed25519PrivateKey, key_id: str):
+        """
+        Initialize signer.
+        
+        Args:
+            private_key: ed25519 private key for signing
+            key_id: Key identifier (SHA256 hash of public key)
+        """
+        self.private_key = private_key
+        self.key_id = key_id
+    
+    def sign_payload(self, payload: Dict[str, Any]) -> str:
+        """
+        Sign command payload with ed25519.
+        
+        Args:
+            payload: Command payload dictionary
+            
+        Returns:
+            Base64-encoded signature
+        """
+        # Serialize payload to canonical JSON
+        payload_json = json.dumps(payload, sort_keys=True, separators=(',', ':'), ensure_ascii=False)
+        
+        # Sign payload
+        signature_bytes = self.private_key.sign(
+            payload_json.encode('utf-8'),
+            backend=default_backend()
+        )
+        
+        # Encode signature as base64
+        signature = base64.b64encode(signature_bytes).decode('ascii')
+        
+        return signature
 
 
-def get_signing_key() -> bytes:
+def get_signer() -> PolicyEngineSigner:
     """
     Get command signing key (loaded once at startup, never reloaded).
     
