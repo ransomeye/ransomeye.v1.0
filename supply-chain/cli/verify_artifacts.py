@@ -68,20 +68,53 @@ def main():
     args = parser.parse_args()
     
     try:
+        # Check revocation if requested
+        signing_key_id = None
+        if args.check_revocation:
+            if not args.registry_path:
+                print("ERROR: --registry-path required for revocation checking", file=sys.stderr)
+                sys.exit(1)
+            
+            registry = KeyRegistry(args.registry_path)
+            
+            # Get signing key ID from manifest if not provided
+            if not args.signing_key_id:
+                import json
+                manifest_data = json.loads(args.manifest.read_text())
+                signing_key_id = manifest_data.get('signing_key_id')
+                if not signing_key_id:
+                    print("ERROR: Cannot determine signing key ID for revocation check", file=sys.stderr)
+                    sys.exit(1)
+            else:
+                signing_key_id = args.signing_key_id
+            
+            # Check if key is revoked
+            if registry.is_revoked(signing_key_id):
+                print(f"FAIL: Signing key {signing_key_id} is REVOKED", file=sys.stderr)
+                print("Artifact signatures from revoked keys are invalid", file=sys.stderr)
+                sys.exit(1)
+            
+            # Check if key is active
+            if not registry.is_key_active(signing_key_id):
+                key_entry = registry.get_key(signing_key_id)
+                status = key_entry['status'] if key_entry else 'unknown'
+                print(f"FAIL: Signing key {signing_key_id} is not active (status: {status})", file=sys.stderr)
+                sys.exit(1)
+        
         # Initialize verifier
         if args.public_key:
             # Use external public key (customer trust root)
             verifier = ArtifactVerifier(public_key_path=args.public_key)
-        elif args.key_dir and args.signing_key_id:
-            # Use vendor key
-            key_manager = VendorKeyManager(args.key_dir)
-            public_key = key_manager.get_public_key(args.signing_key_id)
-            if not public_key:
-                print(f"Public key not found: {args.signing_key_id}", file=sys.stderr)
-                sys.exit(1)
+        elif args.vault_dir and args.signing_key_id:
+            # Use persistent signing authority
+            authority = PersistentSigningAuthority(
+                vault_dir=args.vault_dir,
+                registry_path=args.registry_path or Path('keys/registry.json')
+            )
+            public_key = authority.get_public_key(args.signing_key_id)
             verifier = ArtifactVerifier(public_key=public_key)
         else:
-            print("Either --public-key or both --key-dir and --signing-key-id must be provided", file=sys.stderr)
+            print("Either --public-key or both --vault-dir and --signing-key-id must be provided", file=sys.stderr)
             sys.exit(1)
         
         # Initialize verification engine
