@@ -17,10 +17,8 @@ STRICT SECURITY & PRIVACY RULES:
 This endpoint monitors the system, not threats.
 """
 
-import time
 from typing import Dict, Any
-from fastapi import APIRouter, HTTPException
-from datetime import datetime, timezone, timedelta
+from fastapi import APIRouter
 
 from services.ingest.app.metrics import get_metrics
 
