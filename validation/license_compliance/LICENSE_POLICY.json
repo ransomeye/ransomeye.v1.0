@@ -43,6 +43,14 @@
       "rule": "LLM models used in RansomEye (via llama-cpp-python, transformers, etc.) must have permissive licenses. Model weights may have separate licensing terms. All model licenses must be documented in THIRD_PARTY_INVENTORY.json. Proprietary models require explicit customer agreement.",
       "enforcement": "Model license validation is separate from code license validation. Model licenses are tracked in inventory notes field."
     },
+    "transitive_dependencies": {
+      "rule": "Transitive dependencies (dependencies of dependencies) are not individually inventoried unless they pose license risk. Only direct dependencies are inventoried. Transitive dependencies with permissive licenses (MIT, Apache-2.0, BSD) are acceptable. Transitive dependencies with copyleft licenses must be flagged.",
+      "enforcement": "License scan tools verify direct dependencies only. Transitive dependency license risk is assessed during dependency selection."
+    },
+    "binary_redistribution": {
+      "rule": "Libraries that include binary components (e.g., CUDA binaries in bitsandbytes) may have additional redistribution requirements beyond code licenses. Binary redistribution must comply with all applicable EULAs (e.g., NVIDIA CUDA Toolkit EULA). Source code redistribution follows code license terms.",
+      "enforcement": "Binary redistribution risks are documented in inventory notes field. Risk level may be elevated for libraries with binary components."
+    },
     "kernel_syscalls": {
       "rule": "Use of Linux kernel syscalls via standard library (libc, Rust std, Python stdlib) does NOT constitute GPL contamination. Syscalls are interfaces, not derived works. This is explicitly allowed.",
       "enforcement": "No enforcement needed - syscall usage is standard and legal"
