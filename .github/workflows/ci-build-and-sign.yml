@@ -75,6 +75,23 @@ jobs:
           echo "SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH}" >> $GITHUB_ENV
           echo "PYTHONHASHSEED=0" >> $GITHUB_ENV
       
+      - name: Verify dependency pinning
+        run: |
+          bash scripts/verify_dependency_pinning.sh
+        # PHASE 9: Fail-closed - dependencies must be pinned for reproducibility
+        continue-on-error: false
+      
+      - name: Generate Cargo.lock for Linux Agent (if missing)
+        run: |
+          if [ ! -f "services/linux-agent/Cargo.lock" ]; then
+            echo "Generating Cargo.lock for Linux Agent..."
+            cd services/linux-agent
+            cargo generate-lockfile
+            cd ../..
+          fi
+        # PHASE 9: Cargo.lock required for deterministic Rust builds
+        continue-on-error: false
+      
       - name: Generate signing keypair (CI)
         id: generate-keys
         run: |
