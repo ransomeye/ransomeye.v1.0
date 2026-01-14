@@ -186,11 +186,11 @@ The following licenses are explicitly forbidden and must not be used in RansomEy
 ### Core Platform Components
 
 #### Python Dependencies (Core Services)
-- **ingest:** fastapi (MIT), uvicorn (BSD-3-Clause), psycopg2-binary (LGPL-3.0), jsonschema (MIT), python-dateutil (Apache-2.0), pydantic (MIT), pydantic-settings (MIT)
-- **correlation-engine:** psycopg2-binary (LGPL-3.0), uuid (BSD-2-Clause), pydantic (MIT), pydantic-settings (MIT)
-- **ai-core:** psycopg2-binary (LGPL-3.0), uuid (BSD-2-Clause), scikit-learn (BSD-3-Clause), numpy (BSD-3-Clause), python-dateutil (Apache-2.0), pydantic (MIT), pydantic-settings (MIT)
-- **policy-engine:** psycopg2-binary (LGPL-3.0), cryptography (Apache-2.0), python-dateutil (Apache-2.0), pydantic (MIT), pydantic-settings (MIT)
-- **ui-backend:** fastapi (MIT), uvicorn (BSD-3-Clause), psycopg2-binary (LGPL-3.0), fastapi-cors (MIT), pydantic (MIT), pydantic-settings (MIT)
+- **ingest:** fastapi (MIT), uvicorn (BSD-3-Clause), psycopg2-binary (LGPL-3.0, dynamic linking only), jsonschema (MIT), python-dateutil (Apache-2.0), pydantic (MIT), pydantic-settings (MIT)
+- **correlation-engine:** psycopg2-binary (LGPL-3.0, dynamic linking only), uuid (BSD-2-Clause, Python package), pydantic (MIT), pydantic-settings (MIT)
+- **ai-core:** psycopg2-binary (LGPL-3.0, dynamic linking only), uuid (BSD-2-Clause, Python package), scikit-learn (BSD-3-Clause), numpy (BSD-3-Clause), python-dateutil (Apache-2.0), pydantic (MIT), pydantic-settings (MIT)
+- **policy-engine:** psycopg2-binary (LGPL-3.0, dynamic linking only), cryptography (Apache-2.0), python-dateutil (Apache-2.0), pydantic (MIT), pydantic-settings (MIT)
+- **ui-backend:** fastapi (MIT), uvicorn (BSD-3-Clause), psycopg2-binary (LGPL-3.0, dynamic linking only), fastapi-cors (MIT), pydantic (MIT), pydantic-settings (MIT)
 
 #### Rust Dependencies (Linux Agent)
 - **linux-agent:** reqwest (Apache-2.0 OR MIT), uuid (Apache-2.0 OR MIT), serde (Apache-2.0 OR MIT), serde_json (Apache-2.0 OR MIT), sha2 (MIT), chrono (MIT OR Apache-2.0), anyhow (MIT OR Apache-2.0), hostname (MIT)
