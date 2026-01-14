@@ -245,23 +245,13 @@ def store_feature_vector(conn, incident_id: str, model_version_id: str,
                 # Already exists, skip (idempotent)
                 return
             
-            # PHASE 3: Use deterministic timestamp (from incident observed_at)
-            # For feature vectors, use incident first_observed_at
-            from datetime import datetime, timezone
-            # Get incident observed_at from database
-            cur.execute("""
-                SELECT first_observed_at FROM incidents WHERE incident_id = %s
-            """, (incident_id,))
-            incident_result = cur.fetchone()
-            computed_at = incident_result[0] if incident_result else datetime.now(timezone.utc)
-            
             cur.execute("""
                 INSERT INTO feature_vectors (
                     event_id, model_version_id, feature_vector_hash_sha256,
                     feature_vector_size, feature_vector_storage_path, computed_at, status
                 )
                 VALUES (%s, %s, %s, %s, %s, %s, 'PROCESSED')
-            """, (incident_id, model_version_id, feature_vector_hash, feature_vector_size, storage_path, computed_at))
+            """, (incident_id, model_version_id, feature_vector_hash, feature_vector_size, storage_path))
             
             return True
         finally:
@@ -330,7 +320,7 @@ def store_cluster_membership(conn, cluster_id: str, incident_id: str, membership
                 INSERT INTO cluster_memberships (
                     cluster_id, event_id, membership_score, added_at
                 )
-                VALUES (%s, %s, %s, NOW())
+                VALUES (%s, %s, %s, %s)
                 ON CONFLICT (cluster_id, event_id) DO NOTHING
             """, (cluster_id, incident_id, membership_score))
             return True
