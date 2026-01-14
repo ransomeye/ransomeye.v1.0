@@ -181,22 +181,26 @@ jobs:
         run: |
           cd validation/harness
           python3 aggregate_ga_verdict.py \
-            --linux-results ../../validation/reports/phase_c/phase_c_linux_results.json \
-            --windows-results ../../validation/reports/phase_c/phase_c_windows_results.json \
-            --output ../../validation/reports/phase_c/ga_verdict.json
-        # PHASE 6: Fail-closed - GA verdict must be PASS
+            ../../validation/reports/phase_c/phase_c_linux_results.json \
+            ../../validation/reports/phase_c/phase_c_windows_results.json
+        # PHASE 6: Fail-closed - GA verdict must be PASS (aggregate_ga_verdict.py exits with 1 on FAIL)
         continue-on-error: false
       
       - name: Check GA verdict
         run: |
           cd validation/reports/phase_c
-          VERDICT=$(python3 -c "import json; print(json.load(open('ga_verdict.json'))['ga_verdict'])")
-          if [ "$VERDICT" != "PASS" ]; then
-            echo "❌ GA Verdict: $VERDICT"
-            echo "Build blocked: GA verdict must be PASS"
+          if [ ! -f "phase_c_aggregate_verdict.json" ]; then
+            echo "❌ GA verdict file not found"
             exit 1
           fi
-          echo "✅ GA Verdict: $VERDICT"
+          VERDICT=$(python3 -c "import json; print(json.load(open('phase_c_aggregate_verdict.json'))['ga_verdict'])")
+          GA_READY=$(python3 -c "import json; print(json.load(open('phase_c_aggregate_verdict.json'))['ga_ready'])")
+          if [ "$GA_READY" != "True" ] || [ "$VERDICT" != "PASS" ]; then
+            echo "❌ GA Verdict: $VERDICT (ga_ready: $GA_READY)"
+            echo "Build blocked: GA verdict must be PASS and ga_ready must be True"
+            exit 1
+          fi
+          echo "✅ GA Verdict: $VERDICT (ga_ready: $GA_READY)"
         # PHASE 6: Fail-closed - GA verdict must be PASS
         continue-on-error: false
       
@@ -205,5 +209,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ga-verdict
-          path: validation/reports/phase_c/ga_verdict.json
+          path: validation/reports/phase_c/phase_c_aggregate_verdict.json
           retention-days: 90
