@@ -121,8 +121,8 @@ CREATE TABLE feature_vectors (
     -- TEXT for unlimited length (paths can be long)
     -- NOTE: This is a reference, not the actual feature vector
     
-    computed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    -- When feature vector was computed
+    computed_at TIMESTAMPTZ NOT NULL,
+    -- PHASE 3: Deterministic timestamp - must be provided explicitly (use incident observed_at)
     
     status feature_vector_status NOT NULL DEFAULT 'PENDING',
     -- Feature vector processing status (PENDING, PROCESSED, ERROR)
