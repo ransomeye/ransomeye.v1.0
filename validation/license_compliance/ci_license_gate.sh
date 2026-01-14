@@ -68,7 +68,7 @@ if ! python3 "${SCRIPT_DIR}/license_scan.py" > /tmp/license_scan_report.json 2>&
     
     # Extract violations from JSON report if possible
     if [[ -f /tmp/license_scan_report.json ]]; then
-        python3 -c "
+        python3 << 'PYEOF' 2>/dev/null || cat /tmp/license_scan_report.json
 import json
 import sys
 try:
@@ -77,14 +77,18 @@ try:
     violations = report.get('violations', [])
     if violations:
         for v in violations:
-            print(f\"  {v.get('type', 'unknown')}: {v.get('dependency', 'unknown')} - {v.get('message', '')}\")
+            print('  {}: {} - {}'.format(
+                v.get('type', 'unknown'),
+                v.get('dependency', 'unknown'),
+                v.get('message', '')
+            ))
     else:
         print('  (Could not parse violations from report)')
 except:
     # If JSON parsing fails, just show the raw output
     with open('/tmp/license_scan_report.json', 'r') as f:
         print(f.read())
-" 2>/dev/null || cat /tmp/license_scan_report.json
+PYEOF
     
     echo ""
     echo -e "${RED}BUILD BLOCKED: License violations must be resolved${NC}" >&2

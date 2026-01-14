@@ -227,8 +227,11 @@ class TREAPI:
         try:
             store_response_action(conn, action)
             
-            # Emit audit ledger entry
+            # PHASE 4: Emit audit ledger entry with explanation bundle reference
             if self.ledger:
+                # PHASE 4: Get explanation bundle ID if available
+                explanation_bundle_id = policy_decision.get('explanation_bundle_id')
+                
                 ledger_entry = self.ledger.append(
                     component='threat-response-engine',
                     component_instance_id=os.getenv('HOSTNAME', 'tre'),
@@ -238,7 +241,11 @@ class TREAPI:
                     payload={
                         'action_id': action_id,
                         'command_type': command_payload['command_type'],
-                        'machine_id': command_payload['target_machine_id']
+                        'machine_id': command_payload['target_machine_id'],
+                        'policy_id': command_payload.get('policy_id'),  # PHASE 4: Policy authority
+                        'policy_version': command_payload.get('policy_version'),  # PHASE 4: Policy version
+                        'issuing_authority': command_payload.get('issuing_authority'),  # PHASE 4: Issuing authority
+                        'explanation_bundle_id': explanation_bundle_id  # PHASE 4: Explanation bundle reference
                     }
                 )
                 action['ledger_entry_id'] = ledger_entry['ledger_entry_id']
