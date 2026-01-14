@@ -145,7 +145,7 @@ def main():
         print(f"    - {manifest_path}")
         print(f"    - {signature_path}")
         
-    except (VendorKeyManagerError, ArtifactSigningError, ManifestBuilderError) as e:
+    except (PersistentSigningAuthorityError, ArtifactSigningError, ManifestBuilderError) as e:
         print(f"Artifact signing failed: {e}", file=sys.stderr)
         sys.exit(1)
     except Exception as e:
