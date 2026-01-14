@@ -391,12 +391,16 @@ def run_ai_core():
             logger.error(f"SHAP explanation failed: {safe_error}")
             raise
         
-        # Store SHAP explanations (references only, not blobs)
+        # PHASE 3: Store full SHAP explanations (for replay support)
         stored_shap = 0
         for incident, shap_explanation in zip(incidents, shap_explanations):
             try:
+                # PHASE 3: Use deterministic timestamp from incident (observed_at)
+                from dateutil import parser
+                observed_at = parser.isoparse(incident.get('first_observed_at', incident.get('last_observed_at')))
+                
                 store_shap_explanation(write_conn, incident['incident_id'], explainability_model_version,
-                                     shap_explanation, top_n=10)
+                                     shap_explanation, top_n=10, computed_at=observed_at)
                 stored_shap += 1
             except MemoryError:
                 error_msg = f"MEMORY ALLOCATION FAILURE: Failed to store SHAP explanation for incident {incident.get('incident_id')}"
