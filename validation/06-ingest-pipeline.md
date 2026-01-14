@@ -524,3 +524,30 @@ This validation does NOT validate correlation engine logic, AI/ML, UI, or agents
 **Validator:** Independent System Validator  
 **Next Step:** Validation Step 7 — Correlation Engine  
 **GA Status:** **BLOCKED** (Critical failures in time semantics and replay determinism)
+
+---
+
+## UPSTREAM IMPACT STATEMENT
+
+**Documentation Only:** This section documents upstream impact of ingest pipeline non-determinism on downstream validations.
+
+**Downstream Validations Impacted by Ingest Non-Determinism:**
+
+1. **Correlation Engine (Validation Step 7):**
+   - Ingest pipeline stores `ingested_at` (ingest_time) in `raw_events` table
+   - Correlation engine reads from `raw_events` table
+   - Correlation engine validation (File 07) must NOT assume deterministic `ingested_at` values
+   - Correlation engine validation must NOT assume replay fidelity (same events may have different `ingested_at` values when replayed)
+
+2. **AI Core / ML / SHAP (Validation Step 8):**
+   - AI Core reads incidents created by correlation engine
+   - Correlation engine uses `raw_events` data (including `ingested_at`)
+   - AI Core validation (File 08) must NOT assume deterministic ingest_time
+   - AI Core validation must NOT assume replay fidelity for underlying event data
+
+**Requirements for Downstream Validations:**
+
+- Files 07 and 08 must NOT assume deterministic `ingested_at` (ingest_time) values
+- Files 07 and 08 must NOT assume replay fidelity (same events may produce different `ingested_at` values when replayed)
+- Files 07 and 08 must validate their components based on actual behavior, not assumptions about ingest determinism
+- Files 07 and 08 must explicitly document any dependencies on ingest_time determinism if they exist
