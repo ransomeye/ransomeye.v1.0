@@ -27,7 +27,7 @@ try:
     if _supply_chain_dir.exists():
         sys.path.insert(0, str(_supply_chain_dir))
         from crypto.artifact_signer import ArtifactSigner, ArtifactSigningError
-        from crypto.vendor_key_manager import VendorKeyManager, VendorKeyManagerError
+        from crypto.persistent_signing_authority import PersistentSigningAuthority, PersistentSigningAuthorityError
         _supply_chain_available = True
     else:
         _supply_chain_available = False
@@ -356,20 +356,32 @@ def sign_bundle(
         sys.exit(1)
     
     try:
-        # Load signing key
-        key_manager = VendorKeyManager(key_dir)
-        private_key, public_key, key_id = key_manager.get_or_create_keypair(signing_key_id)
+        # PHASE-9: Use persistent signing authority (no ephemeral keys)
+        from crypto.persistent_signing_authority import PersistentSigningAuthority
+        import os
+        
+        # Get vault and registry paths from environment or key_dir
+        vault_dir = Path(os.environ.get('RANSOMEYE_KEY_VAULT_DIR', key_dir / 'vault'))
+        registry_path = Path(os.environ.get('RANSOMEYE_KEY_REGISTRY_PATH', key_dir.parent / 'registry.json'))
+        
+        # Load signing key from persistent vault
+        authority = PersistentSigningAuthority(
+            vault_dir=vault_dir,
+            registry_path=registry_path
+        )
+        private_key, public_key = authority.get_signing_key(signing_key_id, require_active=True)
         
         # Create signer
-        signer = ArtifactSigner(private_key=private_key, key_id=key_id)
+        signer = ArtifactSigner(private_key=private_key, key_id=signing_key_id)
         
         # Sign bundle (without signature field)
         signature = signer.sign_manifest(bundle)
         
         return signature
         
-    except VendorKeyManagerError as e:
+    except (PersistentSigningAuthorityError, ImportError) as e:
         print(f"ERROR: Failed to load signing key: {e}", file=sys.stderr)
+        print("PHASE-9: Persistent signing keys required. Ephemeral key generation is forbidden.", file=sys.stderr)
         sys.exit(1)
     except ArtifactSigningError as e:
         print(f"ERROR: Failed to sign bundle: {e}", file=sys.stderr)
