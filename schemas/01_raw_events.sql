@@ -151,7 +151,8 @@ CREATE TABLE event_validation_log (
     -- Additional validation context (JSONB for flexibility)
     -- Examples: field paths, expected vs actual values, gap ranges, etc.
     
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMPTZ NOT NULL,
+    -- PHASE 2: Deterministic timestamp - must be provided explicitly (use observed_at from envelope)
     -- Schema-level timestamp (immutable)
     
     CONSTRAINT event_validation_log_error_code_check CHECK (
@@ -195,7 +196,8 @@ CREATE TABLE sequence_gaps (
     first_event_after_gap UUID REFERENCES raw_events(event_id) ON DELETE RESTRICT,
     -- First event received after gap (for analysis)
     
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMPTZ NOT NULL,
+    -- PHASE 2: Deterministic timestamp - must be provided explicitly (use observed_at from envelope)
     -- Schema-level timestamp (immutable)
     
     CONSTRAINT sequence_gaps_start_before_end CHECK (gap_start_sequence < gap_end_sequence),

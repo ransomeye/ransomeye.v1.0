@@ -540,10 +540,9 @@ def store_event(conn, envelope: dict, validation_status: str, late_arrival: bool
                 hash_sha256, prev_hash_sha256,
                 validation_status, late_arrival, arrival_latency_seconds,
                 observed_at  # PHASE 2: created_at uses observed_at (deterministic)
-            ))
+            )            )
             
-            # PHASE 2: Use deterministic timestamp from envelope (observed_at)
-            observed_at = parser.isoparse(envelope["observed_at"])
+            # PHASE 2: Use deterministic timestamp from envelope (observed_at) for validation log
             cur.execute("""
                 INSERT INTO event_validation_log (event_id, validation_status, validation_timestamp)
                 VALUES (%s, %s, %s)
