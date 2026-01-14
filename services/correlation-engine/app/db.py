@@ -339,6 +339,7 @@ def add_evidence_to_incident(conn, incident_id: str, event: Dict[str, Any],
             """, (incident_id, event_id, evidence_type, confidence_level, confidence_score, observed_at))
             
             # Update incident
+            # PHASE 2: Use deterministic timestamp from event (observed_at)
             stage_changed = False
             if should_transition_stage(current_stage, new_stage):
                 # GA-BLOCKING: State transition
@@ -347,20 +348,22 @@ def add_evidence_to_incident(conn, incident_id: str, event: Dict[str, Any],
                         incident_id, from_stage, to_stage, transitioned_at,
                         evidence_count_at_transition, confidence_score_at_transition
                     )
-                    VALUES (%s, %s, %s, NOW(), %s, %s)
-                """, (incident_id, current_stage, new_stage, evidence_count + 1, new_confidence))
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                """, (incident_id, current_stage, new_stage, observed_at, evidence_count + 1, new_confidence))
                 stage_changed = True
             
             # Update incident record
+            # PHASE 2: Use deterministic timestamp from event (observed_at) for stage_changed_at
+            stage_changed_at = observed_at if stage_changed else None
             cur.execute("""
                 UPDATE incidents
                 SET current_stage = %s,
                     confidence_score = %s,
                     total_evidence_count = %s,
                     last_observed_at = %s,
-                    stage_changed_at = CASE WHEN %s THEN NOW() ELSE stage_changed_at END
+                    stage_changed_at = CASE WHEN %s THEN %s ELSE stage_changed_at END
                 WHERE incident_id = %s
-            """, (new_stage, new_confidence, evidence_count + 1, last_observed, stage_changed, incident_id))
+            """, (new_stage, new_confidence, evidence_count + 1, last_observed, stage_changed, stage_changed_at, incident_id))
             
             return True
         finally:
