@@ -459,13 +459,21 @@ class CommandGate:
     
     def _load_cached_policy(self) -> Dict[str, Any]:
         """
-        PHASE F2: Load cached policy for headless survivability.
+        GA-BLOCKING: Load cached policy for headless survivability with integrity check.
+        
+        CRITICAL: Policy cache must be integrity-checked at startup.
+        If integrity check fails or no policy exists, default to DENY (fail-closed).
         
         Returns:
             Cached policy dictionary with allowed/prohibited actions
         """
         if not self.cached_policy_path.exists():
-            # Default policy: All actions prohibited when Core is offline (fail-closed)
+            # GA-BLOCKING: No policy exists - default to DENY (fail-closed)
+            if _logger:
+                _logger.warning(
+                    "GA-BLOCKING: No policy available — default deny enforced. "
+                    "Cached policy file not found. Agent will deny all actions when Core is offline."
+                )
             default_policy = {
                 'version': '1.0',
                 'prohibited_actions': [
@@ -474,7 +482,8 @@ class CommandGate:
                     'MASS_PROCESS_KILL', 'NETWORK_SEGMENT_ISOLATION'
                 ],
                 'allowed_actions': [],  # No actions allowed when Core is offline (fail-closed)
-                'last_updated': None
+                'last_updated': None,
+                'integrity_hash': None  # No integrity hash for default policy
             }
             # Save default policy
             self.cached_policy_path.parent.mkdir(parents=True, exist_ok=True)
@@ -483,22 +492,108 @@ class CommandGate:
             return default_policy
         
         try:
+            # GA-BLOCKING: Load and integrity-check cached policy
             with open(self.cached_policy_path, 'r') as f:
-                return json.load(f)
+                policy = json.load(f)
+            
+            # Integrity check: Verify policy structure and hash (if present)
+            if not self._verify_policy_integrity(policy):
+                if _logger:
+                    _logger.error(
+                        "GA-BLOCKING: Cached policy integrity check failed. "
+                        "Default deny enforced. Policy cache may have been tampered with."
+                    )
+                # Return fail-closed default
+                return self._get_default_deny_policy()
+            
+            if _logger:
+                _logger.info(
+                    f"GA-BLOCKING: Cached policy loaded successfully. "
+                    f"Version: {policy.get('version', 'unknown')}, "
+                    f"Last updated: {policy.get('last_updated', 'never')}"
+                )
+            
+            return policy
+            
         except Exception as e:
             if _logger:
-                _logger.error(f"Failed to load cached policy: {e}")
+                _logger.error(
+                    f"GA-BLOCKING: Failed to load cached policy: {e}. "
+                    "Default deny enforced."
+                )
             # Return fail-closed default
-            return {
-                'version': '1.0',
-                'prohibited_actions': [
-                    'BLOCK_PROCESS', 'BLOCK_NETWORK_CONNECTION', 'TEMPORARY_FIREWALL_RULE',
-                    'QUARANTINE_FILE', 'ISOLATE_HOST', 'LOCK_USER', 'DISABLE_SERVICE',
-                    'MASS_PROCESS_KILL', 'NETWORK_SEGMENT_ISOLATION'
-                ],
-                'allowed_actions': [],
-                'last_updated': None
-            }
+            return self._get_default_deny_policy()
+    
+    def _get_default_deny_policy(self) -> Dict[str, Any]:
+        """
+        GA-BLOCKING: Get default deny policy (fail-closed).
+        
+        Returns:
+            Default policy dictionary (all actions prohibited)
+        """
+        return {
+            'version': '1.0',
+            'prohibited_actions': [
+                'BLOCK_PROCESS', 'BLOCK_NETWORK_CONNECTION', 'TEMPORARY_FIREWALL_RULE',
+                'QUARANTINE_FILE', 'ISOLATE_HOST', 'LOCK_USER', 'DISABLE_SERVICE',
+                'MASS_PROCESS_KILL', 'NETWORK_SEGMENT_ISOLATION'
+            ],
+            'allowed_actions': [],  # No actions allowed (fail-closed)
+            'last_updated': None,
+            'integrity_hash': None
+        }
+    
+    def _verify_policy_integrity(self, policy: Dict[str, Any]) -> bool:
+        """
+        GA-BLOCKING: Verify cached policy integrity.
+        
+        Checks:
+        1. Policy structure is valid
+        2. Required fields are present
+        3. Integrity hash matches (if present)
+        
+        Args:
+            policy: Policy dictionary to verify
+            
+        Returns:
+            True if integrity check passes, False otherwise
+        """
+        # Check required fields
+        required_fields = ['version', 'prohibited_actions', 'allowed_actions']
+        for field in required_fields:
+            if field not in policy:
+                if _logger:
+                    _logger.error(f"Policy integrity check failed: Missing required field: {field}")
+                return False
+        
+        # Verify prohibited_actions and allowed_actions are lists
+        if not isinstance(policy['prohibited_actions'], list):
+            if _logger:
+                _logger.error("Policy integrity check failed: prohibited_actions must be a list")
+            return False
+        
+        if not isinstance(policy['allowed_actions'], list):
+            if _logger:
+                _logger.error("Policy integrity check failed: allowed_actions must be a list")
+            return False
+        
+        # Verify integrity hash if present
+        if 'integrity_hash' in policy and policy['integrity_hash']:
+            # Compute hash of policy (without integrity_hash field)
+            policy_copy = policy.copy()
+            policy_copy.pop('integrity_hash', None)
+            policy_json = json.dumps(policy_copy, sort_keys=True, separators=(',', ':'))
+            computed_hash = hashlib.sha256(policy_json.encode('utf-8')).hexdigest()
+            
+            if computed_hash != policy['integrity_hash']:
+                if _logger:
+                    _logger.error(
+                        f"Policy integrity check failed: Hash mismatch. "
+                        f"Expected: {policy['integrity_hash']}, Computed: {computed_hash}"
+                    )
+                return False
+        
+        return True
     
     def _is_core_online(self) -> bool:
         """
