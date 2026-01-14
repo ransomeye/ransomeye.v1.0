@@ -152,39 +152,90 @@ class PhaseCExecutor:
         
         self.preflight_checked = True
     
+    def _validate_os_track_compatibility(self):
+        """
+        GA-BLOCKING: Validate OS-track compatibility at executor startup.
+        
+        Enforces hard OS gating:
+        - Linux host + Windows-only tracks → hard failure
+        - Windows host + Linux-only tracks → hard failure
+        
+        This prevents invalid or misleading validation failures caused by running
+        platform-specific validation tracks on the wrong operating system.
+        
+        Raises:
+            SystemExit: If OS-track mismatch detected (fail-closed)
+        """
+        if self.host_os == 'linux' and self.execution_mode == 'windows':
+            # Identify which Windows-only tracks would be blocked
+            windows_tracks = [track for track, os_req in self.TRACK_OS_MAPPING.items() 
+                            if os_req == 'windows']
+            error_msg = (
+                f"FATAL: Cannot run Windows-only validation tracks on Linux host.\n"
+                f"\n"
+                f"Host OS: {platform.system()} {platform.release()}\n"
+                f"Requested execution mode: Phase C-W (Windows)\n"
+                f"\n"
+                f"Windows-only tracks that cannot run on Linux:\n"
+            )
+            for track in windows_tracks:
+                error_msg += f"  - {track} (requires ETW - Windows-only)\n"
+            error_msg += (
+                f"\n"
+                f"ETW (Event Tracing for Windows) is Windows-only and cannot run on Linux.\n"
+                f"Windows Agent validation must be run on native Windows host.\n"
+                f"\n"
+                f"To run Linux validation:\n"
+                f"  - Use --mode linux\n"
+                f"  - Or omit --mode to auto-detect (will select Linux on this host)\n"
+                f"\n"
+                f"This is an audit-blocking failure.\n"
+                f"Invalid track execution would produce false audit results.\n"
+            )
+            print(f"❌ {error_msg}", file=sys.stderr)
+            sys.exit(1)
+        
+        if self.host_os == 'windows' and self.execution_mode == 'linux':
+            # Identify which Linux-only tracks would be blocked
+            linux_tracks = [track for track, os_req in self.TRACK_OS_MAPPING.items() 
+                          if os_req == 'linux']
+            error_msg = (
+                f"FATAL: Cannot run Linux-only validation tracks on Windows host.\n"
+                f"\n"
+                f"Host OS: {platform.system()} {platform.release()}\n"
+                f"Requested execution mode: Phase C-L (Linux)\n"
+                f"\n"
+                f"Linux-only tracks that cannot run on Windows:\n"
+            )
+            for track in linux_tracks:
+                error_msg += f"  - {track} (requires eBPF/Linux-specific features)\n"
+            error_msg += (
+                f"\n"
+                f"eBPF (extended Berkeley Packet Filter) is Linux-only and cannot run on Windows.\n"
+                f"Linux tracks (including DPI probe with eBPF) must be run on Linux host.\n"
+                f"\n"
+                f"To run Windows validation:\n"
+                f"  - Use --mode windows\n"
+                f"  - Or omit --mode to auto-detect (will select Windows on this host)\n"
+                f"\n"
+                f"This is an audit-blocking failure.\n"
+                f"Invalid track execution would produce false audit results.\n"
+            )
+            print(f"❌ {error_msg}", file=sys.stderr)
+            sys.exit(1)
+    
     def _enforce_os_boundaries(self):
         """
-        Enforce OS execution boundaries.
+        Enforce OS execution boundaries (preflight check).
         
-        PHASE B2: Hard stops for OS-specific features:
+        GA-BLOCKING: Hard stops for OS-specific features:
         - ETW on Linux: FATAL (ETW is Windows-only)
         - eBPF on Windows: FATAL (eBPF is Linux-only)
         
-        Linux refuses --mode windows
-        Windows refuses Linux tracks
-        Clear fatal errors when violated
+        This is a redundant check (also done in __init__) for defense-in-depth.
         """
-        current_os = platform.system().lower()
-        
-        if current_os == 'linux' and self.execution_mode == 'windows':
-            error_msg = (
-                "FATAL: Cannot run Phase C-W (Windows mode) on Linux host.\n"
-                "ETW (Event Tracing for Windows) is Windows-only and cannot run on Linux.\n"
-                "Windows Agent validation must be run on native Windows host.\n"
-                "Use --mode linux or omit --mode to auto-detect."
-            )
-            print(f"❌ {error_msg}", file=sys.stderr)
-            sys.exit(1)
-        
-        if current_os == 'windows' and self.execution_mode == 'linux':
-            error_msg = (
-                "FATAL: Cannot run Phase C-L (Linux mode) on Windows host.\n"
-                "eBPF (extended Berkeley Packet Filter) is Linux-only and cannot run on Windows.\n"
-                "Linux tracks (including DPI probe with eBPF) must be run on Linux host.\n"
-                "Use --mode windows or omit --mode to auto-detect."
-            )
-            print(f"❌ {error_msg}", file=sys.stderr)
-            sys.exit(1)
+        # OS compatibility already validated in __init__, but re-check for safety
+        self._validate_os_track_compatibility()
     
     def _assert_db_connectivity(self):
         """
