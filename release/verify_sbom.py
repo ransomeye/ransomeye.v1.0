@@ -10,6 +10,7 @@ Used by installers for fail-closed verification before installation.
 import sys
 import json
 import hashlib
+import base64
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 
