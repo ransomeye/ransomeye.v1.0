@@ -48,12 +48,23 @@ def get_db_connection_readonly():
     Read-only enforcement: Abort if write attempted.
     Connection safety: Validate health before returning.
     """
+    # PHASE A2: Require service-specific database user (ransomeye_ai_core)
+    db_user = os.getenv("RANSOMEYE_DB_USER")
+    if not db_user:
+        error_msg = "CRITICAL: RANSOMEYE_DB_USER environment variable is required. Must be set to 'ransomeye_ai_core' for AI core service."
+        if _logger:
+            _logger.fatal(error_msg)
+        else:
+            print(f"FATAL: {error_msg}", file=sys.stderr)
+        from common.shutdown import ExitCode, exit_fatal
+        exit_fatal(error_msg, ExitCode.STARTUP_ERROR)
+    
     if _common_db_safety_available:
         conn = create_readonly_connection(
             host=os.getenv("RANSOMEYE_DB_HOST", "localhost"),
             port=int(os.getenv("RANSOMEYE_DB_PORT", "5432")),
             database=os.getenv("RANSOMEYE_DB_NAME", "ransomeye"),
-            user=os.getenv("RANSOMEYE_DB_USER", "ransomeye"),
+            user=db_user,  # PHASE A2: Must be ransomeye_ai_core
             password=os.getenv("RANSOMEYE_DB_PASSWORD", ""),
             isolation_level=IsolationLevel.READ_COMMITTED,
             logger=_logger
@@ -65,7 +76,7 @@ def get_db_connection_readonly():
             host=os.getenv("RANSOMEYE_DB_HOST", "localhost"),
             port=int(os.getenv("RANSOMEYE_DB_PORT", "5432")),
             database=os.getenv("RANSOMEYE_DB_NAME", "ransomeye"),
-            user=os.getenv("RANSOMEYE_DB_USER", "ransomeye"),
+            user=db_user,  # PHASE A2: Must be ransomeye_ai_core
             password=os.getenv("RANSOMEYE_DB_PASSWORD", "")
         )
 
@@ -76,12 +87,23 @@ def get_db_connection_write():
     Transaction discipline: Explicit isolation level (READ_COMMITTED).
     Connection safety: Validate health before returning.
     """
+    # PHASE A2: Require service-specific database user (ransomeye_ai_core)
+    db_user = os.getenv("RANSOMEYE_DB_USER")
+    if not db_user:
+        error_msg = "CRITICAL: RANSOMEYE_DB_USER environment variable is required. Must be set to 'ransomeye_ai_core' for AI core service."
+        if _logger:
+            _logger.fatal(error_msg)
+        else:
+            print(f"FATAL: {error_msg}", file=sys.stderr)
+        from common.shutdown import ExitCode, exit_fatal
+        exit_fatal(error_msg, ExitCode.STARTUP_ERROR)
+    
     if _common_db_safety_available:
         conn = create_write_connection(
             host=os.getenv("RANSOMEYE_DB_HOST", "localhost"),
             port=int(os.getenv("RANSOMEYE_DB_PORT", "5432")),
             database=os.getenv("RANSOMEYE_DB_NAME", "ransomeye"),
-            user=os.getenv("RANSOMEYE_DB_USER", "ransomeye"),
+            user=db_user,  # PHASE A2: Must be ransomeye_ai_core
             password=os.getenv("RANSOMEYE_DB_PASSWORD", ""),
             isolation_level=IsolationLevel.READ_COMMITTED,
             logger=_logger
@@ -93,7 +115,7 @@ def get_db_connection_write():
             host=os.getenv("RANSOMEYE_DB_HOST", "localhost"),
             port=int(os.getenv("RANSOMEYE_DB_PORT", "5432")),
             database=os.getenv("RANSOMEYE_DB_NAME", "ransomeye"),
-            user=os.getenv("RANSOMEYE_DB_USER", "ransomeye"),
+            user=db_user,  # PHASE A2: Must be ransomeye_ai_core
             password=os.getenv("RANSOMEYE_DB_PASSWORD", "")
         )
 
