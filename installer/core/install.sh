@@ -323,38 +323,24 @@ set_permissions() {
     echo -e "${GREEN}✓${NC} Permissions set correctly"
 }
 
-# Check PostgreSQL availability and verify service users (PHASE B1: No defaults)
+# Check PostgreSQL availability and verify database user (v1.0 GA: gagan/gagan)
 check_postgresql() {
     echo ""
-    echo "Checking PostgreSQL availability and service users..."
+    echo "Checking PostgreSQL availability..."
     
     if ! command -v psql &> /dev/null; then
         error_exit "PostgreSQL client (psql) not found. Please install PostgreSQL first."
     fi
     
-    # Verify each service user exists and can connect
-    local users=(
-        "${RANSOMEYE_DB_USER_INGEST}:${RANSOMEYE_DB_PASSWORD_INGEST}:Ingest"
-        "${RANSOMEYE_DB_USER_CORRELATION}:${RANSOMEYE_DB_PASSWORD_CORRELATION}:Correlation"
-        "${RANSOMEYE_DB_USER_AI_CORE}:${RANSOMEYE_DB_PASSWORD_AI_CORE}:AI Core"
-        "${RANSOMEYE_DB_USER_POLICY}:${RANSOMEYE_DB_PASSWORD_POLICY}:Policy Engine"
-        "${RANSOMEYE_DB_USER_UI}:${RANSOMEYE_DB_PASSWORD_UI}:UI Backend"
-    )
-    
-    for user_info in "${users[@]}"; do
-        IFS=':' read -r db_user db_password service_name <<< "$user_info"
-        
-        export PGPASSWORD="$db_password"
-        if psql -h "${RANSOMEYE_DB_HOST}" -p "${RANSOMEYE_DB_PORT}" -U "$db_user" -d "${RANSOMEYE_DB_NAME}" -c "SELECT 1" &> /dev/null; then
-            echo -e "${GREEN}✓${NC} ${service_name} service user verified: $db_user"
-        else
-            unset PGPASSWORD
-            error_exit "Cannot connect to PostgreSQL with ${service_name} credentials (host: ${RANSOMEYE_DB_HOST}, user: $db_user, database: ${RANSOMEYE_DB_NAME}). Ensure user exists and password is correct."
-        fi
+    # v1.0 GA: Use single gagan user (Phase A.2 reverted)
+    export PGPASSWORD="${RANSOMEYE_DB_PASSWORD}"
+    if psql -h "${RANSOMEYE_DB_HOST}" -p "${RANSOMEYE_DB_PORT}" -U "${RANSOMEYE_DB_USER}" -d "${RANSOMEYE_DB_NAME}" -c "SELECT 1" &> /dev/null; then
+        echo -e "${GREEN}✓${NC} Database connection verified: ${RANSOMEYE_DB_USER}@${RANSOMEYE_DB_HOST}:${RANSOMEYE_DB_PORT}/${RANSOMEYE_DB_NAME}"
+    else
         unset PGPASSWORD
-    done
-    
-    echo -e "${GREEN}✓${NC} All service database users verified"
+        error_exit "Cannot connect to PostgreSQL (host: ${RANSOMEYE_DB_HOST}, user: ${RANSOMEYE_DB_USER}, database: ${RANSOMEYE_DB_NAME}). Ensure user exists and password is correct."
+    fi
+    unset PGPASSWORD
 }
 
 # Install systemd service (ONE service only)
@@ -539,31 +525,112 @@ except jsonschema.ValidationError as e:
     fi
 }
 
-# PHASE B2: Verify artifact signatures (placeholder - requires signing infrastructure)
+# PHASE B1: Verify artifact signatures (SBOM & Artifact Verification)
 verify_artifact_signatures() {
     echo ""
-    echo "Verifying artifact signatures..."
+    echo "Verifying artifact signatures (SBOM & Artifact Verification)..."
     
-    # Check for signature files
-    local sig_files=(
-        "${SRC_ROOT}/contracts/.sig"
-        "${SRC_ROOT}/schemas/.sig"
-    )
+    # PHASE B1: Installer must verify its own artifacts
+    # Check for installer artifact files: manifest.json, .sha256, .sig
+    local installer_artifact="${INSTALLER_DIR}/install.sh"
+    local installer_manifest="${INSTALLER_DIR}/install.sh.manifest.json"
+    local installer_sha256="${INSTALLER_DIR}/install.sh.sha256"
+    local installer_sig="${INSTALLER_DIR}/install.sh.sig"
     
-    local missing_sigs=()
-    for sig_file in "${sig_files[@]}"; do
-        if [[ ! -f "$sig_file" ]]; then
-            missing_sigs+=("$sig_file")
+    # Check for required files
+    local missing_files=()
+    [[ ! -f "$installer_manifest" ]] && missing_files+=("$installer_manifest")
+    [[ ! -f "$installer_sha256" ]] && missing_files+=("$installer_sha256")
+    [[ ! -f "$installer_sig" ]] && missing_files+=("$installer_sig")
+    
+    if [[ ${#missing_files[@]} -gt 0 ]]; then
+        error_exit "Missing artifact verification files (PHASE B1 requirement): ${missing_files[*]}"
+    fi
+    
+    # Verify using Python supply-chain verification engine
+    if command -v python3 &> /dev/null; then
+        local verify_script=$(cat <<'PYTHON_EOF'
+import sys
+import json
+from pathlib import Path
+
+# Add supply-chain module to path
+supply_chain_dir = Path(__file__).parent.parent.parent / "supply-chain"
+sys.path.insert(0, str(supply_chain_dir))
+
+try:
+    from crypto.vendor_key_manager import VendorKeyManager, VendorKeyManagerError
+    from crypto.artifact_verifier import ArtifactVerifier, ArtifactVerificationError
+    from engine.verification_engine import VerificationEngine, VerificationEngineError
+    
+    artifact_path = Path(sys.argv[1])
+    manifest_path = Path(sys.argv[2])
+    key_dir = Path(sys.argv[3]) if len(sys.argv) > 3 else None
+    signing_key_id = sys.argv[4] if len(sys.argv) > 4 else None
+    
+    # Load manifest to get signing_key_id if not provided
+    if not signing_key_id and manifest_path.exists():
+        manifest = json.loads(manifest_path.read_text())
+        signing_key_id = manifest.get('signing_key_id')
+    
+    # Initialize verifier
+    if key_dir and signing_key_id:
+        key_manager = VendorKeyManager(key_dir)
+        public_key = key_manager.get_public_key(signing_key_id)
+        if not public_key:
+            print(f"FATAL: Public key not found: {signing_key_id}", file=sys.stderr)
+            sys.exit(1)
+        verifier = ArtifactVerifier(public_key=public_key)
+    else:
+        print("FATAL: Key directory and signing key ID required for verification", file=sys.stderr)
+        sys.exit(1)
+    
+    # Initialize verification engine
+    verification_engine = VerificationEngine(verifier)
+    
+    # Verify artifact
+    result = verification_engine.verify_artifact(artifact_path, manifest_path)
+    
+    if not result.passed:
+        print(f"FATAL: Artifact verification failed: {result.reason}", file=sys.stderr)
+        if result.details:
+            for key, value in result.details.items():
+                print(f"  {key}: {value}", file=sys.stderr)
+        sys.exit(1)
+    
+    print("PASS: Artifact verification successful")
+    sys.exit(0)
+    
+except (VendorKeyManagerError, ArtifactVerificationError, VerificationEngineError) as e:
+    print(f"FATAL: Artifact verification error: {e}", file=sys.stderr)
+    sys.exit(1)
+except Exception as e:
+    print(f"FATAL: Unexpected error during artifact verification: {e}", file=sys.stderr)
+    sys.exit(1)
+PYTHON_EOF
+)
+        
+        # Create temporary Python script
+        local temp_script=$(mktemp)
+        echo "$verify_script" > "$temp_script"
+        chmod +x "$temp_script"
+        
+        # Run verification (key_dir and signing_key_id from environment or use defaults)
+        local key_dir="${RANSOMEYE_SIGNING_KEY_DIR:-${INSTALLER_DIR}/keys}"
+        local signing_key_id="${RANSOMEYE_SIGNING_KEY_ID:-ransomeye-v1.0-installer}"
+        
+        if python3 "$temp_script" "$installer_artifact" "$installer_manifest" "$key_dir" "$signing_key_id" 2>&1; then
+            echo -e "${GREEN}✓${NC} Artifact verification passed"
+        else
+            rm -f "$temp_script"
+            error_exit "Artifact verification failed (PHASE B1 requirement). Installation aborted."
         fi
-    done
-    
-    if [[ ${#missing_sigs[@]} -gt 0 ]]; then
-        echo -e "${YELLOW}⚠${NC}  Some signature files missing (signing infrastructure not yet implemented)"
-        echo "  Missing: ${missing_sigs[*]}"
-        echo "  Continuing installation (signature verification will be enforced in production)"
+        
+        rm -f "$temp_script"
     else
-        echo -e "${GREEN}✓${NC} Artifact signatures found"
-        # TODO: Implement signature verification when signing infrastructure is ready
+        # Fallback: Basic file existence check (not ideal, but better than nothing)
+        echo -e "${YELLOW}⚠${NC}  Python3 not available, performing basic file checks only"
+        echo -e "${GREEN}✓${NC} Artifact files found (full verification requires Python3)"
     fi
 }
 

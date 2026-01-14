@@ -52,22 +52,14 @@ def get_db_connection():
         from common.shutdown import ExitCode, exit_fatal
         exit_fatal(error_msg, ExitCode.STARTUP_ERROR)
     
-    # PHASE A2: Require service-specific database user (ransomeye_policy_engine)
-    db_user = os.getenv("RANSOMEYE_DB_USER")
-    if not db_user:
-        error_msg = "CRITICAL: RANSOMEYE_DB_USER environment variable is required. Must be set to 'ransomeye_policy_engine' for policy engine."
-        if _logger:
-            _logger.fatal(error_msg)
-        else:
-            print(f"FATAL: {error_msg}", file=sys.stderr)
-        from common.shutdown import ExitCode, exit_fatal
-        exit_fatal(error_msg, ExitCode.STARTUP_ERROR)
+    # v1.0 GA: Use gagan/gagan (Phase A.2 reverted)
+    db_user = os.getenv("RANSOMEYE_DB_USER", "gagan")
     
     conn = create_readonly_connection(
         host=os.getenv("RANSOMEYE_DB_HOST", "localhost"),
         port=int(os.getenv("RANSOMEYE_DB_PORT", "5432")),
         database=os.getenv("RANSOMEYE_DB_NAME", "ransomeye"),
-        user=db_user,  # PHASE A2: Must be ransomeye_policy_engine (read-only)
+        user=db_user,  # v1.0 GA: gagan
         password=os.getenv("RANSOMEYE_DB_PASSWORD", ""),
         isolation_level=IsolationLevel.READ_COMMITTED,
         logger=_logger

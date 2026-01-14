@@ -132,6 +132,10 @@ class PhaseCExecutor:
         """
         Enforce OS execution boundaries.
         
+        PHASE B2: Hard stops for OS-specific features:
+        - ETW on Linux: FATAL (ETW is Windows-only)
+        - eBPF on Windows: FATAL (eBPF is Linux-only)
+        
         Linux refuses --mode windows
         Windows refuses Linux tracks
         Clear fatal errors when violated
@@ -141,6 +145,7 @@ class PhaseCExecutor:
         if current_os == 'linux' and self.execution_mode == 'windows':
             error_msg = (
                 "FATAL: Cannot run Phase C-W (Windows mode) on Linux host.\n"
+                "ETW (Event Tracing for Windows) is Windows-only and cannot run on Linux.\n"
                 "Windows Agent validation must be run on native Windows host.\n"
                 "Use --mode linux or omit --mode to auto-detect."
             )
@@ -150,7 +155,8 @@ class PhaseCExecutor:
         if current_os == 'windows' and self.execution_mode == 'linux':
             error_msg = (
                 "FATAL: Cannot run Phase C-L (Linux mode) on Windows host.\n"
-                "Linux tracks must be run on Linux host.\n"
+                "eBPF (extended Berkeley Packet Filter) is Linux-only and cannot run on Windows.\n"
+                "Linux tracks (including DPI probe with eBPF) must be run on Linux host.\n"
                 "Use --mode windows or omit --mode to auto-detect."
             )
             print(f"❌ {error_msg}", file=sys.stderr)
@@ -657,17 +663,6 @@ class PhaseCExecutor:
     
     def _run_windows_tracks(self):
         """Execute Phase C-W tracks (Track 6-B only)."""
-        # PHASE B1: Hard-block eBPF on Windows (Linux-only technology)
-        current_os = platform.system().lower()
-        if current_os != 'windows':
-            error_msg = (
-                "FATAL: Windows tracks can only run on Windows host.\n"
-                "eBPF (extended Berkeley Packet Filter) is Linux-only and cannot execute on Windows.\n"
-                "This is a hard block for audit integrity and legal defensibility."
-            )
-            print(f"❌ {error_msg}", file=sys.stderr)
-            sys.exit(1)
-        
         # Enforce: Linux tracks cannot run on Windows
         if self.execution_mode != 'windows':
             error_msg = "FATAL: Windows tracks can only run on Windows host."

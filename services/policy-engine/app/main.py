@@ -78,7 +78,7 @@ if _common_available:
     config_loader.optional('RANSOMEYE_DB_HOST', default='localhost')
     config_loader.optional('RANSOMEYE_DB_PORT', default='5432', validator=validate_port)
     config_loader.optional('RANSOMEYE_DB_NAME', default='ransomeye')
-    config_loader.require('RANSOMEYE_DB_USER', description='Database user for policy engine (must be ransomeye_policy_engine)')
+    config_loader.optional('RANSOMEYE_DB_USER', default='gagan', description='Database user (v1.0 GA: gagan)')
     config_loader.optional('RANSOMEYE_POLICY_DIR', default='/tmp/ransomeye/policy')
     config_loader.optional('RANSOMEYE_POLICY_ENFORCEMENT_ENABLED', default='false')
     try:

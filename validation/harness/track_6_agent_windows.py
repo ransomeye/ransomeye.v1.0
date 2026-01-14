@@ -6,9 +6,13 @@ AUTHORITATIVE: Windows agent reality check test (AGENT-002 only)
 CRITICAL: This track runs on Windows only.
 Validates ETW event capture, normalization, PID reuse disambiguation,
 functional parity with simulator, and deterministic schema output.
+
+PHASE B2: Hard stop on Linux - ETW is Windows-only.
 """
 
 import json
+import sys
+import platform
 from datetime import datetime, timezone
 from typing import Dict, Any
 
@@ -29,7 +33,20 @@ def execute_track_6_agent_windows(executor) -> Dict[str, Any]:
     - PID reuse disambiguation
     - Functional parity with simulator
     - Deterministic schema output
+    
+    PHASE B2: Hard stop if run on Linux - ETW is Windows-only.
     """
+    # PHASE B2: Hard stop on Linux - ETW cannot run on Linux
+    current_os = platform.system().lower()
+    if current_os != 'windows':
+        error_msg = (
+            f"FATAL: Track 6-B (Windows Agent/ETW) cannot run on {current_os}.\n"
+            "ETW (Event Tracing for Windows) is Windows-only and cannot run on Linux.\n"
+            "This track must be executed on a native Windows host."
+        )
+        print(f"❌ {error_msg}", file=sys.stderr)
+        sys.exit(1)
+    
     results = {
         "track": "TRACK_6_AGENT_WINDOWS",
         "tests": {},
