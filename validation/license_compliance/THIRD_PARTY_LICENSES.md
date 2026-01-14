@@ -46,7 +46,7 @@ The following licenses are explicitly allowed for use in RansomEye without restr
 ### MIT License
 - **Status:** ✅ ALLOWED
 - **Rationale:** Most permissive license. Allows commercial use, modification, distribution, and private use without restrictions.
-- **Dependencies:** react, react-dom, vite, @vitejs/plugin-react, bitsandbytes, jsonlines, pyyaml, python-dotenv, llama-cpp-python, beautifulsoup4, fastapi, fastapi-cors, pydantic, pydantic-settings, jsonschema, sha2, hostname
+- **Dependencies:** react, react-dom, vite, vitejs-plugin-react, bitsandbytes (see binary redistribution note), jsonlines, pyyaml, python-dotenv, llama-cpp-python, beautifulsoup4, fastapi, fastapi-cors, pydantic, pydantic-settings, jsonschema, sha2, hostname
 
 ### Apache License 2.0
 - **Status:** ✅ ALLOWED
