@@ -205,7 +205,7 @@ def load_and_validate_phase_8_2(project_root: Path) -> Tuple[Dict[str, Any], str
     return result, file_hash
 
 
-def load_ga_verdict(project_root: Path) -> Optional[tuple[Dict[str, Any], str]]:
+def load_ga_verdict(project_root: Path) -> Optional[Tuple[Dict[str, Any], str]]:
     """
     Load GA verdict if present.
     
