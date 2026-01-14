@@ -70,6 +70,7 @@ if ! python3 "${SCRIPT_DIR}/license_scan.py" > /tmp/license_scan_report.json 2>&
     if [[ -f /tmp/license_scan_report.json ]]; then
         # Try to parse JSON and show violations, otherwise show raw output
         python3 "${SCRIPT_DIR}/license_scan.py" 2>&1 | grep -A 100 "violations" || cat /tmp/license_scan_report.json
+    fi
     
     echo ""
     echo -e "${RED}BUILD BLOCKED: License violations must be resolved${NC}" >&2
