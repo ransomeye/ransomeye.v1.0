@@ -155,29 +155,21 @@ def create_command_payload(command_type: str, target_machine_id: str,
 
 def sign_command(command_payload: Dict[str, Any]) -> str:
     """
-    Cryptographically sign command payload.
+    PHASE 4: Cryptographically sign command payload with ed25519.
     
-    Phase 7 requirement: Commands are cryptographically signed
-    Phase 7 requirement: All commands are signed and auditable
+    Commands are cryptographically signed with ed25519 (replaces HMAC-SHA256).
+    All commands are signed and auditable.
     Deterministic: Same command payload + same key → same signature
     
     Args:
         command_payload: Command payload dictionary
         
     Returns:
-        HMAC-SHA256 signature (64-character hex string)
+        Base64-encoded ed25519 signature
     """
-    # Phase 7 requirement: Cryptographically sign command
-    # Contract compliance: Use HMAC-SHA256 for signing (standard practice)
-    
-    # Serialize command payload to canonical JSON (for deterministic signing)
-    command_json = json.dumps(command_payload, sort_keys=True, separators=(',', ':'), ensure_ascii=False)
-    
-    # Get signing key
-    signing_key = get_signing_key()
-    
-    # Compute HMAC-SHA256 signature
-    signature = hmac.new(signing_key, command_json.encode('utf-8'), hashlib.sha256).hexdigest()
+    # PHASE 4: Cryptographically sign command with ed25519
+    signer = get_signer()
+    signature = signer.sign_payload(command_payload)
     
     return signature
 
