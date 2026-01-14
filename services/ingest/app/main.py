@@ -104,7 +104,7 @@ config_loader.require('RANSOMEYE_DB_PASSWORD', description='Database password (s
 config_loader.optional('RANSOMEYE_DB_HOST', default='localhost')
 config_loader.optional('RANSOMEYE_DB_PORT', default='5432', validator=validate_port)
 config_loader.optional('RANSOMEYE_DB_NAME', default='ransomeye')
-config_loader.optional('RANSOMEYE_DB_USER', default='gagan', description='Database user (v1.0 GA: gagan)')
+config_loader.require('RANSOMEYE_DB_USER', description='Database user (PHASE 1: per-service user required, no defaults)')
 config_loader.optional('RANSOMEYE_INGEST_PORT', default='8000', validator=validate_port)
 config_loader.optional('RANSOMEYE_EVENT_ENVELOPE_SCHEMA_PATH', 
                       default='/opt/ransomeye/etc/contracts/event-envelope.schema.json',
@@ -155,7 +155,7 @@ def _init_db_pool():
                 host=config['RANSOMEYE_DB_HOST'],
                 port=int(config['RANSOMEYE_DB_PORT']),
                 database=config['RANSOMEYE_DB_NAME'],
-                user=config.get('RANSOMEYE_DB_USER', 'gagan'),  # v1.0 GA: gagan
+                user=config['RANSOMEYE_DB_USER'],  # PHASE 1: Per-service user (required, no defaults)
                 password=db_password,  # Security: Use secret from secure storage
                 isolation_level=IsolationLevel.READ_COMMITTED,
                 logger=logger
@@ -167,7 +167,7 @@ def _init_db_pool():
                 host=config['RANSOMEYE_DB_HOST'],
                 port=int(config['RANSOMEYE_DB_PORT']),
                 database=config['RANSOMEYE_DB_NAME'],
-                user=config.get('RANSOMEYE_DB_USER', 'gagan'),  # v1.0 GA: gagan
+                user=config['RANSOMEYE_DB_USER'],  # PHASE 1: Per-service user (required, no defaults)
                 password=db_password  # Security: Use secret from secure storage
             )
             # Test connection
