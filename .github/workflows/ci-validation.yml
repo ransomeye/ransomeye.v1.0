@@ -1,5 +1,9 @@
 name: CI Validation - PHASE 6
 
+# PHASE 6 LOCKED
+# GA gating, validation execution, signing, and SBOM verification are FINAL.
+# Any modification requires Phase-6 re-certification.
+
 on:
   push:
     branches: [ main, develop ]
@@ -7,14 +11,13 @@ on:
     branches: [ main, develop ]
   workflow_dispatch:
   workflow_call:
-
-outputs:
-  ga_verdict:
-    description: "Final GA verdict"
-    value: ${{ jobs.aggregate-ga-verdict.outputs.ga_verdict }}
-  ga_ready:
-    description: "GA readiness flag"
-    value: ${{ jobs.aggregate-ga-verdict.outputs.ga_ready }}
+    outputs:
+      ga_verdict:
+        description: "Final GA verdict"
+        value: ${{ jobs.aggregate-ga-verdict.outputs.ga_verdict }}
+      ga_ready:
+        description: "GA readiness flag"
+        value: ${{ jobs.aggregate-ga-verdict.outputs.ga_ready }}
 
 # PHASE 6: CI Fail-Closed Enforcement
 # This workflow blocks CI on any failed validation phase (01-40)
