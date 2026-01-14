@@ -351,7 +351,10 @@ def run_ai_core():
                         else:
                             membership_score = 1.0
                         
-                        store_cluster_membership(write_conn, cluster_metadata['cluster_id'], incident_id, membership_score)
+                        # PHASE 3: Use deterministic timestamp (from incident observed_at)
+                        incident_observed_at = parser.isoparse(incident.get('first_observed_at', incident.get('last_observed_at')))
+                        store_cluster_membership(write_conn, cluster_metadata['cluster_id'], incident_id, 
+                                                membership_score, added_at=incident_observed_at)
                     except MemoryError:
                         error_msg = f"MEMORY ALLOCATION FAILURE: Failed to store cluster membership for incident {incident_id}"
                         logger.fatal(error_msg)
