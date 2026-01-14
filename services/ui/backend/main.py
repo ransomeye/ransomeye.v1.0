@@ -331,12 +331,49 @@ async def get_active_incidents():
     if shutdown_handler.is_shutdown_requested():
         raise HTTPException(status_code=503, detail={"error_code": "SERVICE_SHUTTING_DOWN"})
     
+    # PHASE 5: RBAC enforcement (if available)
+    # TODO: Integrate RBAC authentication when fully configured
+    # For now, endpoints are public (restrict in production)
+    
     conn = None
     try:
         # Phase 8 requirement: Query view only, not base table
         conn = get_db_connection()
         incidents = query_view(conn, "v_active_incidents")
-        return {"incidents": incidents}
+        
+        # PHASE 5: Add evidence quality indicators to incident list
+        evidence_quality_map = {}
+        if incidents:
+            incident_ids = [inc['incident_id'] for inc in incidents]
+            for incident_id in incident_ids:
+                eq = query_view(conn, "v_incident_evidence_quality", "incident_id", incident_id)
+                if eq:
+                    evidence_quality_map[incident_id] = eq[0]
+        
+        # PHASE 5: Enrich incidents with evidence quality and certainty state
+        enriched_incidents = []
+        for incident in incidents:
+            incident_id = incident['incident_id']
+            eq = evidence_quality_map.get(incident_id, {})
+            
+            # PHASE 5: Separate confidence from certainty
+            certainty_state = "UNCONFIRMED"
+            if incident.get('stage') == 'CONFIRMED':
+                certainty_state = "CONFIRMED"
+            elif incident.get('stage') == 'PROBABLE':
+                certainty_state = "PROBABLE"
+            elif incident.get('stage') == 'SUSPICIOUS':
+                certainty_state = "SUSPICIOUS"
+            
+            enriched_incident = {
+                ...incident,
+                'certainty_state': certainty_state,
+                'is_probabilistic': (certainty_state != 'CONFIRMED'),
+                'has_contradiction': eq.get('has_contradiction', False)
+            }
+            enriched_incidents.append(enriched_incident)
+        
+        return {"incidents": enriched_incidents}
     except Exception as e:
         # Security: Sanitize exception message before logging
         try:
