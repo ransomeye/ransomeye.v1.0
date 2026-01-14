@@ -272,16 +272,17 @@ def store_feature_vector(conn, incident_id: str, model_version_id: str,
 
 def store_cluster(conn, cluster_id: str, model_version_id: str, cluster_label: str,
                  cluster_size: int, cluster_created_at: datetime, cluster_updated_at: datetime,
-                 training_data_hash: Optional[str] = None, model_hash: Optional[str] = None):
+                 training_data_hash: Optional[str] = None, model_hash: Optional[str] = None,
+                 model_storage_path: Optional[str] = None):
     """
-    Store cluster metadata.
+    PHASE 3: Store cluster metadata with model provenance.
+    
     Transaction discipline: Explicit begin, commit on success, rollback on failure.
     Deadlock/integrity violation detection: Log and terminate (no retries).
     """
     def _do_store():
         cur = conn.cursor()
         try:
-            # PHASE 3: Store training data hash and model hash if provided
             cur.execute("""
                 INSERT INTO clusters (
                     cluster_id, model_version_id, cluster_label, cluster_size,
@@ -292,8 +293,8 @@ def store_cluster(conn, cluster_id: str, model_version_id: str, cluster_label: s
             """, (cluster_id, model_version_id, cluster_label, cluster_size,
                   cluster_created_at, cluster_updated_at))
             
-            # PHASE 3: Update model version with training data hash and model hash
-            if training_data_hash or model_hash:
+            # PHASE 3: Update model version with training data hash, model hash, and storage path
+            if training_data_hash or model_hash or model_storage_path:
                 update_fields = []
                 update_values = []
                 if training_data_hash:
