@@ -94,7 +94,32 @@
     "signing_key_id": {
       "type": "string",
       "pattern": "^[a-f0-9]{64}$",
-      "description": "SHA256 hash of TRE signing public key"
+      "description": "PHASE 4: SHA256 hash of TRE signing public key (ed25519)"
+    },
+    "signing_algorithm": {
+      "type": "string",
+      "enum": ["ed25519"],
+      "description": "PHASE 4: Signing algorithm (ed25519 only)"
+    },
+    "signed_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "PHASE 4: Timestamp when command was signed"
+    },
+    "policy_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "PHASE 4: Policy ID that authorized this command"
+    },
+    "policy_version": {
+      "type": "string",
+      "minLength": 1,
+      "description": "PHASE 4: Version of policy that authorized this command"
+    },
+    "issuing_authority": {
+      "type": "string",
+      "enum": ["policy-engine", "threat-response-engine", "human-authority"],
+      "description": "PHASE 4: Authority that issued this command"
     }
   }
 }
