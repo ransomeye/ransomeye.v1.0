@@ -132,12 +132,14 @@ def determine_stage(confidence: float) -> str:
 
 def should_transition_stage(current_stage: str, new_stage: str) -> bool:
     """
-    GA-BLOCKING: Determine if stage transition should occur.
+    PHASE 3: Determine if stage transition should occur (deterministic guards).
     
     Rules:
-    - Transitions only forward: SUSPICIOUS → PROBABLE → CONFIRMED
+    - Transitions only forward: CLEAN → SUSPICIOUS → PROBABLE → CONFIRMED
     - No backward transitions
     - No direct jump to CONFIRMED from SUSPICIOUS (must go through PROBABLE)
+    - No time-based escalation (transitions based on confidence only)
+    - No single-signal CONFIRMED (must accumulate confidence)
     
     Args:
         current_stage: Current incident stage
@@ -146,24 +148,27 @@ def should_transition_stage(current_stage: str, new_stage: str) -> bool:
     Returns:
         True if transition should occur, False otherwise
     """
-    # GA-BLOCKING: No backward transitions
+    # PHASE 3: No backward transitions
     if current_stage == 'CONFIRMED':
         return False  # CONFIRMED is terminal
     
-    if current_stage == 'PROBABLE' and new_stage == 'SUSPICIOUS':
+    if current_stage == 'PROBABLE' and new_stage in ['SUSPICIOUS', 'CLEAN']:
         return False  # No backward transition
     
-    if current_stage == 'SUSPICIOUS' and new_stage == 'CONFIRMED':
-        return False  # No direct jump to CONFIRMED (must go through PROBABLE)
+    if current_stage == 'SUSPICIOUS' and new_stage in ['CLEAN', 'CONFIRMED']:
+        return False  # No backward transition, no direct jump to CONFIRMED
     
-    # GA-BLOCKING: Forward transitions only
+    if current_stage == 'CLEAN' and new_stage != 'SUSPICIOUS':
+        return False  # CLEAN can only transition to SUSPICIOUS
+    
+    # PHASE 3: Forward transitions only (deterministic, one step at a time)
     current_index = INCIDENT_STAGES.index(current_stage) if current_stage in INCIDENT_STAGES else -1
     new_index = INCIDENT_STAGES.index(new_stage) if new_stage in INCIDENT_STAGES else -1
     
     if current_index == -1 or new_index == -1:
         return False  # Invalid stage
     
-    # GA-BLOCKING: Only allow forward progression (one step at a time)
+    # PHASE 3: Only allow forward progression (one step at a time, deterministic)
     return new_index > current_index and new_index == current_index + 1
 
 
