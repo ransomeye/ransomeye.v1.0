@@ -78,7 +78,7 @@ if _common_available:
     config_loader.optional('RANSOMEYE_DB_HOST', default='localhost')
     config_loader.optional('RANSOMEYE_DB_PORT', default='5432', validator=validate_port)
     config_loader.optional('RANSOMEYE_DB_NAME', default='ransomeye')
-    config_loader.optional('RANSOMEYE_DB_USER', default='ransomeye')
+    config_loader.require('RANSOMEYE_DB_USER', description='Database user for AI core service (must be ransomeye_ai_core)')
     try:
         config = config_loader.load()
     except ConfigError as e:

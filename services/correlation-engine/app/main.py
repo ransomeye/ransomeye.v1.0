@@ -61,7 +61,7 @@ config_loader.require('RANSOMEYE_DB_PASSWORD', description='Database password (s
 config_loader.optional('RANSOMEYE_DB_HOST', default='localhost')
 config_loader.optional('RANSOMEYE_DB_PORT', default='5432', validator=validate_port)
 config_loader.optional('RANSOMEYE_DB_NAME', default='ransomeye')
-config_loader.optional('RANSOMEYE_DB_USER', default='ransomeye')
+config_loader.require('RANSOMEYE_DB_USER', description='Database user for correlation engine (must be ransomeye_correlation)')
 
 try:
     config = config_loader.load()
