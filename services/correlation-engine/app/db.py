@@ -111,7 +111,7 @@ def get_unprocessed_events(conn) -> List[Dict[str, Any]]:
                 FROM evidence 
                 WHERE event_id IS NOT NULL
             )
-            ORDER BY ingested_at ASC
+            ORDER BY component_instance_id ASC, sequence ASC
         """)
         
         columns = [desc[0] for desc in cur.description]
