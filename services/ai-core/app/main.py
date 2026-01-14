@@ -313,14 +313,18 @@ def run_ai_core():
                     from common.shutdown import ExitCode, exit_fatal
                     exit_fatal(error_msg, ExitCode.RUNTIME_ERROR)
                 
-                # Store cluster
+                # PHASE 3: Store cluster with model version and training data hash
                 try:
                     first_obs = parser.isoparse(cluster_metadata['first_observed_at']) if isinstance(cluster_metadata['first_observed_at'], str) else cluster_metadata['first_observed_at']
                     last_obs = parser.isoparse(cluster_metadata['last_observed_at']) if isinstance(cluster_metadata['last_observed_at'], str) else cluster_metadata['last_observed_at']
                     
+                    # PHASE 3: Store training data hash for replay
+                    training_data_hash = model_storage.compute_training_data_hash(feature_vectors)
+                    model_hash = model_storage.get_model_hash(kmeans_model) if kmeans_model else None
+                    
                     store_cluster(write_conn, cluster_metadata['cluster_id'], clustering_model_version,
                                 cluster_metadata['cluster_label'], cluster_metadata['cluster_size'],
-                                first_obs, last_obs)
+                                first_obs, last_obs, training_data_hash=training_data_hash, model_hash=model_hash)
                 except MemoryError:
                     error_msg = f"MEMORY ALLOCATION FAILURE: Failed to store cluster {cluster_metadata['cluster_id']}"
                     logger.fatal(error_msg)
