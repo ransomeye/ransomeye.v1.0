@@ -806,10 +806,19 @@ class PhaseCExecutor:
         self.execute_track("TRACK_6_AGENT_LINUX", execute_track_6_agent_linux)
     
     def _run_windows_tracks(self):
-        """Execute Phase C-W tracks (Track 6-B only)."""
-        # Enforce: Linux tracks cannot run on Windows
+        """
+        Execute Phase C-W tracks (Track 6-B only).
+        
+        GA-BLOCKING: All tracks in this method are Windows-only.
+        OS compatibility validated at executor startup and track execution time.
+        """
+        # Defense-in-depth: Re-validate execution mode
         if self.execution_mode != 'windows':
-            error_msg = "FATAL: Windows tracks can only run on Windows host."
+            error_msg = (
+                f"FATAL: Windows tracks can only run on Windows host.\n"
+                f"Current execution mode: {self.execution_mode}\n"
+                f"Host OS: {platform.system()} {platform.release()}"
+            )
             print(f"❌ {error_msg}", file=sys.stderr)
             sys.exit(1)
         
