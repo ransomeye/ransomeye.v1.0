@@ -177,12 +177,41 @@ def validate_db_bootstrap(
         SystemExit: If PEER authentication is detected (fail-closed)
         SystemExit: If connection fails for authentication reasons
     """
-    # Default values (v1.0 GA: gagan/gagan)
+    # Get values from parameters or environment (no hardcoded defaults for credentials)
     host = host or os.getenv("RANSOMEYE_DB_HOST", "localhost")
     port = port or int(os.getenv("RANSOMEYE_DB_PORT", "5432"))
     database = database or os.getenv("RANSOMEYE_DB_NAME", "ransomeye")
-    user = user or os.getenv("RANSOMEYE_DB_USER", "gagan")
-    password = password or os.getenv("RANSOMEYE_DB_PASSWORD", "gagan")
+    
+    # Credentials must be provided (fail-closed if missing)
+    user = user or os.getenv("RANSOMEYE_DB_USER")
+    password = password or os.getenv("RANSOMEYE_DB_PASSWORD")
+    
+    if not user:
+        error_msg = "SECURITY VIOLATION: Database user is required (no default allowed)"
+        if logger:
+            logger.fatal(error_msg)
+        exit_startup_error(error_msg)
+    
+    if not password:
+        error_msg = "SECURITY VIOLATION: Database password is required (no default allowed)"
+        if logger:
+            logger.fatal(error_msg)
+        exit_startup_error(error_msg)
+    
+    # Validate credentials are not weak/default values
+    weak_users = ['gagan', 'test', 'admin', 'root', 'default']
+    if user.lower() in [u.lower() for u in weak_users]:
+        error_msg = f"SECURITY VIOLATION: Database user '{user}' is a weak/default value (not allowed)"
+        if logger:
+            logger.fatal(error_msg)
+        exit_startup_error(error_msg)
+    
+    weak_passwords = ['gagan', 'password', 'test', 'changeme', 'default', 'secret']
+    if password.lower() in [p.lower() for p in weak_passwords]:
+        error_msg = "SECURITY VIOLATION: Database password is a weak/default value (not allowed)"
+        if logger:
+            logger.fatal(error_msg)
+        exit_startup_error(error_msg)
     
     if logger:
         logger.startup(f"Pre-flight database bootstrap validation (user: {user})")
