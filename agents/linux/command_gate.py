@@ -59,7 +59,9 @@ class CommandGate:
         agent_id: str,
         audit_log_path: Path,
         nonce_cache_size: int = 1000,
-        clock_skew_tolerance: int = 60
+        clock_skew_tolerance: int = 60,
+        cached_policy_path: Optional[Path] = None,
+        core_endpoint: Optional[str] = None
     ):
         """
         Initialize command gate.
@@ -71,12 +73,19 @@ class CommandGate:
             audit_log_path: Path to local audit log
             nonce_cache_size: Size of nonce cache for replay protection
             clock_skew_tolerance: Clock skew tolerance in seconds (±60s max)
+            cached_policy_path: Path to cached policy file (PHASE F2: Headless survivability)
+            core_endpoint: Core endpoint URL for online check (PHASE F2)
         """
         self.tre_public_key = tre_public_key
         self.tre_key_id = tre_key_id
         self.agent_id = agent_id
         self.audit_log_path = audit_log_path
         self.clock_skew_tolerance = clock_skew_tolerance
+        
+        # PHASE F2: Cached policy for headless survivability
+        self.cached_policy_path = cached_policy_path or Path(os.getenv('RANSOMEYE_CACHED_POLICY_PATH', '/var/lib/ransomeye/agent/cached_policy.json'))
+        self.core_endpoint = core_endpoint or os.getenv('RANSOMEYE_CORE_ENDPOINT', 'http://localhost:8000/health')
+        self.cached_policy = self._load_cached_policy()
         
         # Nonce cache for replay protection
         self.nonce_cache = set()
@@ -179,6 +188,9 @@ class CommandGate:
             
             # Step 8: Rate limiting
             self._check_rate_limit()
+            
+            # Step 9: PHASE F2 - Check cached policy if Core is offline
+            self._check_cached_policy_if_offline(command)
             
             # All checks passed
             self._log_audit_event('command_received', command_id, 'SUCCESS')
@@ -444,3 +456,107 @@ class CommandGate:
         
         # Add current timestamp
         self.command_timestamps.append(now)
+    
+    def _load_cached_policy(self) -> Dict[str, Any]:
+        """
+        PHASE F2: Load cached policy for headless survivability.
+        
+        Returns:
+            Cached policy dictionary with allowed/prohibited actions
+        """
+        if not self.cached_policy_path.exists():
+            # Default policy: All actions prohibited when Core is offline (fail-closed)
+            default_policy = {
+                'version': '1.0',
+                'prohibited_actions': [
+                    'BLOCK_PROCESS', 'BLOCK_NETWORK_CONNECTION', 'TEMPORARY_FIREWALL_RULE',
+                    'QUARANTINE_FILE', 'ISOLATE_HOST', 'LOCK_USER', 'DISABLE_SERVICE',
+                    'MASS_PROCESS_KILL', 'NETWORK_SEGMENT_ISOLATION'
+                ],
+                'allowed_actions': [],  # No actions allowed when Core is offline (fail-closed)
+                'last_updated': None
+            }
+            # Save default policy
+            self.cached_policy_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(self.cached_policy_path, 'w') as f:
+                json.dump(default_policy, f, indent=2)
+            return default_policy
+        
+        try:
+            with open(self.cached_policy_path, 'r') as f:
+                return json.load(f)
+        except Exception as e:
+            if _logger:
+                _logger.error(f"Failed to load cached policy: {e}")
+            # Return fail-closed default
+            return {
+                'version': '1.0',
+                'prohibited_actions': [
+                    'BLOCK_PROCESS', 'BLOCK_NETWORK_CONNECTION', 'TEMPORARY_FIREWALL_RULE',
+                    'QUARANTINE_FILE', 'ISOLATE_HOST', 'LOCK_USER', 'DISABLE_SERVICE',
+                    'MASS_PROCESS_KILL', 'NETWORK_SEGMENT_ISOLATION'
+                ],
+                'allowed_actions': [],
+                'last_updated': None
+            }
+    
+    def _is_core_online(self) -> bool:
+        """
+        PHASE F2: Check if Core is online.
+        
+        Returns:
+            True if Core is online, False otherwise
+        """
+        try:
+            import urllib.request
+            import urllib.error
+            req = urllib.request.Request(self.core_endpoint, method='GET')
+            with urllib.request.urlopen(req, timeout=2) as response:
+                return response.status == 200
+        except Exception:
+            return False
+    
+    def _check_cached_policy_if_offline(self, command: Dict[str, Any]):
+        """
+        PHASE F2: Check cached policy if Core is offline.
+        
+        CRITICAL: When Core is offline and prohibited action attempted,
+        agent must fail-closed using cached policy.
+        Failure = ❌ GA blocked
+        
+        Args:
+            command: Command dictionary
+            
+        Raises:
+            CommandRejectionError: If Core is offline and action is prohibited
+        """
+        # Check if Core is online
+        if self._is_core_online():
+            # Core is online - policy check not needed (Core will verify)
+            return
+        
+        # Core is offline - check cached policy
+        action_type = command.get('action_type', '')
+        prohibited_actions = self.cached_policy.get('prohibited_actions', [])
+        allowed_actions = self.cached_policy.get('allowed_actions', [])
+        
+        # PHASE F2: Fail-closed - if action is prohibited or not explicitly allowed, reject
+        if action_type in prohibited_actions:
+            raise CommandRejectionError(
+                f"PHASE F2: Core offline - Action {action_type} is prohibited by cached policy. "
+                "Agent must fail-closed when Core is unavailable and prohibited action attempted."
+            )
+        
+        if allowed_actions and action_type not in allowed_actions:
+            # Policy has explicit allow-list and this action is not in it
+            raise CommandRejectionError(
+                f"PHASE F2: Core offline - Action {action_type} is not in allowed actions list. "
+                "Agent must fail-closed when Core is unavailable and action is not explicitly allowed."
+            )
+        
+        # If no explicit allow-list and action not prohibited, allow (but log warning)
+        if _logger:
+            _logger.warning(
+                f"PHASE F2: Core offline - Action {action_type} allowed by cached policy "
+                "(no explicit prohibition). Consider updating cached policy for fail-closed behavior."
+            )

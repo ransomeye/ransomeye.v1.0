@@ -199,6 +199,96 @@ def test_branding_separation_csv():
     return True
 
 
+def test_logo_change_does_not_affect_hash():
+    """
+    PHASE F1: Test that replacing logo does NOT change report hash.
+    
+    CRITICAL: Report hash must be anchored to incident snapshot/closure time,
+    NOT to branding assets. Visual layer is presentation-only, not evidence.
+    
+    CI must assert: sha256(report_A_with_logo1) == sha256(report_A_with_logo2)
+    """
+    import os
+    import hashlib
+    import tempfile
+    
+    # Create test assembled explanation
+    assembled_explanation = {
+        'assembled_explanation_id': 'test-logo-hash-1',
+        'incident_id': 'incident-logo-test',
+        'view_type': 'SOC_ANALYST',
+        'source_explanation_bundle_ids': [],
+        'source_alert_ids': [],
+        'source_context_block_ids': [],
+        'source_risk_ids': [],
+        'ordering_rules_applied': [],
+        'content_blocks': [
+            {
+                'block_id': 'block-logo-1',
+                'source_type': 'ALERT',
+                'source_id': 'alert-logo-1',
+                'content_type': 'TECHNICAL_DETAIL',
+                'content_reference': 'alert://alert-logo-1',
+                'display_order': 0
+            }
+        ],
+        'integrity_hash': '',
+        'generated_at': datetime.now(timezone.utc).isoformat()
+    }
+    
+    render_engine = RenderEngine()
+    render_hasher = RenderHasher()
+    
+    # Render report with original logo (or default)
+    original_logo_path = os.environ.get('RANSOMEYE_LOGO_PATH')
+    pdf_content_1 = render_engine.render_report(assembled_explanation, 'PDF')
+    hash_1 = render_hasher.hash_content(pdf_content_1)
+    
+    # Create a different logo file (simulate logo replacement)
+    with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_logo:
+        # Create a minimal PNG (different from original)
+        # PNG signature + minimal valid PNG structure
+        tmp_logo.write(b'\x89PNG\r\n\x1a\n')  # PNG signature
+        tmp_logo.write(b'\x00\x00\x00\rIHDR')  # IHDR chunk start
+        tmp_logo.write(b'\x00' * 13)  # Minimal IHDR data
+        tmp_logo.write(b'\x00\x00\x00\x00IEND\xaeB`\x82')  # IEND chunk
+        tmp_logo_path = tmp_logo.name
+    
+    try:
+        # Set environment to use different logo
+        os.environ['RANSOMEYE_LOGO_PATH'] = tmp_logo_path
+        
+        # Re-render report with different logo
+        # Note: We need to create a new RenderEngine instance to pick up the new logo
+        render_engine_2 = RenderEngine()
+        pdf_content_2 = render_engine_2.render_report(assembled_explanation, 'PDF')
+        hash_2 = render_hasher.hash_content(pdf_content_2)
+        
+        # PHASE F1 REQUIREMENT: Hash must NOT change when logo changes
+        assert hash_1 == hash_2, (
+            f"PHASE F1 FAILED: Report hash changed when logo was replaced.\n"
+            f"Hash with logo1: {hash_1}\n"
+            f"Hash with logo2: {hash_2}\n"
+            f"Report hash must be anchored to incident snapshot/closure time, NOT branding assets."
+        )
+        
+        print("✓ Test passed: Logo replacement does NOT change report hash")
+        return True
+        
+    finally:
+        # Restore original logo path
+        if original_logo_path:
+            os.environ['RANSOMEYE_LOGO_PATH'] = original_logo_path
+        elif 'RANSOMEYE_LOGO_PATH' in os.environ:
+            del os.environ['RANSOMEYE_LOGO_PATH']
+        
+        # Clean up temp logo file
+        try:
+            os.unlink(tmp_logo_path)
+        except:
+            pass
+
+
 def main():
     """Run all branding integrity tests."""
     print("Running Branding Integrity Tests...")
@@ -209,9 +299,10 @@ def main():
         test_branding_separation_pdf()
         test_branding_separation_html()
         test_branding_separation_csv()
+        test_logo_change_does_not_affect_hash()  # PHASE F1: Logo change must not affect hash
         
         print("=" * 60)
-        print("✓ All branding integrity tests passed")
+        print("✓ All branding integrity tests passed (including PHASE F1: Logo change hash test)")
         return 0
     except AssertionError as e:
         print(f"✗ Test failed: {e}", file=sys.stderr)
