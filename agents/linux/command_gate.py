@@ -613,45 +613,73 @@ class CommandGate:
     
     def _check_cached_policy_if_offline(self, command: Dict[str, Any]):
         """
-        PHASE F2: Check cached policy if Core is offline.
+        GA-BLOCKING: Check cached policy if Core is offline (autonomous enforcement).
         
         CRITICAL: When Core is offline and prohibited action attempted,
         agent must fail-closed using cached policy.
-        Failure = ❌ GA blocked
+        
+        Behavior:
+        1. If Core is online → normal operation (Core verifies)
+        2. If Core is offline → enforce cached policy (autonomous)
+        3. If no policy exists → default DENY (fail-closed)
         
         Args:
             command: Command dictionary
             
         Raises:
-            CommandRejectionError: If Core is offline and action is prohibited
+            CommandRejectionError: If Core is offline and action is prohibited/not allowed
         """
         # Check if Core is online
         if self._is_core_online():
             # Core is online - policy check not needed (Core will verify)
             return
         
-        # Core is offline - check cached policy
+        # GA-BLOCKING: Core is offline - enforce cached policy autonomously
         action_type = command.get('action_type', '')
         prohibited_actions = self.cached_policy.get('prohibited_actions', [])
         allowed_actions = self.cached_policy.get('allowed_actions', [])
         
-        # PHASE F2: Fail-closed - if action is prohibited or not explicitly allowed, reject
-        if action_type in prohibited_actions:
-            raise CommandRejectionError(
-                f"PHASE F2: Core offline - Action {action_type} is prohibited by cached policy. "
-                "Agent must fail-closed when Core is unavailable and prohibited action attempted."
-            )
-        
-        if allowed_actions and action_type not in allowed_actions:
-            # Policy has explicit allow-list and this action is not in it
-            raise CommandRejectionError(
-                f"PHASE F2: Core offline - Action {action_type} is not in allowed actions list. "
-                "Agent must fail-closed when Core is unavailable and action is not explicitly allowed."
-            )
-        
-        # If no explicit allow-list and action not prohibited, allow (but log warning)
+        # GA-BLOCKING: Explicit autonomous enforcement logging
         if _logger:
             _logger.warning(
-                f"PHASE F2: Core offline - Action {action_type} allowed by cached policy "
-                "(no explicit prohibition). Consider updating cached policy for fail-closed behavior."
+                f"GA-BLOCKING: Core offline — autonomous enforcement active. "
+                f"Action: {action_type}, Cached policy version: {self.cached_policy.get('version', 'unknown')}"
+            )
+        
+        # GA-BLOCKING: Fail-closed enforcement logic
+        # Rule 1: If action is explicitly prohibited → REJECT
+        if action_type in prohibited_actions:
+            error_msg = (
+                f"GA-BLOCKING: Core offline — Action {action_type} is prohibited by cached policy. "
+                "Agent enforcing autonomous fail-closed policy. Action denied."
+            )
+            if _logger:
+                _logger.error(error_msg)
+            raise CommandRejectionError(error_msg)
+        
+        # Rule 2: If policy has explicit allow-list and action not in it → REJECT
+        if allowed_actions and action_type not in allowed_actions:
+            error_msg = (
+                f"GA-BLOCKING: Core offline — Action {action_type} is not in allowed actions list. "
+                "Agent enforcing autonomous fail-closed policy. Action denied."
+            )
+            if _logger:
+                _logger.error(error_msg)
+            raise CommandRejectionError(error_msg)
+        
+        # Rule 3: If no explicit allow-list exists → default DENY (fail-closed)
+        if not allowed_actions:
+            error_msg = (
+                f"GA-BLOCKING: Core offline — No policy available — default deny enforced. "
+                f"Action {action_type} denied (fail-closed)."
+            )
+            if _logger:
+                _logger.error(error_msg)
+            raise CommandRejectionError(error_msg)
+        
+        # Rule 4: Action is explicitly allowed → ALLOW (but log autonomous enforcement)
+        if _logger:
+            _logger.info(
+                f"GA-BLOCKING: Core offline — Action {action_type} allowed by cached policy. "
+                "Autonomous enforcement: ALLOWED"
             )
