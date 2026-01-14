@@ -1,0 +1,152 @@
+PROMPT 7 — CORRELATION STATE MACHINE HARDENING
+
+(CRITICAL LOGIC FIX — ENTERPRISE USABILITY GATE)
+
+PROMPT START
+
+You are working on RansomEye v1.0 GA – Audit Remediation Phase.
+This is Phase C: Correlation Logic Hardening.
+
+🔒 GLOBAL CONSTRAINTS (MANDATORY)
+
+v1.0 GA hardening only
+
+NO new detection rules
+
+NO new data sources
+
+NO schema changes unless strictly required
+
+Fix engine logic only
+
+Correlation > Isolation must be enforced
+
+Deterministic behavior required
+
+TASK 7 — CORRELATION STATE MACHINE & CONFIDENCE ACCUMULATION (GA BLOCKER)
+Objective
+
+Transform the Correlation Engine from a signal passthrough into a true aggregator that reduces false positives and is usable by enterprise SOC teams.
+
+CURRENT FAILURE (FROM VALIDATION 07)
+
+Single signal → Incident created
+
+No state machine
+
+No confidence accumulation
+
+No deduplication
+
+Violates “Correlation > Isolation”
+
+This causes:
+
+Massive alert fatigue
+
+SOC abandonment
+
+Product unusability in production
+
+REQUIRED IMPLEMENTATION (STRICT)
+1. INCIDENT STATE MACHINE
+
+Implement explicit state transitions:
+
+SUSPICIOUS → PROBABLE → CONFIRMED
+
+
+Rules
+
+Incidents are created only in SUSPICIOUS
+
+Transitions require additional correlated evidence
+
+No direct jump to CONFIRMED from a single signal
+
+2. CONFIDENCE ACCUMULATION
+
+Each correlated signal adds weighted confidence
+
+Confidence must be incremental and bounded
+
+Incident becomes actionable only when:
+
+confidence_score >= CONFIRMATION_THRESHOLD
+
+
+Threshold must be configurable (constant or env-based).
+
+3. DEDUPLICATION (MANDATORY)
+
+Signals with same logical identity (e.g. machine_id, process_id, time window):
+
+MUST MERGE into a single incident
+
+MUST NOT create duplicates
+
+Incident ID must be stable for the same entity
+
+4. CONTRADICTION HANDLING (LOGIC ONLY)
+
+If contradictory evidence appears:
+
+Confidence must decay
+
+State must not escalate
+
+Do not invent new contradiction rules — only enforce decay logic
+
+HARD RULES
+
+❌ No new detection rules
+
+❌ No AI-driven decisions
+
+❌ No single-signal confirmation
+
+❌ No per-signal incidents
+
+✅ Aggregation only
+
+✅ Deterministic escalation
+
+✅ SOC-usable output
+
+DELIVERABLES
+
+Correlation Engine logic changes
+
+State transition logic
+
+Confidence accumulation formula
+
+Deduplication strategy
+
+Example flow (multiple signals → single incident)
+
+Validation test description
+
+ACCEPTANCE CRITERIA (GA BLOCKING)
+
+Single signal → SUSPICIOUS only
+
+Multiple corroborating signals → PROBABLE / CONFIRMED
+
+Same machine → one incident, not many
+
+Alert volume reduced dramatically
+
+Deterministic behavior
+
+Respond only with:
+
+Implementation approach
+
+File paths
+
+Key code excerpts
+
+Example state transition flow
+
+PROMPT END
