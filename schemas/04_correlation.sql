@@ -141,8 +141,7 @@ CREATE TABLE incident_stages (
     to_stage incident_stage NOT NULL,
     -- New stage (transition target)
     
-    transitioned_at TIMESTAMPTZ NOT NULL,
-    -- PHASE 3: Deterministic timestamp - must be provided explicitly (use event observed_at)
+    transitioned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     -- When stage transition occurred
     
     transitioned_by VARCHAR(255),
@@ -162,7 +161,8 @@ CREATE TABLE incident_stages (
     -- Confidence score at time of transition
     -- Snapshot for audit trail
     
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMPTZ NOT NULL,
+    -- PHASE 3: Deterministic timestamp - must be provided explicitly
     -- Schema-level timestamp (immutable)
     
     CONSTRAINT incident_stages_from_to_different CHECK (from_stage IS NULL OR from_stage != to_stage),
@@ -226,7 +226,8 @@ CREATE TABLE evidence (
     -- Timestamp of evidence event (denormalized from raw_events.observed_at)
     -- Used for time-based evidence queries
     
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMPTZ NOT NULL,
+    -- PHASE 3: Deterministic timestamp - must be provided explicitly
     -- Schema-level timestamp (immutable)
     -- When evidence was linked to incident
     
@@ -287,7 +288,8 @@ CREATE TABLE evidence_correlation_patterns (
     pattern_matched_at TIMESTAMPTZ NOT NULL,
     -- When pattern was matched (timestamp of last event in pattern)
     
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMPTZ NOT NULL,
+    -- PHASE 3: Deterministic timestamp - must be provided explicitly
     -- Schema-level timestamp (immutable)
     
     CONSTRAINT evidence_correlation_patterns_pattern_name_not_empty CHECK (LENGTH(TRIM(pattern_name)) > 0),
