@@ -14697,4 +14697,96 @@ Ready to ship with the product
 PROMPT END
 
 
+Prompt Start
 
+You are fixing PHASE 0 — INSTALLER & BOOTSTRAP TRUST for RansomEye.
+
+Scope (STRICT)
+
+You may ONLY modify:
+
+Installer scripts
+
+Bootstrap validation logic
+
+Core startup validation
+
+You may NOT:
+
+Add features
+
+Change architecture
+
+Touch runtime logic beyond trust validation
+
+Objective
+
+Ensure it is impossible to install or start RansomEye insecurely.
+
+Mandatory Fixes (ALL REQUIRED)
+
+Remove ALL hardcoded credentials
+
+"gagan" DB password
+
+Test signing keys
+
+Default secrets of any kind
+
+Installer must FAIL-CLOSED
+
+If required env vars are missing → exit non-zero
+
+If weak secrets are detected → exit non-zero
+
+If signing keys are missing → exit non-zero
+
+Runtime trust alignment
+
+Core startup must validate:
+
+DB credentials present
+
+Signing keys present
+
+No test/default secrets
+
+Core must refuse to start if validation fails
+
+systemd alignment
+
+systemd units must NOT start services if validation fails
+
+No silent fallbacks
+
+Files You MUST Inspect & Fix
+
+(quote exact paths and lines)
+
+installer/core/install.sh
+
+installer/linux-agent/install.sh
+
+installer/dpi-probe/install.sh
+
+core/runtime.py (or equivalent startup validator)
+
+Any shared secret utility used by installer/runtime
+
+Evidence Required in Your Response
+
+You MUST provide:
+
+Exact code diffs
+
+Before vs After behavior
+
+Failure paths demonstrated
+
+Why this satisfies Validation Files 01, 02, 13
+
+If ANY hardcoded secret remains → your response is INVALID.
+
+Do NOT proceed beyond Phase 0.
+
+Prompt Ends
