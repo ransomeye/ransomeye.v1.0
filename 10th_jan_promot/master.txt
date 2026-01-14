@@ -15169,4 +15169,122 @@ If any AI output cannot be re-derived → FAIL.
 Prompt Ends
 
 
+Prompt Start
+
+You are fixing PHASE 4 — POLICY AUTHORITY & RESPONSE EXECUTION for RansomEye.
+
+This phase is SEQUENTIAL and depends on Phase 3 being PASS (now satisfied).
+
+OBJECTIVE
+
+Ensure no response action can execute unless:
+
+It is cryptographically signed
+
+The signing authority is valid
+
+The policy explicitly authorizes it
+
+The endpoint can verify it
+
+MANDATORY FIXES (ALL REQUIRED)
+1. Single Signing Standard (CRITICAL)
+
+You MUST:
+
+Eliminate all non-ed25519 signing
+
+Policy Engine, Threat Response Engine, and Agents MUST use ed25519 only
+
+No HMAC. No exceptions.
+
+2. Policy Authority Validation
+
+You MUST:
+
+Bind every command to:
+
+policy_id
+
+policy_version
+
+issuing authority
+
+Verify authority before execution
+
+Reject unsigned or unauthorized commands
+
+3. Windows Agent Enforcement
+
+You MUST:
+
+Remove placeholder verification
+
+Implement real ed25519 verification
+
+Reject commands that fail verification
+
+No soft-fail allowed.
+
+4. Replay & Audit Anchoring
+
+You MUST:
+
+Ensure every command execution:
+
+emits audit ledger entry
+
+references explanation bundle
+
+is replay-verifiable
+
+FILES YOU MUST INSPECT & MODIFY
+
+(quote exact paths and lines)
+
+services/policy-engine/app/*
+
+services/threat-response-engine/*
+
+agents/linux/*
+
+agents/windows/*
+
+Command signing & verification utilities
+
+FORBIDDEN
+
+No mixed signing algorithms
+
+No “temporary allow”
+
+No implicit trust
+
+No placeholder logic
+
+No runtime bypass
+
+EVIDENCE REQUIRED IN YOUR RESPONSE
+
+You MUST provide:
+
+Signing flow (policy → TRE → agent)
+
+Exact signing & verification code
+
+Rejection paths
+
+Audit anchoring proof
+
+Mapping required to:
+
+Validation File 09
+
+Validation File 10
+
+If any command can execute without verification → FAIL.
+
+Prompt Ends
+
+
 
