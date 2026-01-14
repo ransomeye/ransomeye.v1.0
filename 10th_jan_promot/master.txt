@@ -14551,4 +14551,150 @@ PROMPT END
 
 
 
+PROMPT 8 — FINAL OPERATOR RUNBOOK
+
+(ENTERPRISE / MILITARY HANDOFF — NON-CODE)
+
+PROMPT START
+
+You are working on RansomEye v1.0 GA – Final Enterprise Handoff.
+
+🔒 GLOBAL CONSTRAINTS
+
+NO code changes
+
+NO architecture changes
+
+Documentation only
+
+Audience: Enterprise SOC, SRE, Security Ops, Military Operators
+
+TASK 8 — GENERATE FINAL OPERATOR RUNBOOK
+File: OPERATIONS_MANUAL.md
+Objective
+
+Produce a clear, authoritative operator manual that explains how to install, verify, operate, and audit RansomEye v1.0 in enterprise and military environments.
+
+This document must assume:
+
+Air-gapped deployments
+
+Zero trust mindset
+
+Auditors reading logs months later
+
+REQUIRED CONTENT (MANDATORY)
+1. INSTALLATION & SUPPLY CHAIN VERIFICATION
+
+How to verify manifest.json and manifest.json.sig
+
+How to run verify_sbom.py offline
+
+What a FAILED SBOM verification means
+
+Why installation is fail-closed by design
+
+2. DATABASE BOOTSTRAP TROUBLESHOOTING
+
+Meaning of PEER vs MD5 authentication
+
+How to interpret db_bootstrap_validator errors
+
+Where pg_hba.conf is typically located
+
+What RansomEye will not auto-fix (by design)
+
+3. VALIDATION & PLATFORM AWARENESS
+
+Why Linux and Windows validation tracks are separated
+
+How OS-aware validation prevents audit corruption
+
+Common operator mistakes and how they are blocked
+
+4. OPERATIONAL MONITORING (“GLASS COCKPIT”)
+
+How to use /health/metrics
+
+Meaning of:
+
+HEALTHY
+
+DEGRADED
+
+CRITICAL
+
+What CRITICAL implies operationally
+
+What data is intentionally NOT exposed (privacy guarantees)
+
+5. INCIDENT INTELLIGENCE & CONFIDENCE SCORES
+
+Meaning of:
+
+SUSPICIOUS
+
+PROBABLE
+
+CONFIRMED
+
+How confidence scores accumulate
+
+Why single events never become incidents
+
+How this reduces alert fatigue
+
+6. FORENSICS & LEGAL ADMISSIBILITY
+
+How deterministic reports work
+
+Why report hashes never change
+
+How to prove chain-of-custody
+
+How logo/branding does NOT affect evidence
+
+7. SURVIVABILITY & AGENT AUTONOMY
+
+What happens when Core is offline
+
+Meaning of “GA-BLOCKING” logs
+
+How agents enforce cached policy
+
+Why default-deny is intentional
+
+8. AUDIT & COMPLIANCE NOTES
+
+Why fail-closed behavior exists everywhere
+
+Why there is no “best effort” mode
+
+How RansomEye aligns with military / gov expectations
+
+STYLE REQUIREMENTS
+
+Clear, precise, non-marketing language
+
+No assumptions
+
+No emojis
+
+No buzzwords
+
+Auditor-readable
+
+Operator-usable at 3 AM during an incident
+
+DELIVERABLE
+
+Full OPERATIONS_MANUAL.md content
+
+Structured sections
+
+Ready to ship with the product
+
+PROMPT END
+
+
 
