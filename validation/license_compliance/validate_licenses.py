@@ -156,11 +156,19 @@ class LicenseValidator:
     def validate_forbidden_licenses(self) -> bool:
         """Verify no forbidden licenses exist in inventory."""
         forbidden = {f.lower() for f in self.policy.get('forbidden_licenses', [])}
+        conditionally_allowed_licenses = {
+            cond.get('license', '').lower() 
+            for cond in self.policy.get('conditionally_allowed', [])
+        }
         violations = []
         
         for name, entry in self.inventory.items():
             license_str = entry.get('license', '').lower()
             license_type = entry.get('license_type', '')
+            
+            # Skip if conditionally allowed
+            if license_str in conditionally_allowed_licenses:
+                continue
             
             # Check if license contains forbidden terms
             for forbidden_license in forbidden:
