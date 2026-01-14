@@ -93,25 +93,25 @@ else:
 logger = setup_logging('policy-engine')
 shutdown_handler = ShutdownHandler('policy-engine')
 
-# Security: Initialize signing key at startup (read once, never reloaded, never logged)
+# PHASE 4: Initialize ed25519 signer at startup (read once, never reloaded, never logged)
 try:
-    from signer import get_signing_key
-    # Initialize signing key at startup (fail-fast on weak/invalid keys)
-    _signing_key_initialized = False
+    from signer import get_signer
+    # Initialize signer at startup (fail-fast on invalid keypair)
+    _signer_initialized = False
     try:
-        _ = get_signing_key()  # Validates and loads key
-        _signing_key_initialized = True
-        logger.info("Command signing key initialized successfully")
+        _ = get_signer()  # Validates and loads keypair
+        _signer_initialized = True
+        logger.info("PHASE 4: Command signing keypair initialized successfully (ed25519)")
     except SystemExit:
-        # get_signing_key terminates Core on invalid key
+        # get_signer terminates Core on invalid keypair
         raise
-    except Exception as e:
-        error_msg = f"SECURITY VIOLATION: Failed to initialize signing key: {e}"
-        logger.fatal(error_msg)
-        exit_startup_error(error_msg)
+except Exception as e:
+    error_msg = f"SECURITY VIOLATION: Failed to initialize signing keypair: {e}"
+    logger.fatal(error_msg)
+    exit_startup_error(error_msg)
 except ImportError:
-    _signing_key_initialized = False
-    logger.warning("Signing key initialization skipped (signer module not available)")
+    _signer_initialized = False
+    logger.warning("Signer initialization skipped (signer module not available)")
 
 
 def store_policy_decision(incident_id: str, policy_decision: Dict[str, Any]):
