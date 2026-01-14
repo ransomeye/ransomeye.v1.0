@@ -181,23 +181,15 @@ def generate_sbom(
             'artifacts': artifacts
         }
         
-        # Sign manifest
+        # Sign manifest (without signature field)
         key_manager = VendorKeyManager(key_dir)
         private_key, public_key, key_id = key_manager.get_or_create_keypair(signing_key_id)
         signer = ArtifactSigner(private_key, key_id)
         
-        # Build canonical manifest for signing (sorted JSON, no whitespace)
-        canonical_json = json.dumps(
-            manifest,
-            sort_keys=True,
-            separators=(',', ':'),
-            ensure_ascii=False
-        )
-        
-        # Sign manifest
+        # GA-BLOCKING: Sign manifest (signature computed on manifest without signature field)
         signature = signer.sign_manifest(manifest)
         
-        # Write manifest.json (with signature)
+        # Add signature and signing_key_id to manifest
         manifest['signature'] = signature
         manifest['signing_key_id'] = signing_key_id
         
