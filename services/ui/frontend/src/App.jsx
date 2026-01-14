@@ -268,9 +268,25 @@ function App() {
                     <p>No evidence data</p>
                   )}
 
+                  {/* PHASE 5: AI Insights with Provenance */}
                   <h3>AI Insights</h3>
                   {incidentDetail.ai_insights ? (
                     <div>
+                      {/* PHASE 5: Warning if AI output is advisory only */}
+                      {incidentDetail.evidence_quality && !incidentDetail.evidence_quality.has_ai_provenance && (
+                        <div style={{
+                          padding: '10px',
+                          marginBottom: '10px',
+                          backgroundColor: '#fff3cd',
+                          border: '1px solid #ffc107',
+                          borderRadius: '4px'
+                        }}>
+                          <p style={{ color: '#856404', fontWeight: 'bold', margin: 0 }}>
+                            ⚠️ ADVISORY ONLY: AI output is available but AI provenance (model version, training data hash) is missing. 
+                            This output cannot be verified or replayed. Use with caution.
+                          </p>
+                        </div>
+                      )}
                       <p>Cluster ID: {incidentDetail.ai_insights.cluster_id || 'N/A'}</p>
                       <p>Novelty Score: {incidentDetail.ai_insights.novelty_score || 'N/A'}</p>
                       {incidentDetail.ai_insights.shap_summary && (
@@ -284,6 +300,23 @@ function App() {
                     </div>
                   ) : (
                     <p>No AI insights</p>
+                  )}
+                  
+                  {/* PHASE 5: AI Provenance Information */}
+                  {incidentDetail.ai_provenance && incidentDetail.ai_provenance.length > 0 && (
+                    <div style={{ marginTop: '20px' }}>
+                      <h3>AI Provenance</h3>
+                      {incidentDetail.ai_provenance.map((prov, idx) => (
+                        <div key={idx} style={{ padding: '10px', backgroundColor: '#f5f5f5', borderRadius: '4px', marginBottom: '10px' }}>
+                          <p><strong>Model Type:</strong> {prov.model_type || 'N/A'}</p>
+                          <p><strong>Model Version:</strong> {prov.model_version_string || 'N/A'}</p>
+                          <p><strong>Model Hash:</strong> {prov.model_hash_sha256 ? prov.model_hash_sha256.substring(0, 16) + '...' : 'N/A'}</p>
+                          <p><strong>Training Data Hash:</strong> {prov.training_data_hash_sha256 ? prov.training_data_hash_sha256.substring(0, 16) + '...' : 'N/A'}</p>
+                          <p><strong>Model Storage Path:</strong> {prov.model_storage_path || 'N/A'}</p>
+                          <p><strong>SHAP Explanation Available:</strong> {prov.has_shap_explanation ? 'YES' : 'NO'}</p>
+                        </div>
+                      ))}
+                    </div>
                   )}
 
                   <h3>Policy Recommendations</h3>
