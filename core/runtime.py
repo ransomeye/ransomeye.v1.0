@@ -491,8 +491,20 @@ def _core_startup_validation():
     
     # Phase 10.1 requirement: Fail-fast invariant checks
     _invariant_check_missing_env('RANSOMEYE_DB_PASSWORD')
+    _invariant_check_missing_env('RANSOMEYE_DB_USER')
+    _invariant_check_missing_env('RANSOMEYE_COMMAND_SIGNING_KEY')
     _invariant_check_db_connection()
     _invariant_check_schema_mismatch()
+    
+    # Validate signing key is not weak/default
+    signing_key = os.getenv('RANSOMEYE_COMMAND_SIGNING_KEY')
+    if signing_key:
+        weak_patterns = ['test_signing_key', 'default', 'changeme', 'password', 'secret', 'phase7_minimal']
+        for pattern in weak_patterns:
+            if pattern.lower() in signing_key.lower():
+                error_msg = f"SECURITY VIOLATION: Signing key contains weak/default pattern '{pattern}' (not allowed)"
+                logger.fatal(error_msg)
+                exit_fatal(error_msg, ExitCode.CONFIG_ERROR)
     
     logger.startup("Core startup validation complete")
 
