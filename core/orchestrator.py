@@ -206,16 +206,16 @@ class CoreOrchestrator:
             self.status_path = Path(run_dir) / "core_status.json"
         self.start_order: List[str] = []
         self.adapters: Dict[str, ComponentAdapter] = {}
-        self.specs = self._build_specs()
-        self.adapters = self._build_adapters()
         self.state = ComponentState.INIT
         self.global_state = "INIT"
         self.failure_reason_code: Optional[str] = None
         self.failure_reason: Optional[str] = None
         self.security_events: List[Dict[str, str]] = []
+        self.core_pid = os.getpid()
         self.core_token = os.getenv("RANSOMEYE_CORE_TOKEN", str(uuid.uuid4()))
         os.environ["RANSOMEYE_CORE_TOKEN"] = self.core_token
-        self.core_pid = os.getpid()
+        self.specs = self._build_specs()
+        self.adapters = self._build_adapters()
 
     def run(self) -> int:
         try:
