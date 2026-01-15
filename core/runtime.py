@@ -185,12 +185,13 @@ def _validate_db_connectivity():
     logger.startup("Validating database connectivity")
     
     try:
+        db_password = config_loader.get_secret('RANSOMEYE_DB_PASSWORD') if _common_available else os.getenv('RANSOMEYE_DB_PASSWORD')
         conn = psycopg2.connect(
             host=config.get('RANSOMEYE_DB_HOST', 'localhost'),
             port=config.get('RANSOMEYE_DB_PORT', 5432),
             database=config.get('RANSOMEYE_DB_NAME', 'ransomeye'),
             user=config.get('RANSOMEYE_DB_USER', 'ransomeye'),
-            password=config['RANSOMEYE_DB_PASSWORD']
+            password=db_password
         )
         cur = conn.cursor()
         cur.execute("SELECT 1")
@@ -210,12 +211,13 @@ def _validate_schema_presence():
     logger.startup("Validating database schema presence")
     
     try:
+        db_password = config_loader.get_secret('RANSOMEYE_DB_PASSWORD') if _common_available else os.getenv('RANSOMEYE_DB_PASSWORD')
         conn = psycopg2.connect(
             host=config.get('RANSOMEYE_DB_HOST', 'localhost'),
             port=config.get('RANSOMEYE_DB_PORT', 5432),
             database=config.get('RANSOMEYE_DB_NAME', 'ransomeye'),
             user=config.get('RANSOMEYE_DB_USER', 'ransomeye'),
-            password=config['RANSOMEYE_DB_PASSWORD']
+            password=db_password
         )
         cur = conn.cursor()
         
@@ -282,12 +284,13 @@ def _validate_schema_version():
         exit_startup_error(error_msg)
     
     try:
+        db_password = config_loader.get_secret('RANSOMEYE_DB_PASSWORD') if _common_available else os.getenv('RANSOMEYE_DB_PASSWORD')
         conn = psycopg2.connect(
             host=config.get('RANSOMEYE_DB_HOST', 'localhost'),
             port=config.get('RANSOMEYE_DB_PORT', 5432),
             database=config.get('RANSOMEYE_DB_NAME', 'ransomeye'),
             user=config.get('RANSOMEYE_DB_USER', 'ransomeye'),
-            password=config['RANSOMEYE_DB_PASSWORD']
+            password=db_password
         )
         cur = conn.cursor()
         cur.execute("SELECT to_regclass('public.schema_migrations')")
@@ -375,12 +378,13 @@ def _validate_readonly_enforcement():
     logger.startup("Validating read-only enforcement")
     
     try:
+        db_password = config_loader.get_secret('RANSOMEYE_DB_PASSWORD') if _common_available else os.getenv('RANSOMEYE_DB_PASSWORD')
         conn = psycopg2.connect(
             host=config.get('RANSOMEYE_DB_HOST', 'localhost'),
             port=config.get('RANSOMEYE_DB_PORT', 5432),
             database=config.get('RANSOMEYE_DB_NAME', 'ransomeye'),
             user=config.get('RANSOMEYE_DB_USER', 'ransomeye'),
-            password=config['RANSOMEYE_DB_PASSWORD']
+            password=db_password
         )
         cur = conn.cursor()
         
@@ -431,12 +435,13 @@ def _invariant_check_db_connection():
     Terminate Core immediately if violated.
     """
     try:
+        db_password = config_loader.get_secret('RANSOMEYE_DB_PASSWORD') if _common_available else os.getenv('RANSOMEYE_DB_PASSWORD')
         conn = psycopg2.connect(
             host=config.get('RANSOMEYE_DB_HOST', 'localhost'),
             port=config.get('RANSOMEYE_DB_PORT', 5432),
             database=config.get('RANSOMEYE_DB_NAME', 'ransomeye'),
             user=config.get('RANSOMEYE_DB_USER', 'ransomeye'),
-            password=config['RANSOMEYE_DB_PASSWORD']
+            password=db_password
         )
         conn.close()
     except Exception as e:
@@ -450,12 +455,13 @@ def _invariant_check_schema_mismatch():
     Terminate Core immediately if violated.
     """
     try:
+        db_password = config_loader.get_secret('RANSOMEYE_DB_PASSWORD') if _common_available else os.getenv('RANSOMEYE_DB_PASSWORD')
         conn = psycopg2.connect(
             host=config.get('RANSOMEYE_DB_HOST', 'localhost'),
             port=config.get('RANSOMEYE_DB_PORT', 5432),
             database=config.get('RANSOMEYE_DB_NAME', 'ransomeye'),
             user=config.get('RANSOMEYE_DB_USER', 'ransomeye'),
-            password=config['RANSOMEYE_DB_PASSWORD']
+            password=db_password
         )
         cur = conn.cursor()
         
