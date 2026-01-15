@@ -1126,12 +1126,12 @@ _failure_reason = None
 @require_ui_permission("system:view_logs", resource_type="system")
 async def health_check(request: Request):
     """Health check endpoint."""
+    global _last_successful_cycle, _failure_reason
     try:
         conn = get_db_connection()
         try:
             with conn.cursor() as cur:
                 cur.execute("SELECT 1")
-            global _last_successful_cycle, _failure_reason
             _last_successful_cycle = datetime.now(timezone.utc).isoformat()
             _failure_reason = None
             return {
@@ -1149,7 +1149,6 @@ async def health_check(request: Request):
             safe_error = sanitize_exception(e)
         except ImportError:
             safe_error = str(e)
-        global _failure_reason
         _failure_reason = safe_error
         logger.error(f"Health check failed: {safe_error}")
         # Security: Never expose full error details in response (avoid secret leakage)
