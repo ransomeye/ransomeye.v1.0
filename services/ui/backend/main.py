@@ -242,7 +242,9 @@ try:
     from rbac.middleware.fastapi_auth import RBACAuth
     from rbac.api.rbac_api import RBACAPI
     _audit_ledger_path_mod = os.path.join(_project_root, 'audit-ledger')
-    if os.path.exists(_audit_ledger_path_mod) and _audit_ledger_path_mod not in sys.path:
+    if os.path.exists(_audit_ledger_path_mod):
+        if _audit_ledger_path_mod in sys.path:
+            sys.path.remove(_audit_ledger_path_mod)
         sys.path.insert(0, _audit_ledger_path_mod)
     from api import AuditLedger
     from auth import (
