@@ -353,7 +353,7 @@ def _send_event(ingest_url: str, envelope: Dict[str, Any], auth_manager: Service
     request = urllib.request.Request(ingest_url, data=payload, headers=headers, method="POST")
     try:
         with urllib.request.urlopen(request, timeout=5) as response:
-            if response.status != 200:
+            if response.status not in (200, 201):
                 raise RuntimeError(f"Ingest rejected telemetry (status {response.status})")
     except Exception as exc:
         raise RuntimeError(f"Telemetry transmission failed: {exc}") from exc
