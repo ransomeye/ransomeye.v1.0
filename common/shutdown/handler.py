@@ -9,6 +9,10 @@ import sys
 import signal
 import atexit
 import threading
+import json
+import os
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Callable, Optional, List
 from enum import IntEnum
 
@@ -116,6 +120,45 @@ def exit_fatal(message: str, exit_code: ExitCode = ExitCode.FATAL_ERROR):
     """
     print(f"FATAL: {message}", file=sys.stderr)
     sys.exit(int(exit_code))
+
+
+def _write_core_fatal_marker(reason_code: str, message: str) -> Optional[Path]:
+    run_dir = os.getenv("RANSOMEYE_RUN_DIR", "/tmp/ransomeye")
+    core_token = os.getenv("RANSOMEYE_CORE_TOKEN")
+    component = os.getenv("RANSOMEYE_COMPONENT_NAME") or os.path.basename(sys.argv[0])
+    payload = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "reason_code": reason_code,
+        "message": message,
+        "component": component,
+        "core_token": core_token
+    }
+    try:
+        path = Path(run_dir) / "core_fatal.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+        return path
+    except Exception:
+        return None
+
+
+def _signal_core_fatal(reason_code: str, message: str) -> None:
+    core_pid = os.getenv("RANSOMEYE_CORE_PID")
+    if not core_pid:
+        return
+    _write_core_fatal_marker(reason_code, message)
+    try:
+        os.kill(int(core_pid), signal.SIGUSR1)
+    except Exception:
+        pass
+
+
+def exit_readonly_violation(message: str, exit_code: ExitCode = ExitCode.RUNTIME_ERROR):
+    """
+    Exit immediately on read-only violation and escalate to Core.
+    """
+    _signal_core_fatal("READ_ONLY_VIOLATION", message)
+    exit_fatal(message, exit_code)
 
 
 def exit_config_error(message: str):
