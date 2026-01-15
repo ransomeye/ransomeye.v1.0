@@ -57,6 +57,9 @@ except ImportError:
         CONFIG_ERROR = 1
         STARTUP_ERROR = 2
         FATAL_ERROR = 4
+        RUNTIME_ERROR = 3
+    class ComponentState:
+        FAILED = "FAILED"
     def exit_config_error(m): 
         print(f"CONFIG_ERROR: {m}", file=sys.stderr)
         sys.exit(1)
