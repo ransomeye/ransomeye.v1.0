@@ -102,6 +102,16 @@ logger = setup_logging('core')
 _shutdown_handler = ShutdownHandler('core', cleanup_func=lambda: _core_cleanup())
 _orchestrator: Optional[CoreOrchestrator] = None
 
+
+def _allow_weak_test_credentials() -> bool:
+    return (
+        os.getenv("RANSOMEYE_ALLOW_WEAK_TEST_CREDENTIALS") == "1"
+        and (
+            os.getenv("RANSOMEYE_ENV") == "ci"
+            or os.getenv("RANSOMEYE_VALIDATION_PHASE") == "step05"
+        )
+    )
+
 def shutdown_handler():
     """Get shutdown handler."""
     return _shutdown_handler
@@ -155,7 +165,16 @@ def _validate_environment():
             exit_config_error("RANSOMEYE_DB_USER is too short (minimum 3 characters)")
         weak_users = ['gagan', 'test', 'admin', 'root', 'default']
         if db_user.lower() in [u.lower() for u in weak_users]:
-            exit_config_error(f"SECURITY VIOLATION: RANSOMEYE_DB_USER uses weak/default value '{db_user}' (not allowed)")
+            if _allow_weak_test_credentials():
+                logger.warning(
+                    "TEMPORARY OVERRIDE: Weak DB user allowed for STEP-05 validation",
+                    override_env="RANSOMEYE_ALLOW_WEAK_TEST_CREDENTIALS",
+                    validation_phase=os.getenv("RANSOMEYE_VALIDATION_PHASE")
+                )
+            else:
+                exit_config_error(
+                    f"SECURITY VIOLATION: RANSOMEYE_DB_USER uses weak/default value '{db_user}' (not allowed)"
+                )
         
         # Validate signing key
         signing_key = validate_signing_key('RANSOMEYE_COMMAND_SIGNING_KEY', min_length=32, fail_on_default=True)
@@ -169,7 +188,16 @@ def _validate_environment():
         if len(db_password) < 8:
             exit_config_error("RANSOMEYE_DB_PASSWORD is too short (minimum 8 characters)")
         if db_password.lower() in ['gagan', 'password', 'test', 'changeme', 'default', 'secret']:
-            exit_config_error(f"SECURITY VIOLATION: RANSOMEYE_DB_PASSWORD uses weak/default value (not allowed)")
+            if _allow_weak_test_credentials():
+                logger.warning(
+                    "TEMPORARY OVERRIDE: Weak DB password allowed for STEP-05 validation",
+                    override_env="RANSOMEYE_ALLOW_WEAK_TEST_CREDENTIALS",
+                    validation_phase=os.getenv("RANSOMEYE_VALIDATION_PHASE")
+                )
+            else:
+                exit_config_error(
+                    "SECURITY VIOLATION: RANSOMEYE_DB_PASSWORD uses weak/default value (not allowed)"
+                )
         
         signing_key = os.getenv('RANSOMEYE_COMMAND_SIGNING_KEY')
         if not signing_key:
