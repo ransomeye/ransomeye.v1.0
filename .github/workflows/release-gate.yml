@@ -1,15 +1,7 @@
 name: Release Gate - PHASE 6
 
 on:
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
-    inputs:
-      version:
-        description: 'Release version (e.g., v1.0.0)'
-        required: true
-        type: string
 
 # PHASE 6: Release Gate Policy
 # This workflow enforces explicit GA gate checklist

@@ -15,22 +15,7 @@ name: CI Validation - PHASE 6 (Reusable)
 #   - ci-build-and-sign.yml (for GA gating)
 
 on:
-  workflow_call:
-    outputs:
-      ga_verdict:
-        description: "Final GA verdict"
-        value: ${{ jobs.aggregate-ga-verdict.outputs.ga_verdict }}
-      ga_ready:
-        description: "GA readiness flag"
-        value: ${{ jobs.aggregate-ga-verdict.outputs.ga_ready }}
-
-  # HARD BLOCK: prevent GitHub from creating phantom runs
-  push:
-    branches-ignore:
-      - '**'
-  pull_request:
-    branches-ignore:
-      - '**'
+  workflow_dispatch:
 
 permissions:
   contents: read

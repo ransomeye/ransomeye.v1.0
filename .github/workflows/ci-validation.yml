@@ -16,10 +16,6 @@ name: CI Validation - PHASE 6
 # Validation runs on main branch (only branch that currently exists)
 
 on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
   workflow_dispatch:
 
 permissions:

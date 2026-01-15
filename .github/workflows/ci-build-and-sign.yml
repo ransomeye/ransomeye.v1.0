@@ -9,10 +9,6 @@ name: CI Build and Sign - PHASE 6
 # Any modification requires Phase-7 re-certification.
 
 on:
-  push:
-    branches: [ main ]
-    tags:
-      - 'v*'
   workflow_dispatch:
 
 permissions:
