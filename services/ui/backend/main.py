@@ -570,10 +570,13 @@ def query_view(conn, view_name: str, where_column: Optional[str] = None, where_v
             """, (view_name,))
             if not cur.fetchone():
                 cur.close()
-                error_msg = f"INVARIANT VIOLATION: Unauthorized write attempt by read-only module (UI): view_name={view_name} is not a view"
+                error_msg = (
+                    "READ_ONLY_VIOLATION: Unauthorized write attempt by read-only module "
+                    f"(UI): view_name={view_name} is not a view"
+                )
                 logger.fatal(error_msg)
-                from common.shutdown import ExitCode, exit_fatal
-                exit_fatal(error_msg, ExitCode.RUNTIME_ERROR)
+                from common.shutdown import ExitCode, exit_readonly_violation
+                exit_readonly_violation(error_msg, ExitCode.RUNTIME_ERROR)
             
             # Only SELECT queries (read-only)
             query = f"SELECT * FROM {view_name}"
