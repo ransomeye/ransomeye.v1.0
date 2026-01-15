@@ -138,8 +138,8 @@ _jwt_issuer = 'ransomeye-ui'
 _jwt_audience = 'ransomeye-ui'
 
 # Audit ledger configuration
-_audit_ledger_path = config.get('RANSOMEYE_AUDIT_LEDGER_PATH', os.getenv('RANSOMEYE_AUDIT_LEDGER_PATH'))
-_audit_ledger_key_dir = config.get('RANSOMEYE_AUDIT_LEDGER_KEY_DIR', os.getenv('RANSOMEYE_AUDIT_LEDGER_KEY_DIR'))
+_audit_ledger_path = os.getenv('RANSOMEYE_AUDIT_LEDGER_PATH') or config.get('RANSOMEYE_AUDIT_LEDGER_PATH')
+_audit_ledger_key_dir = os.getenv('RANSOMEYE_AUDIT_LEDGER_KEY_DIR') or config.get('RANSOMEYE_AUDIT_LEDGER_KEY_DIR')
 
 if not _audit_ledger_path or not _audit_ledger_key_dir:
     exit_config_error("RANSOMEYE_AUDIT_LEDGER_PATH and RANSOMEYE_AUDIT_LEDGER_KEY_DIR are required")
