@@ -33,6 +33,7 @@ UNIQUE_VIOLATION_ERROR_CODE = "23505"
 FOREIGN_KEY_VIOLATION_ERROR_CODE = "23503"
 NOT_NULL_VIOLATION_ERROR_CODE = "23502"
 CHECK_VIOLATION_ERROR_CODE = "23514"
+READ_ONLY_VIOLATION_ERROR_CODE = "25006"
 
 
 def _is_deadlock_error(error: Exception) -> bool:
@@ -72,11 +73,27 @@ def _is_integrity_violation(error: Exception) -> bool:
     return False
 
 
+def _is_readonly_violation(error: Exception) -> bool:
+    """Check if error is a read-only transaction violation."""
+    if pg_errors and hasattr(pg_errors, "ReadOnlySqlTransaction"):
+        if isinstance(error, pg_errors.ReadOnlySqlTransaction):
+            return True
+    if hasattr(error, 'pgcode'):
+        return error.pgcode == READ_ONLY_VIOLATION_ERROR_CODE
+    return False
+
+
 def _detect_and_fail_on_db_error(error: Exception, operation: str, logger) -> None:
     """
     Detect deadlocks, serialization failures, and integrity violations.
     Log and terminate immediately (no retries).
     """
+    if _is_readonly_violation(error):
+        error_msg = f"READ_ONLY_VIOLATION: Unauthorized write attempt detected in {operation}: {error}"
+        logger.fatal(error_msg)
+        from common.shutdown import ExitCode, exit_readonly_violation
+        exit_readonly_violation(error_msg, ExitCode.RUNTIME_ERROR)
+
     if _is_deadlock_error(error):
         error_msg = f"DATABASE DEADLOCK DETECTED in {operation}: {error}"
         logger.fatal(error_msg)
