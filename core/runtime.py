@@ -531,7 +531,7 @@ def _core_startup_validation():
         db_port = config.get('RANSOMEYE_DB_PORT')
         db_name = config.get('RANSOMEYE_DB_NAME')
         db_user = config.get('RANSOMEYE_DB_USER')
-        db_password = config.get('RANSOMEYE_DB_PASSWORD')
+        db_password = config_loader.get_secret('RANSOMEYE_DB_PASSWORD') if _common_available else os.getenv('RANSOMEYE_DB_PASSWORD')
         
         # Validate credentials are present (fail-closed)
         if not db_user:
