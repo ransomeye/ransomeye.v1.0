@@ -242,16 +242,14 @@ try:
     from rbac.middleware.fastapi_auth import RBACAuth
     from rbac.api.rbac_api import RBACAPI
     _audit_ledger_path_mod = os.path.join(_project_root, 'audit-ledger')
-    _rbac_path_mod = os.path.join(_project_root, 'rbac')
-    if _rbac_path_mod in sys.path:
-        sys.path.remove(_rbac_path_mod)
-    if os.path.exists(_audit_ledger_path_mod):
-        if _audit_ledger_path_mod in sys.path:
-            sys.path.remove(_audit_ledger_path_mod)
-        sys.path.insert(0, _audit_ledger_path_mod)
-    from api import AuditLedger
-    if _rbac_path_mod and _rbac_path_mod not in sys.path:
-        sys.path.insert(0, _rbac_path_mod)
+    import importlib.util
+    audit_ledger_file = os.path.join(_audit_ledger_path_mod, 'api.py')
+    spec = importlib.util.spec_from_file_location("audit_ledger_api", audit_ledger_file)
+    if not spec or not spec.loader:
+        raise RuntimeError(f"Audit ledger module not found at {audit_ledger_file}")
+    audit_ledger_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(audit_ledger_module)
+    AuditLedger = audit_ledger_module.AuditLedger
     from auth import (
         create_access_token,
         create_refresh_token,
