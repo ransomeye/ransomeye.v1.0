@@ -8,6 +8,7 @@ Phase 10.1 requirement: Harden startup and shutdown for Core components
 import os
 import sys
 import signal
+import json
 import psycopg2
 from typing import Dict, Any, Optional, List
 from pathlib import Path
@@ -23,7 +24,7 @@ try:
     from common.config import ConfigLoader, ConfigError, validate_path, validate_port, check_disk_space
     from common.logging import setup_logging, StructuredLogger
     from common.shutdown import ShutdownHandler, ExitCode, exit_config_error, exit_startup_error, exit_fatal
-    from core.orchestrator import CoreOrchestrator
+    from core.orchestrator import CoreOrchestrator, ComponentState
     _common_available = True
 except ImportError:
     _common_available = False
@@ -630,14 +631,65 @@ def _signal_handler(signum, frame):
     logger.shutdown("Core graceful shutdown complete")
     sys.exit(ExitCode.SUCCESS)
 
+
+def _load_core_fatal_event() -> Dict[str, str]:
+    run_dir = os.getenv("RANSOMEYE_RUN_DIR", "/tmp/ransomeye")
+    core_token = os.getenv("RANSOMEYE_CORE_TOKEN")
+    fatal_path = Path(run_dir) / "core_fatal.json"
+    if not fatal_path.exists():
+        return {
+            "reason_code": "READ_ONLY_VIOLATION",
+            "message": "Read-only violation reported by supervised component",
+            "component": "unknown"
+        }
+    try:
+        payload = json.loads(fatal_path.read_text(encoding="utf-8"))
+    except Exception:
+        return {
+            "reason_code": "READ_ONLY_VIOLATION",
+            "message": "Read-only violation reported by supervised component (invalid marker)",
+            "component": "unknown"
+        }
+    if core_token and payload.get("core_token") and payload.get("core_token") != core_token:
+        return {
+            "reason_code": "READ_ONLY_VIOLATION",
+            "message": "Read-only violation marker token mismatch",
+            "component": payload.get("component", "unknown")
+        }
+    return {
+        "reason_code": payload.get("reason_code", "READ_ONLY_VIOLATION"),
+        "message": payload.get("message", "Read-only violation reported by supervised component"),
+        "component": payload.get("component", "unknown")
+    }
+
+
+def _fatal_signal_handler(signum, frame):
+    event = _load_core_fatal_event()
+    reason_code = event.get("reason_code", "READ_ONLY_VIOLATION")
+    message = event.get("message", "Read-only violation reported by supervised component")
+    component = event.get("component", "unknown")
+    logger.fatal(
+        f"SECURITY-GRADE: Core termination due to {reason_code}: {message}",
+        failure_reason_code=reason_code,
+        source_component=component
+    )
+    if _orchestrator:
+        _orchestrator.state = ComponentState.FAILED
+        _orchestrator.global_state = "FAILED"
+        _orchestrator.failure_reason_code = reason_code
+        _orchestrator.failure_reason = message
+        _orchestrator._write_status()
+    os._exit(ExitCode.RUNTIME_ERROR)
+
 def _initialize_core():
     """
     Phase 10.1 requirement: Initialize Core runtime.
     Register signal handlers and perform startup validation.
     """
-    # Register signal handlers for graceful shutdown
+    # Register signal handlers for graceful shutdown and fatal escalation
     signal.signal(signal.SIGTERM, _signal_handler)
     signal.signal(signal.SIGINT, _signal_handler)
+    signal.signal(signal.SIGUSR1, _fatal_signal_handler)
     
     # Phase 10.1 requirement: Core startup validation
     _core_startup_validation()
