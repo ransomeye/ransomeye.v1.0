@@ -1,0 +1,17 @@
+[run]
+branch = True
+source =
+    .
+omit =
+    */tests/*
+    */validation/*
+    */release/*
+    */mishka/*
+    */scripts/*
+    */services/linux-agent/*
+    */services/windows-agent/*
+    */services/ui/frontend/*
+
+[report]
+show_missing = True
+skip_covered = False

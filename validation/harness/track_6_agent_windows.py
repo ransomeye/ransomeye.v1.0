@@ -16,8 +16,9 @@ import platform
 from datetime import datetime, timezone
 from typing import Dict, Any
 
-from validation.harness.phase_c_executor import TestStatus
+from validation.harness.phase_c_executor import ValidationStatus
 from validation.harness.test_helpers import get_test_db_connection, clean_database
+from validation.harness.test_install_rollback import test_rollback_framework_windows
 
 
 def execute_track_6_agent_windows(executor) -> Dict[str, Any]:
@@ -26,6 +27,7 @@ def execute_track_6_agent_windows(executor) -> Dict[str, Any]:
     
     Tests:
     - AGENT-002: Windows Real Agent (ETW) vs Simulator
+    - ROLL-002: Windows installer rollback framework
     
     Validates:
     - ETW event capture
@@ -61,11 +63,25 @@ def execute_track_6_agent_windows(executor) -> Dict[str, Any]:
         try:
             test_result = test_agent_002_windows_real_vs_simulator(executor, conn)
             results["tests"]["AGENT-002"] = test_result
-            if test_result["status"] != TestStatus.PASSED.value:
+            if test_result["status"] != ValidationStatus.PASSED.value:
                 results["all_passed"] = False
         except Exception as e:
             results["tests"]["AGENT-002"] = {
-                "status": TestStatus.FAILED.value,
+                "status": ValidationStatus.FAILED.value,
+                "error": str(e)
+            }
+            results["all_passed"] = False
+
+        # Execute ROLL-002 (Windows rollback framework)
+        print("\n[ROLL-002] Windows Installer Rollback Framework")
+        try:
+            test_result = test_rollback_framework_windows()
+            results["tests"]["ROLL-002"] = test_result
+            if test_result["status"] != ValidationStatus.PASSED.value:
+                results["all_passed"] = False
+        except Exception as e:
+            results["tests"]["ROLL-002"] = {
+                "status": ValidationStatus.FAILED.value,
                 "error": str(e)
             }
             results["all_passed"] = False
@@ -110,7 +126,7 @@ def test_agent_002_windows_real_vs_simulator(executor, conn) -> Dict[str, Any]:
     # 9. Verify deterministic schema output
     
     return {
-        "status": TestStatus.PASSED.value,
+        "status": ValidationStatus.PASSED.value,
         "etw_event_capture": True,
         "normalization_correctness": True,
         "pid_reuse_disambiguation": True,

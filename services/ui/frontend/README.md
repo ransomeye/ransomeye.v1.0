@@ -1,18 +1,18 @@
-# RansomEye v1.0 SOC UI Frontend (Phase 8 - Read-Only)
+# RansomEye v1.0 SOC UI Frontend (Phase 4 - Authenticated + RBAC)
 
-**AUTHORITATIVE**: Minimal read-only frontend for Phase 8 proof-of-concept.
+**AUTHORITATIVE**: Authenticated frontend with RBAC-aware rendering.
 
 ---
 
 ## What This Component Does
 
-This component **ONLY** implements the minimal read-only frontend required for Phase 8 validation:
+This component implements authenticated, RBAC-aware read-only visibility for production:
 
-1. **Incident List**: Displays active incidents (read-only, from `v_active_incidents` view)
-2. **Incident Detail View**: Displays timeline, evidence count, AI insights, policy recommendations
-3. **No Edits**: No edit forms, no input fields, no save buttons
-4. **No Actions**: No "acknowledge", "resolve", or "close" buttons
-5. **No Action Triggers**: No buttons that execute actions
+1. **Login Flow**: Username/password login with JWT access + refresh tokens
+2. **Incident List**: Displays active incidents (read-only, from `v_active_incidents` view)
+3. **Incident Detail View**: Displays timeline, evidence count, AI insights, policy recommendations
+4. **No Edits**: No edit forms, no input fields, no save buttons
+5. **No Actions**: No "acknowledge", "resolve", or "close" buttons
 
 ---
 
@@ -28,7 +28,7 @@ This component **ONLY** implements the minimal read-only frontend required for P
 
 **Read-Only Proof**:
 - Frontend has no edit forms, no save buttons, no action buttons
-- Frontend only makes GET requests to backend API (no POST, PUT, DELETE, PATCH)
+- Frontend uses GET for data and POST for auth only
 - UI cannot modify incidents, evidence, or any fact tables
 
 ---
@@ -38,7 +38,7 @@ This component **ONLY** implements the minimal read-only frontend required for P
 - **React 18.2.0**: Frontend framework
 - **Vite 5.0.0**: Build tool and dev server
 - **No state management**: Simple React hooks (useState, useEffect) only
-- **No forms**: No form libraries, no input validation
+- **Minimal forms**: Login form only
 - **No actions**: No action buttons, no command execution
 
 ---
@@ -79,14 +79,31 @@ npm run preview
 
 ## API Integration
 
-**Phase 8 requirement**: Frontend reads from backend API only (read-only).
+**Phase 4 requirement**: Frontend reads from backend API only (read-only).
 
 **Endpoints Used**:
+- `POST /auth/login`: Login
+- `POST /auth/refresh`: Refresh access token
+- `POST /auth/logout`: Logout
+- `GET /auth/permissions`: Permission list for RBAC rendering
 - `GET /api/incidents`: List active incidents
 - `GET /api/incidents/{incident_id}`: Get incident detail
 
+## Authentication & Session
+
+- Access token stored in memory (never localStorage)
+- Refresh token stored in HttpOnly cookie
+- Session refresh on startup and when API returns 401
+- Logout revokes refresh token server-side
+
+## RBAC Rendering
+
+- UI sections hidden if permission missing
+- Permissions loaded from `/auth/permissions`
+- Backend enforcement is mandatory; UI hiding is advisory only
+
 **No Writes**:
-- Frontend does NOT make POST, PUT, DELETE, or PATCH requests
+- Frontend does NOT make POST, PUT, DELETE, or PATCH requests beyond auth
 - Frontend does NOT send any data to backend (read-only)
 
 ---
@@ -100,16 +117,13 @@ npm run preview
 
 ---
 
-## Phase 8 Limitations
+## Current Limitations
 
-**Minimal Implementation**:
 - No routing (single page application)
-- No authentication (Phase 8 minimal)
-- No error handling UI (console errors only)
-- No loading states (basic "Loading..." text)
+- Minimal error UI (console errors only)
 - No pagination (displays all incidents)
 
-These limitations do not affect Phase 8 correctness (UI is read-only, observational only).
+These limitations do not affect read-only correctness (UI is observational only).
 
 ---
 

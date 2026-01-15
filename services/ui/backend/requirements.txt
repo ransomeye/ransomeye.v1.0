@@ -14,3 +14,7 @@ fastapi-cors==0.0.6
 # Environment variable validation
 pydantic==2.5.0
 pydantic-settings==2.1.0
+
+# Auth dependencies
+PyJWT==2.10.1
+bcrypt==4.2.1

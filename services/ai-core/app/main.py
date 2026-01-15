@@ -8,9 +8,14 @@ Python 3.10+ only - aligns with Phase 6 requirements
 import os
 import sys
 import uuid
+import signal
+import time
+import json
+from datetime import datetime, timezone
 import numpy as np
-from typing import List, Dict, Any
-from datetime import datetime
+from typing import List, Dict, Any, Optional
+from datetime import datetime, timezone
+from pathlib import Path
 
 # Add common utilities to path (Phase 10 requirement)
 _current_file = os.path.abspath(__file__)
@@ -90,6 +95,34 @@ else:
 
 logger = setup_logging('ai-core')
 shutdown_handler = ShutdownHandler('ai-core')
+_shutdown_requested = False
+
+def _handle_signal(signum, frame):
+    global _shutdown_requested
+    _shutdown_requested = True
+    if hasattr(shutdown_handler, "shutdown_requested") and hasattr(shutdown_handler.shutdown_requested, "set"):
+        shutdown_handler.shutdown_requested.set()
+
+def _should_shutdown() -> bool:
+    if hasattr(shutdown_handler, "is_shutdown_requested"):
+        try:
+            return shutdown_handler.is_shutdown_requested()
+        except Exception:
+            return _shutdown_requested
+    return _shutdown_requested
+
+def _status_path():
+    return Path(os.getenv("RANSOMEYE_COMPONENT_STATUS_PATH", "/tmp/ransomeye/ai-core.status.json"))
+
+def _write_status(state: str, last_successful_cycle: Optional[str], failure_reason: Optional[str]):
+    payload = {
+        "state": state,
+        "last_successful_cycle": last_successful_cycle,
+        "failure_reason": failure_reason
+    }
+    path = _status_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
 
 
 def run_ai_core():
@@ -454,12 +487,56 @@ def run_ai_core():
             write_conn.close()
             logger.shutdown("Write database connection closed")
 
+def run_ai_core_daemon():
+    cycle_seconds = int(os.getenv("RANSOMEYE_COMPONENT_CYCLE_SECONDS", "60"))
+    signal.signal(signal.SIGTERM, _handle_signal)
+    signal.signal(signal.SIGINT, _handle_signal)
+    last_success = None
+    failure_reason = None
+    _write_status("RUNNING", last_success, failure_reason)
+    while not _should_shutdown():
+        try:
+            run_ai_core()
+            last_success = datetime.now(timezone.utc).isoformat()
+            failure_reason = None
+            _write_status("RUNNING", last_success, failure_reason)
+        except Exception as e:
+            failure_reason = str(e)
+            _write_status("FAILED", last_success, failure_reason)
+            raise
+        time.sleep(cycle_seconds)
+    _write_status("STOPPED", last_success, failure_reason)
+
+
+def _assert_supervised():
+    if os.getenv("RANSOMEYE_SUPERVISED") != "1":
+        error_msg = "AI Core must be started by Core orchestrator"
+        logger.fatal(error_msg)
+        exit_startup_error(error_msg)
+    core_pid = os.getenv("RANSOMEYE_CORE_PID")
+    core_token = os.getenv("RANSOMEYE_CORE_TOKEN")
+    if not core_pid or not core_token:
+        error_msg = "AI Core missing Core supervision metadata"
+        logger.fatal(error_msg)
+        exit_startup_error(error_msg)
+    try:
+        uuid.UUID(core_token)
+    except Exception:
+        error_msg = "AI Core invalid Core token"
+        logger.fatal(error_msg)
+        exit_startup_error(error_msg)
+    if os.getppid() != int(core_pid):
+        error_msg = "AI Core parent PID mismatch"
+        logger.fatal(error_msg)
+        exit_startup_error(error_msg)
+
 
 if __name__ == "__main__":
     # Phase 6 requirement: No async, no background threads, no background schedulers
     # Synchronous batch execution only
     try:
-        run_ai_core()
+        _assert_supervised()
+        run_ai_core_daemon()
         logger.shutdown("AI Core completed successfully")
         sys.exit(ExitCode.SUCCESS)
     except KeyboardInterrupt:

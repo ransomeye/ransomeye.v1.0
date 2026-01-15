@@ -6,7 +6,6 @@ AUTHORITATIVE: Deterministic flow assembly from packet tuples
 
 from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime, timezone
-import uuid
 import hashlib
 import json
 from collections import defaultdict
@@ -67,8 +66,9 @@ class FlowAssembler:
         
         # Get or create flow
         if flow_key not in self.active_flows:
+            flow_id = self._generate_flow_id(flow_key, timestamp)
             self.active_flows[flow_key] = {
-                'flow_id': str(uuid.uuid4()),
+                'flow_id': flow_id,
                 'src_ip': src_ip,
                 'dst_ip': dst_ip,
                 'src_port': src_port,
@@ -129,6 +129,13 @@ class FlowAssembler:
                 return (src_ip, dst_ip, src_port, dst_port, protocol)
             else:
                 return (dst_ip, src_ip, dst_port, src_port, protocol)
+
+    def _generate_flow_id(self, flow_key: Tuple, timestamp: datetime) -> str:
+        """Generate deterministic flow ID from flow key and start time."""
+        flow_start = timestamp.isoformat()
+        flow_key_str = json.dumps({"flow_key": flow_key, "flow_start": flow_start}, sort_keys=True)
+        flow_hash = hashlib.sha256(flow_key_str.encode('utf-8')).hexdigest()
+        return flow_hash[:32]
     
     def _calculate_hash(self, flow: Dict[str, Any]) -> str:
         """Calculate SHA256 hash of flow record."""
@@ -137,3 +144,23 @@ class FlowAssembler:
         content_bytes = canonical_json.encode('utf-8')
         hash_obj = hashlib.sha256(content_bytes)
         return hash_obj.hexdigest()
+
+    def flush_expired(self, now: datetime) -> List[Dict[str, Any]]:
+        """Flush expired flows based on timeout."""
+        expired = []
+        to_delete = []
+        for flow_key, flow in self.active_flows.items():
+            try:
+                flow_start = datetime.fromisoformat(flow['flow_start'].replace('Z', '+00:00'))
+                elapsed = (now - flow_start).total_seconds()
+                if elapsed > self.flow_timeout:
+                    completed_flow = flow.copy()
+                    completed_flow['flow_end'] = now.isoformat()
+                    completed_flow['immutable_hash'] = self._calculate_hash(completed_flow)
+                    expired.append(completed_flow)
+                    to_delete.append(flow_key)
+            except Exception:
+                continue
+        for flow_key in to_delete:
+            del self.active_flows[flow_key]
+        return expired

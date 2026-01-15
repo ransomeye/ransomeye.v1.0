@@ -11,6 +11,12 @@ psycopg2-binary==2.9.9
 # JSON Schema validation (for event-envelope.schema.json)
 jsonschema==4.19.2
 
+# Ed25519 signature verification
+pynacl==1.6.2
+
+# JWT handling for service-to-service auth
+PyJWT==2.10.1
+
 # SHA256 hashing (for hash verification)
 # Python standard library hashlib is sufficient, no external dependency needed
 

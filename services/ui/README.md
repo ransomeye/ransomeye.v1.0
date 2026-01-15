@@ -1,35 +1,58 @@
-# RansomEye v1.0 SOC UI (Phase 8 - Read-Only)
+# RansomEye v1.0 SOC UI (Phase 4 - Authenticated + RBAC)
 
-**AUTHORITATIVE**: Minimal read-only SOC UI for Phase 8 proof-of-concept.
+**AUTHORITATIVE**: Authenticated SOC UI with JWT + RBAC enforcement for production.
 
 ---
 
 ## What This Component Does
 
-This component **ONLY** implements the minimal read-only visibility required for Phase 8 validation:
+This component implements production-grade SOC UI access with strict authentication and RBAC:
 
-1. **Read-Only Database Views** (contract compliance: Phase 8 requirements):
+1. **Read-Only Database Views** (contract compliance: Phase 4 requirements):
    - `v_active_incidents`: Active (unresolved) incidents
    - `v_incident_timeline`: Incident stage transitions (timeline)
    - `v_incident_evidence_summary`: Evidence summary per incident
-   - `v_policy_recommendations`: Policy recommendations (placeholder for Phase 8 minimal)
+   - `v_policy_recommendations`: Policy recommendations (file-based when DB entries are absent)
    - `v_ai_insights`: AI insights (clusters, novelty scores, SHAP summaries)
    - `v_incident_detail`: Combined incident detail view
 
-2. **Read-Only Backend API** (contract compliance: Phase 8 requirements):
+2. **Read-Only Backend API** (contract compliance: Phase 4 requirements):
    - `GET /api/incidents`: List active incidents (from `v_active_incidents` view)
    - `GET /api/incidents/{incident_id}`: Get incident detail (from views only)
    - `GET /api/incidents/{incident_id}/timeline`: Get incident timeline (from `v_incident_timeline` view)
    - **Read-only**: All endpoints are GET only (no POST, PUT, DELETE, PATCH)
 
-3. **Read-Only Frontend** (contract compliance: Phase 8 requirements):
+3. **Authenticated Frontend** (contract compliance: Phase 4 requirements):
    - **Incident list**: Displays active incidents (read-only)
    - **Incident detail view**: Displays timeline, evidence count, AI insights, policy recommendations
-   - **No edits**: No edit forms, no input fields, no save buttons
-   - **No actions**: No "acknowledge", "resolve", or "close" buttons
-   - **No action triggers**: No buttons that execute actions
+   - **Login required**: JWT access + refresh token flow
+   - **Session refresh**: Automatic refresh via HttpOnly cookie
+   - **Logout invalidation**: Refresh tokens revoked on logout
 
 ---
+
+## Authentication Model (Phase 4)
+
+- **JWT access tokens** (short-lived) in `Authorization: Bearer`
+- **JWT refresh tokens** stored in HttpOnly cookie (`ransomeye_refresh`)
+- **Token rotation** on refresh; refresh token hashes stored in DB
+- **Logout invalidation** revokes refresh tokens server-side
+- **No anonymous access**: All endpoints require auth
+- **Health checks** require JWT with `system:view_logs`
+
+## RBAC Model (Phase 4)
+
+- RBAC initialized at startup; UI refuses to start if RBAC backend missing
+- All API endpoints enforce `@require_ui_permission()`
+- Permissions enforced server-side (default DENY)
+- Frontend hides UI sections based on permissions returned by `/auth/permissions`
+
+## Network Exposure & CORS (Phase 4)
+
+- **Bind address default**: `127.0.0.1` (override with `RANSOMEYE_UI_BIND_ADDRESS`)
+- **CORS allowlist only** (no wildcard origins)
+- **Credentials allowed** for refresh cookie only
+- **Core health checks** must send `Authorization: Bearer $RANSOMEYE_UI_HEALTH_TOKEN`
 
 ## UI is Read-Only
 
@@ -66,7 +89,7 @@ This component **ONLY** implements the minimal read-only visibility required for
 - Phase 5 (Correlation Engine): Works without UI (deterministic rules create incidents)
 - Phase 6 (AI Core): Works without UI (generates AI metadata)
 - Phase 7 (Policy Engine): Works without UI (generates policy recommendations)
-- Phase 8 (SOC UI): Optional visibility layer (does not affect pipeline)
+- SOC UI: Optional visibility layer (does not affect pipeline)
 
 ---
 
@@ -103,7 +126,7 @@ This component **ONLY** implements the minimal read-only visibility required for
 - Phase 5 (Correlation Engine): Works without UI (deterministic rules create incidents)
 - Phase 6 (AI Core): Works without UI (generates AI metadata)
 - Phase 7 (Policy Engine): Works without UI (generates policy recommendations)
-- Phase 8 (SOC UI): Optional visibility (does not affect correctness)
+- SOC UI: Optional visibility (does not affect correctness)
 
 **System Correctness Proof**:
 - If UI is disabled: Incidents are still created by correlation engine (Phase 5)
@@ -114,7 +137,7 @@ This component **ONLY** implements the minimal read-only visibility required for
 
 ## What This Component Explicitly Does NOT Do
 
-**Phase 8 Requirements - Forbidden Behaviors**:
+**Forbidden Behaviors (Read-Only)**:
 
 - ❌ **UI must NOT write to DB**: UI does not write to database (no INSERT, UPDATE, DELETE)
 - ❌ **UI must NOT query base tables**: UI queries views only, not base tables
@@ -136,7 +159,7 @@ This component **ONLY** implements the minimal read-only visibility required for
 
 ## Database Views (Read-Only)
 
-**Phase 8 requirement**: UI reads from DB views only, not base tables.
+**Phase 4 requirement**: UI reads from DB views only, not base tables.
 
 ### v_active_incidents
 - **Columns**: incident_id, machine_id, stage, confidence, created_at, last_observed_at, total_evidence_count, title, description
@@ -155,8 +178,8 @@ This component **ONLY** implements the minimal read-only visibility required for
 
 ### v_policy_recommendations
 - **Columns**: incident_id, recommended_action, simulation_mode, created_at
-- **Source**: Empty view (Phase 8 minimal: policy decisions are file-based, not in DB)
-- **Purpose**: Policy recommendations (placeholder for Phase 8 minimal)
+- **Source**: Empty view when policy decisions are file-based, not in DB
+- **Purpose**: Policy recommendations (file-based when DB entries are absent)
 
 ### v_ai_insights
 - **Columns**: incident_id, cluster_id, novelty_score, shap_summary
@@ -170,7 +193,7 @@ This component **ONLY** implements the minimal read-only visibility required for
 
 ---
 
-## How This Proves Phase 8 Correctness
+## How This Proves Read-Only Correctness
 
 ### Validation Criteria (PASS / FAIL)
 
@@ -207,15 +230,25 @@ This component **ONLY** implements the minimal read-only visibility required for
 
 ## Environment Variables
 
-**Required** (contract compliance: `env.contract.json`):
+**Required**:
 - `RANSOMEYE_DB_HOST`: PostgreSQL host (default: `localhost`)
 - `RANSOMEYE_DB_PORT`: PostgreSQL port (default: `5432`)
 - `RANSOMEYE_DB_NAME`: Database name (default: `ransomeye`)
-- `RANSOMEYE_DB_USER`: Database user (default: `ransomeye`)
-- `RANSOMEYE_DB_PASSWORD`: Database password (**required**, no default, fail-closed)
+- `RANSOMEYE_DB_USER`: Database user (**required**, no default)
+- `RANSOMEYE_DB_PASSWORD`: Database password (**required**, no default)
+- `RANSOMEYE_UI_JWT_SIGNING_KEY`: JWT signing key (**required**, min 32 chars, no defaults)
+- `RANSOMEYE_AUDIT_LEDGER_PATH`: Audit ledger path (**required**)
+- `RANSOMEYE_AUDIT_LEDGER_KEY_DIR`: Audit ledger key directory (**required**)
 
 **Optional**:
 - `RANSOMEYE_UI_PORT`: Backend API port (default: `8080`)
+- `RANSOMEYE_UI_BIND_ADDRESS`: Bind address (default: `127.0.0.1`)
+- `RANSOMEYE_UI_CORS_ALLOW_ORIGINS`: Comma-separated allowlist (default: `http://127.0.0.1:5173,http://localhost:5173`)
+- `RANSOMEYE_UI_CORS_ALLOW_METHODS`: Allowed methods (default: `GET,POST`)
+- `RANSOMEYE_UI_ACCESS_TOKEN_TTL_SECONDS`: Access token TTL (default: `900`)
+- `RANSOMEYE_UI_REFRESH_TOKEN_TTL_SECONDS`: Refresh token TTL (default: `604800`)
+- `RANSOMEYE_UI_COOKIE_SECURE`: Cookie secure flag (default: `true`)
+- `RANSOMEYE_UI_COOKIE_SAMESITE`: Cookie SameSite (default: `strict`)
 - `RANSOMEYE_POLICY_DIR`: Policy decisions directory (default: `/tmp/ransomeye/policy`)
 
 **Frontend**:
@@ -225,18 +258,10 @@ This component **ONLY** implements the minimal read-only visibility required for
 
 ## Database Views Setup
 
-**Phase 8 requirement**: Views must be created in database before UI can be used.
-
-```bash
-# Connect to database
-psql -h localhost -U ransomeye -d ransomeye
-
-# Create views
-\i services/ui/backend/views.sql
-```
+**Phase 4 requirement**: Views are created via schema migrations before UI is used.
 
 **View Creation**:
-- Views are defined in `services/ui/backend/views.sql`
+- Views are defined in `schemas/09_ui_views.sql`
 - Views are read-only (SELECT only, no writes)
 - Views can be created/dropped without affecting base tables
 - Views are the only interface UI uses to access data
@@ -259,11 +284,8 @@ export RANSOMEYE_DB_NAME="ransomeye"
 export RANSOMEYE_DB_USER="ransomeye"
 export RANSOMEYE_DB_PASSWORD="your_password"
 
-# Create database views (one-time setup)
-psql -h localhost -U ransomeye -d ransomeye -f views.sql
-
-# Run backend API
-uvicorn main:app --host 0.0.0.0 --port 8080
+# Run backend API (binds to 127.0.0.1 by default)
+uvicorn main:app --host 127.0.0.1 --port 8080
 ```
 
 ### Frontend
@@ -388,9 +410,9 @@ npm run build
 
 ---
 
-## Proof of Phase 8 Correctness
+## Proof of Read-Only Correctness
 
-**Phase 8 Objective**: Prove that SOC UI provides read-only visibility without affecting system correctness.
+**Objective**: Prove that SOC UI provides read-only visibility without affecting system correctness.
 
 **This component proves**:
 - ✅ **UI is read-only**: All endpoints are GET only, no database writes
@@ -411,25 +433,25 @@ npm run build
 
 **Together, they prove**:
 - ✅ **Incidents created without UI**: Correlation engine creates incidents independently (Phase 5)
-- ✅ **UI displays without modifying**: UI displays data without modifying incidents (Phase 8)
+- ✅ **UI displays without modifying**: UI displays data without modifying incidents
 - ✅ **System correctness without UI**: System works correctly even if UI is disabled
 
 ---
 
-## Phase 8 Limitations
+## Current Data Limitations
 
 **View Limitations**:
-- Phase 8 minimal uses `event_id` as `incident_id` in `v_ai_insights` view (limitation of Phase 6)
-- `v_policy_recommendations` is empty (Phase 8 minimal: policy decisions are file-based, not in DB)
+- `event_id` is used as `incident_id` in `v_ai_insights` view (limitation of Phase 6)
+- `v_policy_recommendations` may be empty when policy decisions are file-based (not in DB)
 - Policy recommendations are read from files (not from database view)
 
 **Storage Limitations**:
 - Policy recommendations are stored in files (not in database)
-- This is because schema changes are not allowed in Phase 8
-- **For Phase 8 minimal**: Policy recommendations are read from JSON files
-- **Proper implementation**: Would have `policy_decisions` database table and view
+- This is because schema changes are not yet applied
+- **Current implementation**: Policy recommendations are read from JSON files
+- **Full implementation**: Would include `policy_decisions` database table and view
 
-These limitations do not affect Phase 8 correctness (UI is read-only, observational only).
+These limitations do not affect read-only correctness (UI is observational only).
 
 ---
 

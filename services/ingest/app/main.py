@@ -10,6 +10,7 @@ import os
 import json
 import hashlib
 import time
+import uuid
 from pathlib import Path
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any
@@ -296,6 +297,7 @@ VALIDATION_STATUS_DUPLICATE_REJECTED = "DUPLICATE_REJECTED"
 VALIDATION_STATUS_SCHEMA_VALIDATION_FAILED = "SCHEMA_VALIDATION_FAILED"
 VALIDATION_STATUS_TIMESTAMP_VALIDATION_FAILED = "TIMESTAMP_VALIDATION_FAILED"
 VALIDATION_STATUS_INTEGRITY_CHAIN_BROKEN = "INTEGRITY_CHAIN_BROKEN"
+VALIDATION_STATUS_REJECTED = "REJECTED"
 
 # GA-BLOCKING: Import metrics collection for operational telemetry
 try:
@@ -366,6 +368,8 @@ async def shutdown_event():
 def compute_hash(envelope: dict) -> str:
     """Compute SHA256 hash of event envelope."""
     envelope_copy = envelope.copy()
+    envelope_copy.pop("signature", None)
+    envelope_copy.pop("signing_key_id", None)
     if "integrity" in envelope_copy:
         integrity_copy = envelope_copy["integrity"].copy()
         integrity_copy["hash_sha256"] = ""
@@ -544,9 +548,11 @@ def store_event(conn, envelope: dict, validation_status: str, late_arrival: bool
             
             # PHASE 2: Use deterministic timestamp from envelope (observed_at) for validation log
             cur.execute("""
-                INSERT INTO event_validation_log (event_id, validation_status, validation_timestamp)
-                VALUES (%s, %s, %s)
-            """, (event_id, validation_status, observed_at))
+                INSERT INTO event_validation_log (
+                    event_id, validation_status, validation_timestamp, created_at
+                )
+                VALUES (%s, %s, %s, %s)
+            """, (event_id, validation_status, observed_at, observed_at))
             
             return True
         finally:
@@ -629,15 +635,16 @@ async def ingest_event(request: Request):
                     cur.execute("""
                         INSERT INTO event_validation_log (
                             event_id, validation_status, validation_timestamp,
-                            error_code, error_message
+                            error_code, error_message, created_at
                         )
-                        VALUES (%s, %s, %s, %s, %s)
+                        VALUES (%s, %s, %s, %s, %s, %s)
                     """, (
-                        envelope.get("event_id"),
-                        "SIGNATURE_VERIFICATION_FAILED",
+                        None,
+                        VALIDATION_STATUS_REJECTED,
                         observed_at,  # PHASE 2: Deterministic timestamp from envelope
                         "SIGNATURE_VERIFICATION_FAILED",
-                        error_msg
+                        error_msg,
+                        observed_at
                     ))
                 conn.commit()
                 logger.warning(f"Telemetry signature verification failed: {error_msg}", event_id=envelope.get("event_id"))
@@ -661,21 +668,21 @@ async def ingest_event(request: Request):
             try:
                 conn = get_db_connection()
                 with conn.cursor() as cur:
-                    cur.execute("""
                     # PHASE 2: Use deterministic timestamp from envelope (observed_at)
                     observed_at = parser.isoparse(envelope.get("observed_at", envelope.get("ingested_at")))
                     cur.execute("""
                         INSERT INTO event_validation_log (
                             event_id, validation_status, validation_timestamp,
-                            error_code, error_message
+                            error_code, error_message, created_at
                         )
-                        VALUES (%s, %s, %s, %s, %s)
+                        VALUES (%s, %s, %s, %s, %s, %s)
                     """, (
-                        envelope.get("event_id"),
-                        "COMPONENT_IDENTITY_VERIFICATION_FAILED",
+                        None,
+                        VALIDATION_STATUS_REJECTED,
                         observed_at,  # PHASE 2: Deterministic timestamp from envelope
                         "COMPONENT_IDENTITY_VERIFICATION_FAILED",
-                        error_msg
+                        error_msg,
+                        observed_at
                     ))
                 conn.commit()
                 logger.warning(f"Component identity verification failed: {error_msg}", event_id=envelope.get("event_id"))
@@ -705,21 +712,21 @@ async def ingest_event(request: Request):
         try:
             conn = get_db_connection()
             with conn.cursor() as cur:
+                # PHASE 2: Use deterministic timestamp from envelope (observed_at)
+                observed_at = parser.isoparse(envelope.get("observed_at", envelope.get("ingested_at")))
                 cur.execute("""
-                    # PHASE 2: Use deterministic timestamp from envelope (observed_at)
-                    observed_at = parser.isoparse(envelope.get("observed_at", envelope.get("ingested_at")))
-                    cur.execute("""
                         INSERT INTO event_validation_log (
                             event_id, validation_status, validation_timestamp,
-                            error_code, error_message, validation_details
+                            error_code, error_message, validation_details, created_at
                         )
-                        VALUES (NULL, %s, %s, %s, %s, %s::jsonb)
+                        VALUES (NULL, %s, %s, %s, %s, %s::jsonb, %s)
                     """, (
                         VALIDATION_STATUS_SCHEMA_VALIDATION_FAILED,
                         observed_at,  # PHASE 2: Deterministic timestamp from envelope
                         error_code,
                         validation_details.get("error_message") if validation_details else None,
-                        json.dumps(validation_details) if validation_details else None
+                        json.dumps(validation_details) if validation_details else None,
+                        observed_at
                     ))
             conn.commit()
             logger.warning(f"Schema validation failed: {error_code}", event_id=envelope.get("event_id"))
@@ -742,16 +749,21 @@ async def ingest_event(request: Request):
         try:
             conn = get_db_connection()
             with conn.cursor() as cur:
+                # PHASE 2: Use deterministic timestamp from envelope (observed_at)
+                observed_at = parser.isoparse(envelope.get("observed_at", envelope.get("ingested_at")))
                 cur.execute("""
-                    # PHASE 2: Use deterministic timestamp from envelope (observed_at)
-                    observed_at = parser.isoparse(envelope.get("observed_at", envelope.get("ingested_at")))
-                    cur.execute("""
                         INSERT INTO event_validation_log (
                             event_id, validation_status, validation_timestamp,
-                            error_code, error_message
+                            error_code, error_message, created_at
                         )
-                        VALUES (NULL, %s, %s, %s, %s)
-                    """, (VALIDATION_STATUS_INTEGRITY_CHAIN_BROKEN, observed_at, error_code, "Hash mismatch"))
+                        VALUES (NULL, %s, %s, %s, %s, %s)
+                    """, (
+                        VALIDATION_STATUS_INTEGRITY_CHAIN_BROKEN,
+                        observed_at,
+                        error_code,
+                        "Hash mismatch",
+                        observed_at
+                    ))
             conn.commit()
             logger.warning(f"Hash integrity validation failed: {error_code}", event_id=envelope.get("event_id"))
         except Exception as e:
@@ -779,21 +791,21 @@ async def ingest_event(request: Request):
         try:
             conn = get_db_connection()
             with conn.cursor() as cur:
+                # PHASE 2: Use deterministic timestamp from envelope (observed_at)
+                observed_at = parser.isoparse(envelope.get("observed_at", envelope.get("ingested_at")))
                 cur.execute("""
-                    # PHASE 2: Use deterministic timestamp from envelope (observed_at)
-                    observed_at = parser.isoparse(envelope.get("observed_at", envelope.get("ingested_at")))
-                    cur.execute("""
                         INSERT INTO event_validation_log (
                             event_id, validation_status, validation_timestamp,
-                            error_code, error_message, validation_details
+                            error_code, error_message, validation_details, created_at
                         )
-                        VALUES (NULL, %s, %s, %s, %s, %s::jsonb)
+                        VALUES (NULL, %s, %s, %s, %s, %s::jsonb, %s)
                     """, (
                         VALIDATION_STATUS_TIMESTAMP_VALIDATION_FAILED,
                         observed_at,  # PHASE 2: Deterministic timestamp from envelope
                         error_code,
                         timestamp_details.get("error") if timestamp_details else None,
-                        json.dumps(timestamp_details) if timestamp_details else None
+                        json.dumps(timestamp_details) if timestamp_details else None,
+                        observed_at
                     ))
             conn.commit()
             logger.warning(f"Timestamp validation failed: {error_code}", event_id=envelope.get("event_id"))
@@ -825,10 +837,17 @@ async def ingest_event(request: Request):
                 cur.execute("""
                     INSERT INTO event_validation_log (
                         event_id, validation_status, validation_timestamp,
-                        error_code, error_message
+                        error_code, error_message, created_at
                     )
-                    VALUES (%s, %s, %s, %s, %s)
-                """, (event_id, VALIDATION_STATUS_DUPLICATE_REJECTED, observed_at, "DUPLICATE_EVENT_ID", "Event ID already exists"))
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                """, (
+                    event_id,
+                    VALIDATION_STATUS_DUPLICATE_REJECTED,
+                    observed_at,
+                    "DUPLICATE_EVENT_ID",
+                    "Event ID already exists",
+                    observed_at
+                ))
             conn.commit()
             logger.info(f"Duplicate event rejected", event_id=event_id)
             
@@ -852,14 +871,22 @@ async def ingest_event(request: Request):
             logger.error(f"Integrity violation during event storage: {error_msg}", event_id=event_id)
             
             # Log integrity violation to event_validation_log
+            observed_at = parser.isoparse(envelope.get("observed_at", envelope.get("ingested_at")))
             with conn.cursor() as cur:
                 cur.execute("""
                     INSERT INTO event_validation_log (
                         event_id, validation_status, validation_timestamp,
-                        error_code, error_message
+                        error_code, error_message, created_at
                     )
-                    VALUES (%s, %s, %s, %s, %s)
-                """, (event_id, VALIDATION_STATUS_INTEGRITY_CHAIN_BROKEN, "INTEGRITY_VIOLATION", error_msg))
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                """, (
+                    event_id,
+                    VALIDATION_STATUS_INTEGRITY_CHAIN_BROKEN,
+                    observed_at,
+                    "INTEGRITY_VIOLATION",
+                    error_msg,
+                    observed_at
+                ))
             conn.commit()
             
             raise HTTPException(
@@ -894,15 +921,26 @@ async def ingest_event(request: Request):
         if conn:
             put_db_connection(conn)
 
+_last_successful_cycle = None
+_failure_reason = None
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
+    global _last_successful_cycle, _failure_reason
     try:
         conn = get_db_connection()
         try:
             with conn.cursor() as cur:
                 cur.execute("SELECT 1")
-            return {"status": "healthy", "component": "ingest"}
+            _last_successful_cycle = datetime.now(timezone.utc).isoformat()
+            _failure_reason = None
+            return {
+                "status": "healthy",
+                "component": "ingest",
+                "last_successful_cycle": _last_successful_cycle,
+                "failure_reason": _failure_reason
+            }
         finally:
             put_db_connection(conn)
     except Exception as e:
@@ -912,12 +950,40 @@ async def health_check():
             safe_error = sanitize_exception(e)
         except ImportError:
             safe_error = str(e)
+        _failure_reason = safe_error
         logger.error(f"Health check failed: {safe_error}")
         # Security: Never expose full error details in response (avoid secret leakage)
-        raise HTTPException(status_code=503, detail={"status": "unhealthy"})
+        raise HTTPException(status_code=503, detail={
+            "status": "unhealthy",
+            "last_successful_cycle": _last_successful_cycle,
+            "failure_reason": _failure_reason
+        })
+
+def _assert_supervised():
+    if os.getenv("RANSOMEYE_SUPERVISED") != "1":
+        error_msg = "Ingest service must be started by Core orchestrator"
+        logger.fatal(error_msg)
+        exit_startup_error(error_msg)
+    core_pid = os.getenv("RANSOMEYE_CORE_PID")
+    core_token = os.getenv("RANSOMEYE_CORE_TOKEN")
+    if not core_pid or not core_token:
+        error_msg = "Ingest service missing Core supervision metadata"
+        logger.fatal(error_msg)
+        exit_startup_error(error_msg)
+    try:
+        uuid.UUID(core_token)
+    except Exception:
+        error_msg = "Ingest service invalid Core token"
+        logger.fatal(error_msg)
+        exit_startup_error(error_msg)
+    if os.getppid() != int(core_pid):
+        error_msg = "Ingest service parent PID mismatch"
+        logger.fatal(error_msg)
+        exit_startup_error(error_msg)
 
 if __name__ == "__main__":
     try:
+        _assert_supervised()
         port = int(config.get('RANSOMEYE_INGEST_PORT', 8000))
         logger.startup(f"Starting ingest service on port {port}")
         uvicorn.run(app, host="0.0.0.0", port=port, log_config=None)

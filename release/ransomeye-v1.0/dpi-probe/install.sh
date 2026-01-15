@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # RansomEye v1.0 DPI Probe Installer
-# AUTHORITATIVE: Production-grade installer for standalone DPI Probe
+# AUTHORITATIVE: Production-grade installer for Core-supervised DPI Probe
 # Fail-closed: Any error terminates installation immediately
 #
 
@@ -23,10 +23,39 @@ error_exit() {
     exit 1
 }
 
+# Transaction framework
+TRANSACTION_PY=""
+INSTALL_STATE_FILE=""
+
+init_transaction() {
+    TRANSACTION_PY="$(cd "$(dirname "${BASH_SOURCE[0]}")/../common" && pwd)/install_transaction.py"
+    if [[ ! -f "$TRANSACTION_PY" ]]; then
+        error_exit "Transaction framework not found: $TRANSACTION_PY"
+    fi
+    INSTALL_STATE_FILE="${INSTALL_ROOT}/.install_state.json"
+    python3 "$TRANSACTION_PY" init --state-file "$INSTALL_STATE_FILE" --component "dpi-probe"
+}
+
+record_step() {
+    local action="$1"
+    local rollback_action="$2"
+    shift 2
+    python3 "$TRANSACTION_PY" record --state-file "$INSTALL_STATE_FILE" \
+        --action "$action" --rollback-action "$rollback_action" "$@"
+}
+
+run_rollback() {
+    trap - ERR
+    if [[ -n "${INSTALL_STATE_FILE}" && -f "${INSTALL_STATE_FILE}" ]]; then
+        python3 "$TRANSACTION_PY" rollback --state-file "$INSTALL_STATE_FILE" || true
+    fi
+    exit 1
+}
+
 # Validate root privileges (CRITICAL for DPI Probe - requires root for installation)
 check_root() {
     if [[ $EUID -ne 0 ]]; then
-        error_exit "Installer must be run as root (required for systemd service, user creation, and capability management)"
+        error_exit "Installer must be run as root (required for user creation, capability management, and build)"
     fi
 }
 
@@ -46,7 +75,7 @@ check_ubuntu() {
 
 # Prompt for install root (no hardcoded paths)
 prompt_install_root() {
-    local default_root="/opt/ransomeye-dpi"
+    local default_root="/opt/ransomeye"
     
     echo ""
     echo "RansomEye v${RANSOMEYE_VERSION} DPI Probe Installer"
@@ -72,28 +101,28 @@ prompt_install_root() {
     echo -e "${GREEN}✓${NC} Install root: ${INSTALL_ROOT}"
 }
 
+# Enforce empty install root for transactional install
+ensure_clean_install_root() {
+    if [[ -d "${INSTALL_ROOT}" ]] && [[ "$(ls -A "${INSTALL_ROOT}")" ]]; then
+        error_exit "Install root must be empty for transactional install: ${INSTALL_ROOT}"
+    fi
+}
+
 # Detect installer directory (where install.sh is located)
 detect_installer_dir() {
     INSTALLER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     SRC_ROOT="$(cd "${INSTALLER_DIR}/../../dpi/probe" && pwd)"
 }
 
-# Check if Python 3 is available
-check_python() {
-    if ! command -v python3 &> /dev/null; then
-        error_exit "Python 3 is not installed. Please install Python 3.10+ first: sudo apt-get install python3"
+# Preflight: enforce python3 availability and minimum version
+preflight_python3() {
+    local preflight_script="${INSTALLER_DIR}/../common/preflight_python3.sh"
+    if [[ ! -f "$preflight_script" ]]; then
+        error_exit "Python3 preflight script not found: $preflight_script"
     fi
-    
-    # Check Python version (3.10+ required)
-    PYTHON_VERSION=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null || echo "0.0")
-    PYTHON_MAJOR=$(echo "$PYTHON_VERSION" | cut -d. -f1)
-    PYTHON_MINOR=$(echo "$PYTHON_VERSION" | cut -d. -f2)
-    
-    if [[ "$PYTHON_MAJOR" -lt 3 ]] || [[ "$PYTHON_MAJOR" -eq 3 && "$PYTHON_MINOR" -lt 10 ]]; then
-        error_exit "Python 3.10+ is required (detected: Python ${PYTHON_VERSION})"
+    if ! bash "$preflight_script"; then
+        error_exit "Python3 preflight failed"
     fi
-    
-    echo -e "${GREEN}✓${NC} Python 3 detected: ${PYTHON_VERSION}"
 }
 
 # Create directory structure (no hardcoded paths)
@@ -102,8 +131,12 @@ create_directory_structure() {
     echo "Creating directory structure..."
     
     local dirs=(
+        "${INSTALL_ROOT}"
         "${INSTALL_ROOT}/bin"
         "${INSTALL_ROOT}/config"
+        "${INSTALL_ROOT}/config/component-keys"
+        "${INSTALL_ROOT}/config/keys"
+        "${INSTALL_ROOT}/lib"
         "${INSTALL_ROOT}/logs"
         "${INSTALL_ROOT}/runtime"
     )
@@ -111,6 +144,12 @@ create_directory_structure() {
     for dir in "${dirs[@]}"; do
         if [[ ! -d "$dir" ]]; then
             mkdir -p "$dir" || error_exit "Failed to create directory: $dir"
+            if [[ "$dir" == "${INSTALL_ROOT}" ]]; then
+                init_transaction
+                record_step "create_install_root" "remove_tree" --meta "path=${INSTALL_ROOT}" --rollback-meta "path=${INSTALL_ROOT}"
+            else
+                record_step "create_directory" "remove_tree" --meta "path=${dir}" --rollback-meta "path=${dir}"
+            fi
             echo -e "${GREEN}✓${NC} Created: $dir"
         else
             echo -e "${YELLOW}✓${NC} Exists: $dir"
@@ -127,6 +166,7 @@ create_system_user() {
         echo -e "${YELLOW}✓${NC} User 'ransomeye-dpi' already exists"
     else
         useradd --system --no-create-home --shell /bin/false ransomeye-dpi || error_exit "Failed to create user 'ransomeye-dpi'"
+        record_step "create_user" "remove_user" --meta "username=ransomeye-dpi" --rollback-meta "username=ransomeye-dpi"
         echo -e "${GREEN}✓${NC} Created user: ransomeye-dpi"
     fi
     
@@ -152,8 +192,78 @@ install_dpi_probe_script() {
     chmod +x "${INSTALL_ROOT}/bin/ransomeye-dpi-probe" || error_exit "Failed to make script executable"
     chown ransomeye-dpi:ransomeye-dpi "${INSTALL_ROOT}/bin/ransomeye-dpi-probe" || \
         error_exit "Failed to set ownership on script"
+    record_step "install_probe" "remove_path" --meta "path=${INSTALL_ROOT}/bin/ransomeye-dpi-probe" --rollback-meta "path=${INSTALL_ROOT}/bin/ransomeye-dpi-probe"
     
     echo -e "${GREEN}✓${NC} Installed: ${INSTALL_ROOT}/bin/ransomeye-dpi-probe"
+}
+
+# Build AF_PACKET fastpath library
+build_fastpath_library() {
+    echo ""
+    echo "Building AF_PACKET fastpath library..."
+
+    if ! command -v gcc &> /dev/null; then
+        error_exit "gcc is required to build AF_PACKET fastpath (install build-essential)"
+    fi
+
+    local fastpath_src="${INSTALLER_DIR}/../../dpi-advanced/fastpath/af_packet_capture.c"
+    local output_lib="${INSTALL_ROOT}/lib/libransomeye_dpi_af_packet.so"
+
+    if [[ ! -f "$fastpath_src" ]]; then
+        error_exit "AF_PACKET fastpath source not found: ${fastpath_src}"
+    fi
+
+    gcc -shared -fPIC -O2 -o "$output_lib" "$fastpath_src" || \
+        error_exit "Failed to build AF_PACKET fastpath library"
+    chmod 755 "$output_lib" || error_exit "Failed to set permissions on fastpath library"
+    chown ransomeye-dpi:ransomeye-dpi "$output_lib" || \
+        error_exit "Failed to set ownership on fastpath library"
+
+    record_step "build_fastpath" "remove_path" --meta "path=${output_lib}" --rollback-meta "path=${output_lib}"
+    echo -e "${GREEN}✓${NC} Built: ${output_lib}"
+}
+
+# Generate telemetry signing keys
+generate_telemetry_keys() {
+    echo ""
+    echo "Generating DPI telemetry signing keys..."
+
+    local key_dir="${INSTALL_ROOT}/config/component-keys"
+    local private_key="${key_dir}/dpi.key"
+    local key_id
+
+    KEY_DIR="$key_dir" PRIVATE_KEY="$private_key" key_id=$(python3 - << 'EOF' || exit 1
+import hashlib
+import os
+from pathlib import Path
+from nacl.signing import SigningKey
+
+key_dir = Path(os.environ["KEY_DIR"])
+key_dir.mkdir(parents=True, exist_ok=True)
+private_key_path = Path(os.environ["PRIVATE_KEY"])
+
+if private_key_path.exists():
+    signing_key = SigningKey(private_key_path.read_bytes())
+else:
+    signing_key = SigningKey.generate()
+    private_key_path.write_bytes(signing_key.encode())
+
+public_key = signing_key.verify_key.encode()
+key_id = hashlib.sha256(public_key).hexdigest()
+public_key_path = key_dir / f"{key_id}.pub"
+public_key_path.write_bytes(public_key)
+print(key_id)
+EOF
+)
+    if [[ -z "$key_id" ]]; then
+        error_exit "Failed to generate telemetry signing keys (PyNaCl required)"
+    fi
+
+    chmod 600 "$private_key" || error_exit "Failed to set permissions on private key"
+    chown ransomeye-dpi:ransomeye-dpi "$private_key" || \
+        error_exit "Failed to set ownership on private key"
+    record_step "create_telemetry_key" "remove_path" --meta "path=${private_key}" --rollback-meta "path=${private_key}"
+    record_step "create_telemetry_pubkey" "remove_path" --meta "path=${key_dir}/${key_id}.pub" --rollback-meta "path=${key_dir}/${key_id}.pub"
 }
 
 # Set Linux capabilities (CRITICAL for DPI Probe - network packet capture requires privileges)
@@ -179,6 +289,10 @@ set_capabilities() {
         error_exit "Failed to verify capabilities on DPI Probe script"
     fi
     
+    record_step "set_capabilities" "remove_capabilities" \
+        --meta "path=${INSTALL_ROOT}/bin/ransomeye-dpi-probe" \
+        --rollback-meta "path=${INSTALL_ROOT}/bin/ransomeye-dpi-probe"
+    
     echo -e "${GREEN}✓${NC} DPI Probe script configured with required capabilities (not full root)"
 }
 
@@ -186,8 +300,8 @@ set_capabilities() {
 prompt_core_endpoint() {
     echo ""
     echo "Core endpoint configuration:"
-    echo "  The DPI Probe will transmit events to the Core Ingest service."
-    echo "  Core may or may not be installed on this system."
+    echo "  The DPI Probe is supervised by Core and transmits events to Ingest."
+    echo "  DPI will fail fast if Core/Ingest is unavailable."
     echo ""
     echo -n "Core Ingest URL [http://localhost:8000/events]: "
     
@@ -269,8 +383,20 @@ RANSOMEYE_VERSION="${RANSOMEYE_VERSION}"
 RANSOMEYE_INGEST_URL="${RANSOMEYE_INGEST_URL}"
 
 # DPI Probe configuration
-RANSOMEYE_DPI_CAPTURE_ENABLED="false"
+RANSOMEYE_DPI_CAPTURE_BACKEND="af_packet_c"
 RANSOMEYE_DPI_INTERFACE="${RANSOMEYE_DPI_INTERFACE}"
+RANSOMEYE_DPI_FASTPATH_LIB="${INSTALL_ROOT}/lib/libransomeye_dpi_af_packet.so"
+RANSOMEYE_DPI_FLOW_TIMEOUT="300"
+RANSOMEYE_DPI_HEARTBEAT_SECONDS="5"
+RANSOMEYE_DPI_PRIVACY_MODE="FORENSIC"
+RANSOMEYE_DPI_IP_REDACTION="none"
+RANSOMEYE_DPI_PORT_REDACTION="none"
+
+# Component key directory (telemetry signing keys)
+RANSOMEYE_COMPONENT_KEY_DIR="${INSTALL_ROOT}/config/component-keys"
+
+# Service key directory (used for service auth tokens)
+RANSOMEYE_SERVICE_KEY_DIR="${INSTALL_ROOT}/config/keys"
 
 # Database credentials (if probe needs direct DB access in future)
 RANSOMEYE_DB_USER="gagan"
@@ -280,6 +406,7 @@ EOF
     chmod 600 "${INSTALL_ROOT}/config/environment" || error_exit "Failed to set permissions on environment file"
     chown ransomeye-dpi:ransomeye-dpi "${INSTALL_ROOT}/config/environment" || \
         error_exit "Failed to set ownership on environment file"
+    record_step "create_environment" "remove_path" --meta "path=${INSTALL_ROOT}/config/environment" --rollback-meta "path=${INSTALL_ROOT}/config/environment"
     echo -e "${GREEN}✓${NC} Created: ${INSTALL_ROOT}/config/environment"
 }
 
@@ -296,33 +423,17 @@ set_permissions() {
     chmod 755 "${INSTALL_ROOT}/logs" || error_exit "Failed to set permissions on logs/"
     chmod 755 "${INSTALL_ROOT}/runtime" || error_exit "Failed to set permissions on runtime/"
     
-    # Config and bin owned by probe user but readable only
+    # Config, bin, and lib owned by probe user but readable only
     chown -R ransomeye-dpi:ransomeye-dpi "${INSTALL_ROOT}/config" || \
         error_exit "Failed to set ownership on config/"
     chown -R ransomeye-dpi:ransomeye-dpi "${INSTALL_ROOT}/bin" || \
         error_exit "Failed to set ownership on bin/"
+    chown -R ransomeye-dpi:ransomeye-dpi "${INSTALL_ROOT}/lib" || \
+        error_exit "Failed to set ownership on lib/"
     
     echo -e "${GREEN}✓${NC} Permissions set correctly"
 }
 
-# Install systemd service (ONE service only)
-install_systemd_service() {
-    echo ""
-    echo "Installing systemd service..."
-    
-    local service_file="${INSTALLER_DIR}/ransomeye-dpi.service"
-    
-    if [[ ! -f "$service_file" ]]; then
-        error_exit "Service file not found: $service_file"
-    fi
-    
-    # Replace INSTALL_ROOT placeholder in service file
-    sed "s|@INSTALL_ROOT@|${INSTALL_ROOT}|g" "$service_file" > /etc/systemd/system/ransomeye-dpi.service || \
-        error_exit "Failed to install systemd service"
-    
-    systemctl daemon-reload || error_exit "Failed to reload systemd daemon"
-    echo -e "${GREEN}✓${NC} Installed systemd service: ransomeye-dpi.service"
-}
 
 # Create installation manifest
 create_manifest() {
@@ -341,6 +452,7 @@ create_manifest() {
   "directories": {
     "bin": "${INSTALL_ROOT}/bin",
     "config": "${INSTALL_ROOT}/config",
+    "lib": "${INSTALL_ROOT}/lib",
     "logs": "${INSTALL_ROOT}/logs",
     "runtime": "${INSTALL_ROOT}/runtime"
   },
@@ -354,56 +466,35 @@ create_manifest() {
   "core_endpoint": "${RANSOMEYE_INGEST_URL}",
   "network_interface": "${RANSOMEYE_DPI_INTERFACE}",
   "capabilities": ["CAP_NET_RAW", "CAP_NET_ADMIN"],
-  "systemd_service": "ransomeye-dpi.service"
+  "component_key_dir": "${INSTALL_ROOT}/config/component-keys",
+  "fastpath_library": "${INSTALL_ROOT}/lib/libransomeye_dpi_af_packet.so"
 }
 EOF
 
     chmod 644 "$manifest_file" || error_exit "Failed to set permissions on manifest"
     chown ransomeye-dpi:ransomeye-dpi "$manifest_file" || \
         error_exit "Failed to set ownership on manifest"
+    record_step "create_manifest" "remove_path" --meta "path=${manifest_file}" --rollback-meta "path=${manifest_file}"
     echo -e "${GREEN}✓${NC} Created: $manifest_file"
 }
 
-# Start probe and verify process (validation hook)
+# Validate installation (no service start; Core supervises runtime)
 validate_installation() {
     echo ""
-    echo "Starting DPI Probe and performing validation..."
-    
-    # Start service
-    systemctl start ransomeye-dpi || error_exit "Failed to start ransomeye-dpi service"
-    echo -e "${GREEN}✓${NC} Service started"
-    
-    # Wait briefly for probe to start
-    sleep 2
-    
-    # Check service status
-    if systemctl is-active --quiet ransomeye-dpi; then
-        echo -e "${GREEN}✓${NC} DPI Probe process is running"
-    else
-        # Check exit status (probe may have completed and exited if stub mode)
-        local exit_status=$(systemctl show -p ExecMainStatus --value ransomeye-dpi 2>/dev/null || echo "unknown")
-        if [[ "$exit_status" == "0" ]]; then
-            echo -e "${GREEN}✓${NC} DPI Probe completed successfully (exit code: 0)"
-        elif [[ "$exit_status" == "3" ]]; then
-            # Exit code 3 = RuntimeError (Core unreachable) - this is expected if Core is not installed
-            echo -e "${YELLOW}✓${NC} DPI Probe exited with RuntimeError (exit code: 3) - Core may be unreachable (this is expected if Core is not installed)"
-        else
-            echo -e "${YELLOW}WARNING:${NC} DPI Probe exited with status: $exit_status (may be expected if Core is not installed)"
-        fi
-    fi
-    
-    # Verify process was created (check journal for probe activity)
-    if journalctl -u ransomeye-dpi --no-pager -n 5 2>/dev/null | grep -q "STARTUP: DPI Probe starting"; then
-        echo -e "${GREEN}✓${NC} DPI Probe process was created and executed"
-    else
-        echo -e "${YELLOW}WARNING:${NC} DPI Probe execution log not found (service may not have run yet)"
-    fi
+    echo "Validating DPI Probe installation..."
     
     # Verify capabilities are set correctly
     if getcap "${INSTALL_ROOT}/bin/ransomeye-dpi-probe" | grep -q "cap_net_raw,cap_net_admin"; then
         echo -e "${GREEN}✓${NC} Capabilities verified: CAP_NET_RAW, CAP_NET_ADMIN"
     else
-        echo -e "${YELLOW}WARNING:${NC} Capabilities not verified (may require filesystem support)"
+        error_exit "Capabilities not verified on DPI Probe binary"
+    fi
+
+    # Verify fastpath library exists
+    if [[ -f "${INSTALL_ROOT}/lib/libransomeye_dpi_af_packet.so" ]]; then
+        echo -e "${GREEN}✓${NC} Fastpath library present"
+    else
+        error_exit "Fastpath library missing: ${INSTALL_ROOT}/lib/libransomeye_dpi_af_packet.so"
     fi
     
     echo -e "${GREEN}✓${NC} Installation validation complete"
@@ -411,22 +502,28 @@ validate_installation() {
 
 # Main installation flow
 main() {
+    trap 'run_rollback' ERR
     check_root
     check_ubuntu
     detect_installer_dir
     prompt_install_root
-    check_python
+    ensure_clean_install_root
+    preflight_python3
     create_directory_structure
     create_system_user
     install_dpi_probe_script
+    build_fastpath_library
     set_capabilities
+    generate_telemetry_keys
     prompt_core_endpoint
     prompt_network_interface
     generate_environment_file
     set_permissions
-    install_systemd_service
     create_manifest
     validate_installation
+    
+    rm -f "${INSTALL_STATE_FILE}" 2>/dev/null || true
+    trap - ERR
     
     echo ""
     echo "================================================================================"
@@ -434,21 +531,11 @@ main() {
     echo "================================================================================"
     echo ""
     echo "Installation root: ${INSTALL_ROOT}"
-    echo "Systemd service: ransomeye-dpi.service"
     echo "Capabilities: CAP_NET_RAW, CAP_NET_ADMIN (scoped privileges, not full root)"
     echo ""
-    echo "Service commands:"
-    echo "  sudo systemctl start ransomeye-dpi      # Start DPI Probe"
-    echo "  sudo systemctl stop ransomeye-dpi       # Stop DPI Probe"
-    echo "  sudo systemctl status ransomeye-dpi     # Check status"
-    echo "  sudo systemctl restart ransomeye-dpi    # Restart DPI Probe"
-    echo ""
     echo "Logs location: ${INSTALL_ROOT}/logs/"
-    echo "Systemd logs: sudo journalctl -u ransomeye-dpi -f"
     echo ""
-    echo "NOTE: DPI Probe is standalone and does NOT require Core to be installed."
-    echo "      DPI Probe runs with CAP_NET_RAW and CAP_NET_ADMIN capabilities (not full root)."
-    echo "      DPI Probe will fail gracefully if Core is unreachable (no crash-loop)."
+    echo "NOTE: DPI Probe is supervised by Core only (no standalone mode)."
     echo ""
 }
 

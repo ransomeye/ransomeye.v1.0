@@ -1,10 +1,10 @@
-# RansomEye DPI Advanced Engine (10G / eBPF / AF_PACKET Fast-Path)
+# RansomEye DPI Engine (Unified Runtime Backend)
 
 **AUTHORITATIVE:** Carrier-grade, high-performance network intelligence engine
 
 ## Overview
 
-The RansomEye DPI Advanced Engine upgrades the DPI Probe from a **functional sensor** to a **carrier-grade, high-performance network intelligence engine** capable of sustaining **10G+ traffic** with **provable performance and privacy guarantees**. It provides line-rate traffic observation, flow-level behavioral ML (local, bounded, explainable), asset classification, privacy-preserving redaction, and deterministic chunked upload with cryptographic enforcement.
+The RansomEye DPI Engine provides the internal pipeline used by the unified DPI runtime. It provides line-rate traffic observation, flow-level behavioral modeling, asset classification, privacy-preserving redaction, and deterministic hashing for evidence integrity.
 
 ## Core Principles
 
@@ -106,16 +106,9 @@ The RansomEye DPI Advanced Engine upgrades the DPI Probe from a **functional sen
 
 **Redaction happens before storage and upload.**
 
-## Upload Pipeline
+## Telemetry
 
-- **Chunked uploads**: Uploads are chunked
-- **Per-chunk SHA256**: Each chunk has SHA256 hash
-- **Signed chunk manifests**: Manifests are signed (Ed25519)
-- **Backpressure-aware**: Handles backpressure
-- **Resume-safe**: Uploads can be resumed
-- **Offline buffering**: Bounded offline buffering
-
-**No silent drops.**
+Telemetry emission is handled by the unified DPI runtime (`dpi/probe/main.py`).
 
 ## Required Integrations
 
@@ -140,62 +133,7 @@ DPI Advanced Engine integrates with:
 
 ## Usage
 
-### Run Probe
-
-```bash
-python3 dpi-advanced/cli/run_probe.py \
-    --interface eth0 \
-    --privacy-policy /path/to/privacy_policy.json \
-    --flows-store /var/lib/ransomeye/dpi/flows.jsonl \
-    --asset-profiles-store /var/lib/ransomeye/dpi/asset_profiles.jsonl \
-    --upload-chunks-store /var/lib/ransomeye/dpi/upload_chunks.jsonl \
-    --ledger /var/lib/ransomeye/audit/ledger.jsonl \
-    --ledger-key-dir /var/lib/ransomeye/audit/keys \
-    --flow-timeout 300 \
-    --chunk-size 1000
-```
-
-### Benchmark Probe
-
-```bash
-python3 dpi-advanced/cli/benchmark_probe.py \
-    --benchmark-type both \
-    --duration 60 \
-    --packet-size 64 \
-    --num-packets 100000 \
-    --output benchmark_results.json
-```
-
-### Programmatic API
-
-```python
-from api.dpi_api import DPIAPI
-
-api = DPIAPI(
-    flows_store_path=Path('/var/lib/ransomeye/dpi/flows.jsonl'),
-    asset_profiles_store_path=Path('/var/lib/ransomeye/dpi/asset_profiles.jsonl'),
-    upload_chunks_store_path=Path('/var/lib/ransomeye/dpi/upload_chunks.jsonl'),
-    privacy_policy={
-        'privacy_mode': 'BALANCED',
-        'ip_redaction': 'partial',
-        'port_redaction': 'none',
-        'dns_redaction': 'second_level_only'
-    },
-    ledger_path=Path('/var/lib/ransomeye/audit/ledger.jsonl'),
-    ledger_key_dir=Path('/var/lib/ransomeye/audit/keys')
-)
-
-# Process packet
-flow = api.process_packet(
-    src_ip='192.168.1.10',
-    dst_ip='192.168.1.20',
-    src_port=12345,
-    dst_port=80,
-    protocol='tcp',
-    packet_size=1500,
-    timestamp=datetime.now(timezone.utc)
-)
-```
+This engine is invoked by `dpi/probe/main.py` and is not a standalone runtime.
 
 ## File Structure
 
@@ -214,19 +152,11 @@ dpi-advanced/
 │   ├── flow_assembler.py               # Deterministic flow assembly
 │   ├── behavior_model.py              # Flow-level behavioral ML
 │   ├── asset_classifier.py            # Asset classification
-│   ├── privacy_redactor.py            # Privacy-preserving redaction
-│   └── uploader.py                    # Chunked upload with crypto
+│   └── privacy_redactor.py            # Privacy-preserving redaction
 ├── performance/
 │   ├── throughput_benchmark.py        # Throughput benchmark
 │   ├── latency_benchmark.py          # Latency benchmark
 │   └── cpu_profile.md                 # CPU profile documentation
-├── api/
-│   ├── __init__.py
-│   └── dpi_api.py                     # DPI API with audit integration
-├── cli/
-│   ├── __init__.py
-│   ├── run_probe.py                   # Run probe CLI
-│   └── benchmark_probe.py             # Benchmark probe CLI
 └── README.md                          # This file
 ```
 

@@ -94,6 +94,20 @@ This validation does NOT validate threat logic, correlation, or AI. This validat
 4. **Schema Validation:** Verify SBOM schemas, manifest schemas exist and are valid
 5. **Failure Behavior Analysis:** Verify fail-closed behavior on validation and signing failures
 
+### Local Execution Checklist (Fail-Closed)
+
+Before any local validation or test execution, enforce the dev toolchain and pytest gate:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python3 -m pip install --upgrade pip
+python3 -m pip install -r requirements-dev.txt
+bash scripts/pytest_gate.sh
+```
+
+**Gate rule:** If pytest is missing, validation must stop immediately with a fatal error.
+
 ### Forbidden Patterns (Grep Validation)
 
 - No CI/CD pipeline files found

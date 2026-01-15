@@ -10,8 +10,11 @@ import sys
 import json
 import base64
 import hashlib
-from typing import Optional, Dict, Any, Tuple
+from typing import Optional, Dict, Any, Tuple, TYPE_CHECKING
 from pathlib import Path
+
+if TYPE_CHECKING:
+    import nacl.signing as nacl_signing
 
 try:
     import nacl.signing
@@ -57,9 +60,9 @@ class TelemetryVerifier:
                 self.public_key_dir = Path(install_root) / 'config' / 'component-keys'
         
         # Cache for loaded public keys (key_id -> VerifyKey)
-        self._key_cache: Dict[str, nacl.signing.VerifyKey] = {}
+        self._key_cache: Dict[str, "nacl_signing.VerifyKey"] = {}
     
-    def _load_public_key(self, key_id: str) -> nacl.signing.VerifyKey:
+    def _load_public_key(self, key_id: str) -> "nacl_signing.VerifyKey":
         """
         Load public key by key_id.
         
@@ -147,7 +150,7 @@ class TelemetryVerifier:
             envelope_copy['integrity']['hash_sha256'] = ''
         
         # 3. Serialize to canonical JSON
-        envelope_json = json.dumps(envelope_copy, sort_keys=True, ensure_ascii=False)
+        envelope_json = json.dumps(envelope_copy, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
         envelope_bytes = envelope_json.encode('utf-8')
         
         # 4. Compute SHA256 hash (same as signing process)

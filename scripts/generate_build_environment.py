@@ -108,7 +108,7 @@ def get_pip_packages(venv_path: Path = None) -> List[Dict[str, str]]:
     """Get installed pip packages and versions."""
     packages = []
     try:
-        pip_cmd = [sys.executable, '-m', 'pip', 'list', '--format=json']
+        pip_cmd = ['python3', '-m', 'pip', 'list', '--format=json']
         if venv_path:
             pip_cmd[0] = str(venv_path / 'bin' / 'python3')
         

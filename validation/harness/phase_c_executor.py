@@ -28,8 +28,8 @@ sys.path.insert(0, str(_project_root))
 from validation.harness.test_helpers import get_test_db_connection, clean_database
 
 
-class TestStatus(Enum):
-    """Test execution status."""
+class ValidationStatus(Enum):
+    """Validation execution status."""
     PENDING = "pending"
     RUNNING = "running"
     PASSED = "passed"
@@ -432,13 +432,13 @@ class PhaseCExecutor:
         
         try:
             track_results = track_executor(self)
-            track_results["status"] = TestStatus.PASSED.value if track_results.get("all_passed", False) else TestStatus.FAILED.value
+            track_results["status"] = ValidationStatus.PASSED.value if track_results.get("all_passed", False) else ValidationStatus.FAILED.value
             self.tracks_executed = True
         except Exception as e:
             # Clear error message (no traceback for operator errors)
             error_detail = str(e).split('\n')[0] if '\n' in str(e) else str(e)
             track_results = {
-                "status": TestStatus.FAILED.value,
+                "status": ValidationStatus.FAILED.value,
                 "error": error_detail,
                 "all_passed": False
             }
@@ -487,16 +487,16 @@ class PhaseCExecutor:
             for test_name, test_result in track_tests.items():
                 total_tests += 1
                 status = test_result.get("status")
-                if status == TestStatus.PASSED.value:
+                if status == ValidationStatus.PASSED.value:
                     passed_tests += 1
-                elif status == TestStatus.FAILED.value:
+                elif status == ValidationStatus.FAILED.value:
                     failed_tests += 1
-                elif status == TestStatus.SKIPPED.value:
+                elif status == ValidationStatus.SKIPPED.value:
                     skipped_tests += 1
         
         # Determine overall status for this execution mode
         all_tracks_passed = all(
-            track.get("status") == TestStatus.PASSED.value
+            track.get("status") == ValidationStatus.PASSED.value
             for track in self.results["tracks"].values()
         )
         
@@ -593,7 +593,7 @@ class PhaseCExecutor:
             fail_tests = linux_tracks["TRACK_3_FAILURE_INJECTION"].get("tests", {})
             if "FAIL-006" in fail_tests:
                 fail_006_status = fail_tests["FAIL-006"].get("status")
-                if fail_006_status == TestStatus.SKIPPED.value:
+                if fail_006_status == ValidationStatus.SKIPPED.value:
                     fail_006_skipped = True
         
         # Check AGENT-002 was not skipped (should not be in Linux results)
@@ -610,7 +610,7 @@ class PhaseCExecutor:
             if "AGENT-002" in agent_tests:
                 agent_002_status = agent_tests["AGENT-002"].get("status")
                 agent_002_in_windows = True
-                if agent_002_status == TestStatus.SKIPPED.value:
+                if agent_002_status == ValidationStatus.SKIPPED.value:
                     windows_pass = False  # AGENT-002 cannot be skipped
         
         # Final GA verdict
@@ -657,8 +657,8 @@ class PhaseCExecutor:
         for track_name, track_results in self.results["tracks"].items():
             status = track_results.get("status", "unknown")
             tests = track_results.get("tests", {})
-            passed = sum(1 for t in tests.values() if t.get("status") == TestStatus.PASSED.value)
-            failed = sum(1 for t in tests.values() if t.get("status") == TestStatus.FAILED.value)
+            passed = sum(1 for t in tests.values() if t.get("status") == ValidationStatus.PASSED.value)
+            failed = sum(1 for t in tests.values() if t.get("status") == ValidationStatus.FAILED.value)
             exec_time = track_results.get("execution_time_seconds", 0)
             
             lines.append(f"| {track_name} | {status.upper()} | {passed} | {failed} | {exec_time:.2f}s |")

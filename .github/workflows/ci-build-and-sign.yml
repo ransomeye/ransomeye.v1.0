@@ -52,6 +52,10 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       
+      - name: Preflight python3
+        run: |
+          bash scripts/preflight_python3.sh
+      
       - name: Set up Rust
         uses: actions-rs/toolchain@v1
         with:
@@ -379,10 +383,57 @@ jobs:
           print(f"✅ Public key exported to {public_key_path}")
           EOF
       
-      - name: Upload public key
+      - name: Create Phase-8 evidence bundle
+        if: success()
+        env:
+          RANSOMEYE_KEY_VAULT_PASSPHRASE: ${{ secrets.RANSOMEYE_KEY_VAULT_PASSPHRASE }}
+          RANSOMEYE_KEY_VAULT_DIR: ${{ secrets.RANSOMEYE_KEY_VAULT_DIR || 'keys/vault' }}
+          RANSOMEYE_KEY_REGISTRY_PATH: ${{ secrets.RANSOMEYE_KEY_REGISTRY_PATH || 'keys/registry.json' }}
+          RANSOMEYE_SIGNING_KEY_DIR: ${{ secrets.RANSOMEYE_KEY_VAULT_DIR || 'keys/vault' }}
+          RANSOMEYE_SIGNING_KEY_ID: ${{ env.SIGNING_KEY_ID }}
+          RANSOMEYE_RELEASE_ROOT: build/artifacts
+        run: |
+          # Run Phase-8 evidence bundle freezing
+          python3 validation/evidence_bundle/freeze_evidence_bundle.py || {
+            echo "⚠️  WARNING: Phase-8 evidence bundle creation failed or skipped"
+            echo "   This may be acceptable if validation results are not yet available"
+          }
+        # PHASE-9: Evidence bundle creation is optional during build (may be created later)
+        continue-on-error: true
+      
+      - name: Create release bundle
+        if: success()
+        env:
+          RANSOMEYE_KEY_VAULT_DIR: ${{ secrets.RANSOMEYE_KEY_VAULT_DIR || 'keys/vault' }}
+          RANSOMEYE_KEY_REGISTRY_PATH: ${{ secrets.RANSOMEYE_KEY_REGISTRY_PATH || 'keys/registry.json' }}
+          SIGNING_KEY_ID: ${{ env.SIGNING_KEY_ID }}
+        run: |
+          # PHASE-9: Create self-contained release bundle
+          python3 scripts/create_release_bundle.py \
+            --version "${{ github.ref_name }}" \
+            --build-artifacts-dir build/artifacts \
+            --signed-artifacts-dir build/artifacts/signed \
+            --sbom-dir build/artifacts/sbom \
+            --public-keys-dir build/artifacts/public-keys \
+            --evidence-dir validation/evidence_bundle \
+            --metadata-dir build/artifacts \
+            --signing-key-id "${{ env.SIGNING_KEY_ID }}" \
+            --output-dir release/bundles
+        # PHASE-9: Fail-closed - release bundle creation must succeed
+        continue-on-error: false
+      
+      - name: Upload release bundle
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: signing-public-key
-          path: build/artifacts/public-keys/*.pub
-          retention-days: 90
+          name: release-bundle
+          path: release/bundles/ransomeye-*.tar.gz
+          retention-days: 365
+      
+      - name: Upload release bundle checksum
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-bundle-checksum
+          path: release/bundles/ransomeye-*.tar.gz.sha256
+          retention-days: 365

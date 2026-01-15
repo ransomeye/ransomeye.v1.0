@@ -23,6 +23,7 @@ try:
     from common.config import ConfigLoader, ConfigError, validate_path, validate_port, check_disk_space
     from common.logging import setup_logging, StructuredLogger
     from common.shutdown import ShutdownHandler, ExitCode, exit_config_error, exit_startup_error, exit_fatal
+    from core.orchestrator import CoreOrchestrator
     _common_available = True
 except ImportError:
     _common_available = False
@@ -75,6 +76,9 @@ if _common_available:
     config_loader.optional('RANSOMEYE_DB_USER', default='ransomeye')
     config_loader.optional('RANSOMEYE_INGEST_PORT', default='8000', validator=validate_port)
     config_loader.optional('RANSOMEYE_UI_PORT', default='8080', validator=validate_port)
+    config_loader.optional('RANSOMEYE_SCHEMA_MIGRATIONS_DIR',
+                          default=str(Path(_project_root) / 'schemas' / 'migrations'),
+                          validator=lambda v: validate_path(v, must_exist=False))
     config_loader.optional('RANSOMEYE_EVENT_ENVELOPE_SCHEMA_PATH', 
                           default='/opt/ransomeye/etc/contracts/event-envelope.schema.json',
                           validator=lambda v: validate_path(v, must_exist=True))
@@ -92,6 +96,7 @@ else:
 
 logger = setup_logging('core')
 _shutdown_handler = ShutdownHandler('core', cleanup_func=lambda: _core_cleanup())
+_orchestrator: Optional[CoreOrchestrator] = None
 
 def shutdown_handler():
     """Get shutdown handler."""
@@ -244,6 +249,78 @@ def _validate_schema_presence():
     except Exception as e:
         error_msg = f"Schema validation failed: {e}"
         logger.db_error(str(e), "schema_check")
+        exit_startup_error(error_msg)
+
+def _validate_schema_version():
+    """
+    Phase 1 requirement: Validate schema version strictly.
+    Fail-fast: Exit immediately if DB version != expected version.
+    """
+    logger.startup("Validating database schema version")
+    
+    migrations_dir = os.getenv("RANSOMEYE_SCHEMA_MIGRATIONS_DIR")
+    if not migrations_dir:
+        migrations_dir = str(Path(_project_root) / "schemas" / "migrations")
+    migrations_path = Path(migrations_dir)
+    
+    if not migrations_path.exists():
+        error_msg = f"Schema migrations directory not found: {migrations_path}"
+        logger.fatal(error_msg)
+        exit_startup_error(error_msg)
+    
+    try:
+        from common.db.migration_runner import get_latest_migration_version
+    except Exception as e:
+        error_msg = f"Migration runner not available for schema version check: {e}"
+        logger.fatal(error_msg)
+        exit_startup_error(error_msg)
+    
+    expected_version = get_latest_migration_version(migrations_path)
+    if not expected_version:
+        error_msg = "No migrations found; schema version cannot be determined"
+        logger.fatal(error_msg)
+        exit_startup_error(error_msg)
+    
+    try:
+        conn = psycopg2.connect(
+            host=config.get('RANSOMEYE_DB_HOST', 'localhost'),
+            port=config.get('RANSOMEYE_DB_PORT', 5432),
+            database=config.get('RANSOMEYE_DB_NAME', 'ransomeye'),
+            user=config.get('RANSOMEYE_DB_USER', 'ransomeye'),
+            password=config['RANSOMEYE_DB_PASSWORD']
+        )
+        cur = conn.cursor()
+        cur.execute("SELECT to_regclass('public.schema_migrations')")
+        if cur.fetchone()[0] is None:
+            cur.close()
+            conn.close()
+            error_msg = "Schema migrations table missing; database not initialized"
+            logger.fatal(error_msg)
+            exit_startup_error(error_msg)
+        
+        cur.execute("SELECT version FROM schema_migrations ORDER BY version DESC LIMIT 1")
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+        
+        if not row:
+            error_msg = "No schema migrations applied; database not initialized"
+            logger.fatal(error_msg)
+            exit_startup_error(error_msg)
+        
+        current_version = row[0]
+        if current_version != expected_version:
+            error_msg = (
+                f"Schema version mismatch: expected {expected_version}, "
+                f"found {current_version}"
+            )
+            logger.fatal(error_msg)
+            exit_startup_error(error_msg)
+        
+        logger.startup(f"Schema version validated (version {current_version})")
+    except Exception as e:
+        error_msg = f"Schema version validation failed: {e}"
+        logger.db_error(str(e), "schema_version_check")
         exit_startup_error(error_msg)
 
 def _validate_write_permissions():
@@ -480,6 +557,9 @@ def _core_startup_validation():
     # Phase 10.1 requirement: Validate DB connectivity
     _validate_db_connectivity()
     
+    # Phase 1 requirement: Validate schema version before presence checks
+    _validate_schema_version()
+    
     # Phase 10.1 requirement: Validate schema presence
     _validate_schema_presence()
     
@@ -535,32 +615,12 @@ def _signal_handler(signum, frame):
     signal_name = signal.Signals(signum).name
     logger.shutdown(f"Received {signal_name}, initiating graceful shutdown")
     
-    # Phase 10.1 requirement: Stop accepting new work
+    # Phase 2 requirement: Orchestrator-managed shutdown
     if _shutdown_handler:
         _shutdown_handler.shutdown_requested.set()
-    
-    for component_name, state in _component_state.items():
-        state['running'] = False
-        logger.info(f"Stopped accepting new work for {component_name}")
-    
-    # Phase 10.1 requirement: Finish in-flight DB transactions
-    for component_name, state in _component_state.items():
-        if state.get('conn'):
-            try:
-                # Commit any pending transactions
-                state['conn'].commit()
-                logger.info(f"Finished in-flight transactions for {component_name}")
-            except Exception as e:
-                logger.warning(f"Error committing transactions for {component_name}: {e}")
-                try:
-                    state['conn'].rollback()
-                except:
-                    pass
-    
-    # Phase 10.1 requirement: Close DB connections cleanly
+    if _orchestrator:
+        _orchestrator._shutdown_components()
     _core_cleanup()
-    
-    # Phase 10.1 requirement: Exit cleanly with log confirmation
     logger.shutdown("Core graceful shutdown complete")
     sys.exit(ExitCode.SUCCESS)
 
@@ -636,35 +696,20 @@ def run_core():
     Phase 10.1 requirement: Run Core runtime.
     Initialize Core, load components as modules, coordinate execution.
     """
-    # Phase 10.1 requirement: Initialize Core
+    global _orchestrator
     _initialize_core()
-    
-    # Phase 10.1 requirement: Load component modules
-    _load_component_modules()
-    
-    logger.startup("Core runtime starting")
-    
-    # Phase 10.1 requirement: Components run as modules within Core
-    # Note: Actual component execution is coordinated by Core
-    # Components are not standalone services, they are Core modules
-    
-    logger.startup("Core runtime ready")
-    
-    # Phase 10.1 requirement: Core remains running until shutdown signal
-    # Components execute within Core context, not as separate processes
-    # Note: Component execution is coordinated by Core (components are modules, not processes)
-    import time
-    while not _shutdown_handler.is_shutdown_requested():
-        time.sleep(1)
-    
+    logger.startup("Core runtime starting (orchestrator mode)")
+    _orchestrator = CoreOrchestrator(logger, _shutdown_handler)
+    exit_code = _orchestrator.run()
     logger.shutdown("Core runtime stopping")
     _core_cleanup()
+    return exit_code
 
 if __name__ == "__main__":
     try:
-        run_core()
+        exit_code = run_core()
         logger.shutdown("Core runtime completed successfully")
-        sys.exit(ExitCode.SUCCESS)
+        sys.exit(exit_code)
     except KeyboardInterrupt:
         logger.shutdown("Received interrupt, shutting down")
         _core_cleanup()

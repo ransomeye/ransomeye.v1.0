@@ -172,6 +172,53 @@ COMMENT ON COLUMN rbac_user_roles.role IS 'Role assigned to user (exactly one)';
 COMMENT ON CONSTRAINT rbac_user_roles_one_role_per_user ON rbac_user_roles IS 'Enforces one role per user (multiple users per role allowed)';
 
 -- ============================================================================
+-- REFRESH TOKENS
+-- ============================================================================
+-- Refresh token storage for JWT session management (logout + rotation)
+
+CREATE TABLE rbac_refresh_tokens (
+    token_id VARCHAR(255) NOT NULL PRIMARY KEY,
+    -- Unique token identifier (jti)
+
+    user_id VARCHAR(255) NOT NULL REFERENCES rbac_users(user_id) ON DELETE CASCADE,
+    -- Token owner
+
+    token_hash VARCHAR(255) NOT NULL,
+    -- SHA256 hash of refresh token (never store raw token)
+
+    issued_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    -- When refresh token was issued
+
+    expires_at TIMESTAMPTZ NOT NULL,
+    -- Token expiration timestamp
+
+    revoked_at TIMESTAMPTZ,
+    -- When token was revoked (NULL if active)
+
+    revoked_by VARCHAR(255),
+    -- User or system that revoked the token
+
+    revocation_reason VARCHAR(255),
+    -- Reason for revocation
+
+    user_agent VARCHAR(512),
+    -- Optional user agent for audit traceability
+
+    ip_address VARCHAR(128),
+    -- Optional IP address for audit traceability
+
+    CONSTRAINT rbac_refresh_tokens_token_id_not_empty CHECK (LENGTH(TRIM(token_id)) > 0),
+    CONSTRAINT rbac_refresh_tokens_token_hash_not_empty CHECK (LENGTH(TRIM(token_hash)) > 0)
+);
+
+COMMENT ON TABLE rbac_refresh_tokens IS 'Refresh token store for UI authentication. Stores hashed tokens for rotation and logout invalidation.';
+COMMENT ON COLUMN rbac_refresh_tokens.token_hash IS 'SHA256 hash of refresh token; raw tokens are never stored.';
+
+CREATE INDEX idx_rbac_refresh_tokens_user_id ON rbac_refresh_tokens(user_id);
+CREATE INDEX idx_rbac_refresh_tokens_expires_at ON rbac_refresh_tokens(expires_at);
+CREATE INDEX idx_rbac_refresh_tokens_revoked_at ON rbac_refresh_tokens(revoked_at);
+
+-- ============================================================================
 -- ROLE PERMISSIONS
 -- ============================================================================
 -- Role-permission mappings (many-to-many)

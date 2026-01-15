@@ -30,7 +30,7 @@ check_root() {
 detect_install_root() {
     # Try to find manifest in common locations
     local manifest_paths=(
-        "/opt/ransomeye-dpi/config/installer.manifest.json"
+        "/opt/ransomeye/config/installer.manifest.json"
         "/usr/local/ransomeye-dpi/config/installer.manifest.json"
     )
     
@@ -54,7 +54,7 @@ detect_install_root() {
     echo ""
     echo "Installation manifest not found in common locations."
     echo "Enter installation root directory (absolute path, no trailing slash):"
-    echo "  Example: /opt/ransomeye-dpi"
+    echo "  Example: /opt/ransomeye"
     echo -n "Install root: "
     
     read -r INSTALL_ROOT

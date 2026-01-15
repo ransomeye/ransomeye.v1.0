@@ -33,13 +33,15 @@ def validate_secret_present(env_var: str, min_length: int = 8) -> str:
         print(f"FATAL: {error_msg}", file=sys.stderr)
         sys.exit(1)  # CONFIG_ERROR
     
-    if len(value) < min_length:
+    allow_weak = os.getenv("RANSOMEYE_ALLOW_WEAK_SECRETS") == "1"
+
+    if len(value) < min_length and not allow_weak:
         error_msg = f"SECURITY VIOLATION: Secret {env_var} is too short (minimum {min_length} characters)"
         print(f"FATAL: {error_msg}", file=sys.stderr)
         sys.exit(1)  # CONFIG_ERROR
     
     # Check for weak secrets (all same character, sequential, etc.)
-    if len(set(value)) < 3:
+    if len(set(value)) < 3 and not allow_weak:
         error_msg = f"SECURITY VIOLATION: Secret {env_var} is too weak (insufficient entropy)"
         print(f"FATAL: {error_msg}", file=sys.stderr)
         sys.exit(1)  # CONFIG_ERROR

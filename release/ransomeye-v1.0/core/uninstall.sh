@@ -137,6 +137,47 @@ remove_installation() {
     fi
 }
 
+# Optional rollback of database schema (non-destructive to other databases)
+rollback_database_schema() {
+    echo ""
+    echo "Database schema rollback (optional)..."
+    
+    local env_file="${INSTALL_ROOT}/config/environment"
+    if [[ ! -f "$env_file" ]]; then
+        echo -e "${YELLOW}✓${NC} Environment file not found; skipping schema rollback"
+        return
+    fi
+    
+    echo "This will rollback RansomEye schema migrations to base (schema objects removed)."
+    echo -n "Rollback database schema? [y/N]: "
+    read -r confirm_db
+    if [[ "$confirm_db" != "y" && "$confirm_db" != "Y" ]]; then
+        echo -e "${YELLOW}✓${NC} Database schema rollback skipped"
+        return
+    fi
+    
+    set -a
+    source "$env_file"
+    set +a
+    
+    local migrations_dir="${RANSOMEYE_SCHEMA_MIGRATIONS_DIR:-${INSTALL_ROOT}/config/schemas/migrations}"
+    if [[ ! -d "$migrations_dir" ]]; then
+        error_exit "Migrations directory not found: $migrations_dir"
+    fi
+    
+    if ! PYTHONPATH="${INSTALL_ROOT}/lib" \
+        RANSOMEYE_DB_HOST="${RANSOMEYE_DB_HOST}" \
+        RANSOMEYE_DB_PORT="${RANSOMEYE_DB_PORT}" \
+        RANSOMEYE_DB_NAME="${RANSOMEYE_DB_NAME}" \
+        RANSOMEYE_DB_USER="${RANSOMEYE_DB_USER}" \
+        RANSOMEYE_DB_PASSWORD="${RANSOMEYE_DB_PASSWORD}" \
+        RANSOMEYE_SCHEMA_MIGRATIONS_DIR="${migrations_dir}" \
+        python3 -m common.db.migration_runner downgrade --migrations-dir "${migrations_dir}" --target-version "0"; then
+        error_exit "Database schema rollback failed"
+    fi
+    
+    echo -e "${GREEN}✓${NC} Database schema rollback completed"
+}
 # Remove system user (optional, with confirmation)
 remove_system_user() {
     echo ""
@@ -169,6 +210,7 @@ main() {
     check_root
     detect_install_root
     remove_systemd_service
+    rollback_database_schema
     remove_installation
     remove_system_user
     
@@ -179,10 +221,8 @@ main() {
     echo ""
     echo "RansomEye Core has been removed from this system."
     echo ""
-    echo "NOTE: PostgreSQL database 'ransomeye' and user 'gagan' were NOT removed."
-    echo "      Remove them manually if needed:"
-    echo "        sudo -u postgres psql -c \"DROP DATABASE ransomeye;\""
-    echo "        sudo -u postgres psql -c \"DROP USER gagan;\""
+    echo "NOTE: PostgreSQL database and roles were NOT removed."
+    echo "      Schema rollback can be executed via the migration runner if needed."
     echo ""
 }
 

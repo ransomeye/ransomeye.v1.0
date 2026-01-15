@@ -23,6 +23,35 @@ error_exit() {
     exit 1
 }
 
+# Transaction framework
+TRANSACTION_PY=""
+INSTALL_STATE_FILE=""
+
+init_transaction() {
+    TRANSACTION_PY="$(cd "$(dirname "${BASH_SOURCE[0]}")/../common" && pwd)/install_transaction.py"
+    if [[ ! -f "$TRANSACTION_PY" ]]; then
+        error_exit "Transaction framework not found: $TRANSACTION_PY"
+    fi
+    INSTALL_STATE_FILE="${INSTALL_ROOT}/.install_state.json"
+    python3 "$TRANSACTION_PY" init --state-file "$INSTALL_STATE_FILE" --component "core"
+}
+
+record_step() {
+    local action="$1"
+    local rollback_action="$2"
+    shift 2
+    python3 "$TRANSACTION_PY" record --state-file "$INSTALL_STATE_FILE" \
+        --action "$action" --rollback-action "$rollback_action" "$@"
+}
+
+run_rollback() {
+    trap - ERR
+    if [[ -n "${INSTALL_STATE_FILE}" && -f "${INSTALL_STATE_FILE}" ]]; then
+        python3 "$TRANSACTION_PY" rollback --state-file "$INSTALL_STATE_FILE" || true
+    fi
+    exit 1
+}
+
 # Validate root privileges (needed for systemd, user creation)
 check_root() {
     if [[ $EUID -ne 0 ]]; then
@@ -72,6 +101,13 @@ prompt_install_root() {
     echo -e "${GREEN}✓${NC} Install root: ${INSTALL_ROOT}"
 }
 
+# Enforce empty install root for transactional install
+ensure_clean_install_root() {
+    if [[ -d "${INSTALL_ROOT}" ]] && [[ "$(ls -A "${INSTALL_ROOT}")" ]]; then
+        error_exit "Install root must be empty for transactional install: ${INSTALL_ROOT}"
+    fi
+}
+
 # Detect installer directory (where install.sh is located)
 detect_installer_dir() {
     INSTALLER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -93,6 +129,17 @@ detect_installer_dir() {
             fi
             search_dir="${search_dir}/.."
         done
+    fi
+}
+
+# Preflight: enforce python3 availability and minimum version
+preflight_python3() {
+    local preflight_script="${INSTALLER_DIR}/../common/preflight_python3.sh"
+    if [[ ! -f "$preflight_script" ]]; then
+        error_exit "Python3 preflight script not found: $preflight_script"
+    fi
+    if ! bash "$preflight_script"; then
+        error_exit "Python3 preflight failed"
     fi
 }
 
@@ -131,9 +178,7 @@ verify_sbom() {
     fi
     
     # Use Python verification utility
-    if ! command -v python3 &> /dev/null; then
-        error_exit "python3 not found. Cannot verify SBOM."
-    fi
+    preflight_python3
     
     # Try to find public key
     local public_key_path=""
@@ -219,6 +264,7 @@ create_directory_structure() {
     echo "Creating directory structure..."
     
     local dirs=(
+        "${INSTALL_ROOT}"
         "${INSTALL_ROOT}/bin"
         "${INSTALL_ROOT}/lib"
         "${INSTALL_ROOT}/config"
@@ -229,6 +275,12 @@ create_directory_structure() {
     for dir in "${dirs[@]}"; do
         if [[ ! -d "$dir" ]]; then
             mkdir -p "$dir" || error_exit "Failed to create directory: $dir"
+            if [[ "$dir" == "${INSTALL_ROOT}" ]]; then
+                init_transaction
+                record_step "create_install_root" "remove_tree" --meta "path=${INSTALL_ROOT}" --rollback-meta "path=${INSTALL_ROOT}"
+            else
+                record_step "create_directory" "remove_tree" --meta "path=${dir}" --rollback-meta "path=${dir}"
+            fi
             echo -e "${GREEN}✓${NC} Created: $dir"
         else
             echo -e "${YELLOW}✓${NC} Exists: $dir"
@@ -245,6 +297,7 @@ create_system_user() {
         echo -e "${YELLOW}✓${NC} User 'ransomeye' already exists"
     else
         useradd --system --no-create-home --shell /bin/false ransomeye || error_exit "Failed to create user 'ransomeye'"
+        record_step "create_user" "remove_user" --meta "username=ransomeye" --rollback-meta "username=ransomeye"
         echo -e "${GREEN}✓${NC} Created user: ransomeye"
     fi
     
@@ -276,6 +329,12 @@ install_python_files() {
         echo -e "${GREEN}✓${NC} Installed: services/"
     fi
     
+    # Copy DPI probe (supervised by Core)
+    if [[ -d "${SRC_ROOT}/dpi" ]]; then
+        cp -r "${SRC_ROOT}/dpi" "${INSTALL_ROOT}/lib/" || error_exit "Failed to copy DPI probe"
+        echo -e "${GREEN}✓${NC} Installed: dpi/"
+    fi
+    
     # Copy contracts
     if [[ -d "${SRC_ROOT}/contracts" ]]; then
         mkdir -p "${INSTALL_ROOT}/config/contracts"
@@ -303,8 +362,7 @@ create_core_wrapper() {
     cat > "${INSTALL_ROOT}/bin/ransomeye-core" << 'WRAPPER_EOF'
 #!/bin/bash
 # RansomEye Core Runtime Wrapper
-# This wrapper starts Core runtime and FastAPI services with proper environment
-# Installer requirement: Start services using uvicorn without modifying Core code
+# Core is the only process started by installer
 
 set -euo pipefail
 
@@ -324,54 +382,13 @@ fi
 # Change to install root for relative path resolution
 cd "$INSTALL_ROOT" || exit 1
 
-# Background process PIDs
-INGEST_PID=""
-UI_PID=""
-
-# Cleanup function: kill background services when Core exits
-cleanup() {
-    if [[ -n "$INGEST_PID" ]]; then
-        kill "$INGEST_PID" 2>/dev/null || true
-        wait "$INGEST_PID" 2>/dev/null || true
-    fi
-    if [[ -n "$UI_PID" ]]; then
-        kill "$UI_PID" 2>/dev/null || true
-        wait "$UI_PID" 2>/dev/null || true
-    fi
-}
-
-# Trap signals to ensure cleanup on exit
-trap cleanup SIGTERM SIGINT
-
-# Installer requirement: Start FastAPI services (Ingest, UI Backend) using uvicorn
-# Services have their own main blocks that call uvicorn when run directly
-# This does NOT modify Core code - installer calls services as-is
-
-# Start Ingest service in background
-python3 "${INSTALL_ROOT}/lib/services/ingest/app/main.py" &
-INGEST_PID=$!
-
-# Start UI Backend service in background
-python3 "${INSTALL_ROOT}/lib/services/ui/backend/main.py" &
-UI_PID=$!
-
-# Give services time to start
-sleep 2
-
 # Run Core main entry point (foreground process - systemd tracks this)
-# Core runtime coordinates modules and remains running until shutdown signal
-# Use exec to replace shell with Core process (systemd tracks this)
-python3 "${INSTALL_ROOT}/lib/core/main.py" "$@"
-CORE_EXIT=$?
-
-# Cleanup when Core exits
-cleanup
-
-exit $CORE_EXIT
+exec python3 "${INSTALL_ROOT}/lib/core/main.py" "$@"
 WRAPPER_EOF
 
     chmod +x "${INSTALL_ROOT}/bin/ransomeye-core" || error_exit "Failed to make wrapper executable"
     chown ransomeye:ransomeye "${INSTALL_ROOT}/bin/ransomeye-core" || error_exit "Failed to set ownership on wrapper"
+    record_step "create_wrapper" "remove_path" --meta "path=${INSTALL_ROOT}/bin/ransomeye-core" --rollback-meta "path=${INSTALL_ROOT}/bin/ransomeye-core"
     echo -e "${GREEN}✓${NC} Created: ${INSTALL_ROOT}/bin/ransomeye-core"
 }
 
@@ -544,6 +561,7 @@ RANSOMEYE_ETC_DIR="${INSTALL_ROOT}/config"
 RANSOMEYE_LOG_DIR="${INSTALL_ROOT}/logs"
 RANSOMEYE_RUN_DIR="${INSTALL_ROOT}/runtime"
 RANSOMEYE_TMP_DIR="${INSTALL_ROOT}/runtime/tmp"
+RANSOMEYE_CORE_STATUS_PATH="${INSTALL_ROOT}/runtime/core_status.json"
 
 # Runtime identity
 RANSOMEYE_USER="ransomeye"
@@ -562,6 +580,7 @@ RANSOMEYE_DB_PORT="${RANSOMEYE_DB_PORT}"
 RANSOMEYE_DB_NAME="${RANSOMEYE_DB_NAME}"
 RANSOMEYE_DB_USER="${RANSOMEYE_DB_USER}"
 RANSOMEYE_DB_PASSWORD="${RANSOMEYE_DB_PASSWORD}"
+RANSOMEYE_SCHEMA_MIGRATIONS_DIR="${INSTALL_ROOT}/config/schemas/migrations"
 
 # Service ports
 RANSOMEYE_INGEST_PORT="8000"
@@ -580,6 +599,7 @@ EOF
 
     chmod 600 "${INSTALL_ROOT}/config/environment" || error_exit "Failed to set permissions on environment file"
     chown ransomeye:ransomeye "${INSTALL_ROOT}/config/environment" || error_exit "Failed to set ownership on environment file"
+    record_step "create_environment" "remove_path" --meta "path=${INSTALL_ROOT}/config/environment" --rollback-meta "path=${INSTALL_ROOT}/config/environment"
     echo -e "${GREEN}✓${NC} Created: ${INSTALL_ROOT}/config/environment"
 }
 
@@ -622,6 +642,49 @@ check_postgresql() {
     unset PGPASSWORD
 }
 
+# Run database migrations (fail-closed, idempotent)
+run_database_migrations() {
+    echo ""
+    echo "Applying database migrations..."
+    
+    local migrations_dir="${INSTALL_ROOT}/config/schemas/migrations"
+    if [[ ! -d "$migrations_dir" ]]; then
+        error_exit "Migrations directory not found: $migrations_dir"
+    fi
+    
+    preflight_python3
+    
+    # Run migration runner using installed libraries
+    if ! PYTHONPATH="${INSTALL_ROOT}/lib" \
+        RANSOMEYE_DB_HOST="${RANSOMEYE_DB_HOST}" \
+        RANSOMEYE_DB_PORT="${RANSOMEYE_DB_PORT}" \
+        RANSOMEYE_DB_NAME="${RANSOMEYE_DB_NAME}" \
+        RANSOMEYE_DB_USER="${RANSOMEYE_DB_USER}" \
+        RANSOMEYE_DB_PASSWORD="${RANSOMEYE_DB_PASSWORD}" \
+        RANSOMEYE_SCHEMA_MIGRATIONS_DIR="${migrations_dir}" \
+        python3 -m common.db.migration_runner upgrade --migrations-dir "${migrations_dir}"; then
+        error_exit "Database migrations failed. Installation aborted (fail-closed)."
+    fi
+    
+    record_step "apply_migrations" "rollback_migrations" \
+        --meta "migrations_dir=${migrations_dir}" \
+        --meta "pythonpath=${INSTALL_ROOT}/lib" \
+        --meta "db_host=${RANSOMEYE_DB_HOST}" \
+        --meta "db_port=${RANSOMEYE_DB_PORT}" \
+        --meta "db_name=${RANSOMEYE_DB_NAME}" \
+        --meta "db_user=${RANSOMEYE_DB_USER}" \
+        --meta "db_password=${RANSOMEYE_DB_PASSWORD}" \
+        --rollback-meta "migrations_dir=${migrations_dir}" \
+        --rollback-meta "pythonpath=${INSTALL_ROOT}/lib" \
+        --rollback-meta "db_host=${RANSOMEYE_DB_HOST}" \
+        --rollback-meta "db_port=${RANSOMEYE_DB_PORT}" \
+        --rollback-meta "db_name=${RANSOMEYE_DB_NAME}" \
+        --rollback-meta "db_user=${RANSOMEYE_DB_USER}" \
+        --rollback-meta "db_password=${RANSOMEYE_DB_PASSWORD}"
+    
+    echo -e "${GREEN}✓${NC} Database migrations applied successfully"
+}
+
 # Install systemd service (ONE service only)
 install_systemd_service() {
     echo ""
@@ -638,6 +701,11 @@ install_systemd_service() {
         error_exit "Failed to install systemd service"
     
     systemctl daemon-reload || error_exit "Failed to reload systemd daemon"
+    record_step "install_systemd_service" "remove_systemd_service" \
+        --meta "service=ransomeye-core.service" \
+        --meta "service_file=/etc/systemd/system/ransomeye-core.service" \
+        --rollback-meta "service=ransomeye-core.service" \
+        --rollback-meta "service_file=/etc/systemd/system/ransomeye-core.service"
     echo -e "${GREEN}✓${NC} Installed systemd service: ransomeye-core.service"
 }
 
@@ -675,6 +743,7 @@ EOF
 
     chmod 644 "$manifest_file" || error_exit "Failed to set permissions on manifest"
     chown ransomeye:ransomeye "$manifest_file" || error_exit "Failed to set ownership on manifest"
+    record_step "create_manifest" "remove_path" --meta "path=${manifest_file}" --rollback-meta "path=${manifest_file}"
     echo -e "${GREEN}✓${NC} Created: $manifest_file"
 }
 
@@ -690,30 +759,20 @@ validate_installation() {
     # Wait for startup (max 30 seconds)
     local max_wait=30
     local waited=0
-    local health_check_passed=false
+    local status_file="${INSTALL_ROOT}/runtime/core_status.json"
+    local core_ready=false
     
-    echo "Waiting for Core to become healthy (max ${max_wait}s)..."
+    echo "Waiting for Core to reach RUNNING state (max ${max_wait}s)..."
     
     while [[ $waited -lt $max_wait ]]; do
         if systemctl is-active --quiet ransomeye-core; then
-            # Check health endpoints (if available)
-            sleep 2  # Give services time to initialize
-            
-            # Check Ingest health (port 8000)
-            if curl -sf http://localhost:8000/health > /dev/null 2>&1; then
-                echo -e "${GREEN}✓${NC} Ingest health check passed"
-                health_check_passed=true
-                break
-            fi
-            
-            # Check UI health (port 8080)
-            if curl -sf http://localhost:8080/health > /dev/null 2>&1; then
-                echo -e "${GREEN}✓${NC} UI Backend health check passed"
-                health_check_passed=true
-                break
+            if [[ -f "$status_file" ]]; then
+                if python3 -c "import json; s=json.load(open('$status_file')); print(s.get('state',''))" 2>/dev/null | grep -q "RUNNING"; then
+                    core_ready=true
+                    break
+                fi
             fi
         fi
-        
         sleep 1
         waited=$((waited + 1))
         echo -n "."
@@ -725,37 +784,35 @@ validate_installation() {
         error_exit "Core service is not active after startup"
     fi
     
-    if [[ "$health_check_passed" == "false" ]]; then
-        echo -e "${YELLOW}WARNING: Health check endpoints not accessible (service may still be starting)${NC}"
+    if [[ "$core_ready" != "true" ]]; then
+        error_exit "Core did not reach RUNNING state during validation"
     fi
     
-    echo -e "${GREEN}✓${NC} Core started successfully"
-}
-
-# PHASE B3: Rollback capability
-ROLLBACK_STACK=()
-
-push_rollback() {
-    # Add rollback action to stack
-    ROLLBACK_STACK+=("$1")
-}
-
-execute_rollback() {
-    echo ""
-    echo "================================================================================"
-    echo -e "${RED}INSTALLATION FAILED - Executing rollback${NC}"
-    echo "================================================================================"
+    # Validate status schema and enforce authoritative state
+    local status_check
+    status_check=$(PYTHONPATH="${INSTALL_ROOT}/lib" python3 -c "import json; from core.status_schema import validate_status; s=json.load(open('$status_file')); ok,err=validate_status(s); print('OK' if ok else err)" 2>/dev/null || echo "INVALID")
+    if [[ "$status_check" != "OK" ]]; then
+        error_exit "Core status file invalid: ${status_check}"
+    fi
     
-    # Execute rollback actions in reverse order
-    for (( idx=${#ROLLBACK_STACK[@]}-1 ; idx>=0 ; idx-- )) ; do
-        local action="${ROLLBACK_STACK[idx]}"
-        echo "Rollback: $action"
-        eval "$action" || echo "Warning: Rollback action failed: $action"
-    done
+    local global_state
+    global_state=$(PYTHONPATH="${INSTALL_ROOT}/lib" python3 -c "import json; s=json.load(open('$status_file')); print(s.get('global_state',''))" 2>/dev/null || echo "")
+    if [[ "$global_state" != "RUNNING" ]]; then
+        local reason
+        reason=$(PYTHONPATH="${INSTALL_ROOT}/lib" python3 -c "import json; s=json.load(open('$status_file')); print(s.get('failure_reason_code'), s.get('failure_reason'))" 2>/dev/null || echo "")
+        error_exit "Core did not reach RUNNING state: ${global_state} ${reason}"
+    fi
     
-    echo ""
-    echo "Rollback completed. System restored to pre-installation state."
+    # Validate component states from status file (fail-closed)
+    local component_check
+    component_check=$(PYTHONPATH="${INSTALL_ROOT}/lib" python3 -c "import json; s=json.load(open('$status_file')); print([k for k,v in s.get('components',{}).items() if v.get('state')!='RUNNING' and k!='ui-backend'])" 2>/dev/null || echo "[]")
+    if [[ "$component_check" != "[]" ]]; then
+        error_exit "Critical components not RUNNING: ${component_check}"
+    fi
+    
+    echo -e "${GREEN}✓${NC} Core started successfully (RUNNING, all components supervised)"
 }
+
 
 # PHASE B2: Manifest validation
 validate_manifest() {
@@ -916,25 +973,22 @@ PYTHON_EOF
 # Main installation flow (PHASE B: Updated with credential prompts and rollback)
 main() {
     # Set up error handler for rollback
-    trap 'execute_rollback' ERR
+    trap 'run_rollback' ERR
     
     check_root
     check_ubuntu
     detect_installer_dir
+    preflight_python3
     
     # PHASE B1: Prompt for credentials (no defaults)
     prompt_install_root
+    ensure_clean_install_root
     prompt_database_credentials
     prompt_signing_key
     
-    # Track installation steps for rollback
-    push_rollback "echo 'Rollback: Installation directory created at ${INSTALL_ROOT}'"
-    
     create_directory_structure
-    push_rollback "rm -rf '${INSTALL_ROOT}' 2>/dev/null || true"
     
     create_system_user
-    push_rollback "userdel ransomeye 2>/dev/null || true"
     
     # GA-BLOCKING: Verify SBOM (manifest.json) before installation (fail-closed)
     verify_sbom
@@ -943,21 +997,20 @@ main() {
     verify_artifact_signatures
     
     install_python_files
-    push_rollback "rm -rf '${INSTALL_ROOT}/lib' 2>/dev/null || true"
     
     create_core_wrapper
-    push_rollback "rm -f '${INSTALL_ROOT}/bin/ransomeye-core' 2>/dev/null || true"
     
     generate_environment_file
-    push_rollback "rm -f '${INSTALL_ROOT}/config/environment' 2>/dev/null || true"
     
     set_permissions
     
     # PHASE A2: Verify service users exist in database
     check_postgresql
     
+    # PHASE 1: Apply schema migrations (automatic, fail-closed)
+    run_database_migrations
+    
     install_systemd_service
-    push_rollback "systemctl stop ransomeye-core 2>/dev/null || true; rm -f /etc/systemd/system/ransomeye-core.service 2>/dev/null || true; systemctl daemon-reload 2>/dev/null || true"
     
     create_manifest
     
@@ -966,8 +1019,8 @@ main() {
     
     validate_installation
     
-    # Clear rollback stack on success
-    ROLLBACK_STACK=()
+    # Remove transaction state file on success
+    rm -f "${INSTALL_STATE_FILE}" 2>/dev/null || true
     trap - ERR
     
     echo ""

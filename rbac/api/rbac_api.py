@@ -474,3 +474,339 @@ class RBACAPI:
         finally:
             if conn:
                 conn.close()
+
+    def get_user_by_id(self, user_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Fetch user by ID.
+
+        Args:
+            user_id: User identifier
+
+        Returns:
+            User dictionary if found, None otherwise
+        """
+        conn = None
+        try:
+            if _common_available:
+                conn = create_readonly_connection(
+                    host=self.db_conn_params['host'],
+                    port=int(self.db_conn_params.get('port', 5432)),
+                    database=self.db_conn_params['database'],
+                    user=self.db_conn_params['user'],
+                    password=self.db_conn_params['password'],
+                    isolation_level=IsolationLevel.READ_COMMITTED,
+                    logger=_logger
+                )
+            else:
+                import psycopg2
+                conn = psycopg2.connect(
+                    host=self.db_conn_params['host'],
+                    port=int(self.db_conn_params.get('port', 5432)),
+                    database=self.db_conn_params['database'],
+                    user=self.db_conn_params['user'],
+                    password=self.db_conn_params['password']
+                )
+
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT user_id, username, email, full_name, is_active
+                FROM rbac_users
+                WHERE user_id = %s
+            """, (user_id,))
+            row = cur.fetchone()
+            cur.close()
+
+            if not row:
+                return None
+
+            return {
+                'user_id': row[0],
+                'username': row[1],
+                'email': row[2],
+                'full_name': row[3],
+                'is_active': row[4]
+            }
+        except Exception as e:
+            raise RBACAPIError(f"Failed to fetch user: {e}") from e
+        finally:
+            if conn:
+                conn.close()
+
+    def get_user_role(self, user_id: str) -> Optional[str]:
+        """
+        Fetch user's role.
+
+        Args:
+            user_id: User identifier
+
+        Returns:
+            Role name or None if not assigned
+        """
+        conn = None
+        try:
+            if _common_available:
+                conn = create_readonly_connection(
+                    host=self.db_conn_params['host'],
+                    port=int(self.db_conn_params.get('port', 5432)),
+                    database=self.db_conn_params['database'],
+                    user=self.db_conn_params['user'],
+                    password=self.db_conn_params['password'],
+                    isolation_level=IsolationLevel.READ_COMMITTED,
+                    logger=_logger
+                )
+            else:
+                import psycopg2
+                conn = psycopg2.connect(
+                    host=self.db_conn_params['host'],
+                    port=int(self.db_conn_params.get('port', 5432)),
+                    database=self.db_conn_params['database'],
+                    user=self.db_conn_params['user'],
+                    password=self.db_conn_params['password']
+                )
+
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT role
+                FROM rbac_user_roles
+                WHERE user_id = %s
+            """, (user_id,))
+            row = cur.fetchone()
+            cur.close()
+            return row[0] if row else None
+        except Exception as e:
+            raise RBACAPIError(f"Failed to fetch user role: {e}") from e
+        finally:
+            if conn:
+                conn.close()
+
+    def store_refresh_token(
+        self,
+        token_id: str,
+        user_id: str,
+        token_hash: str,
+        expires_at: datetime,
+        user_agent: Optional[str] = None,
+        ip_address: Optional[str] = None
+    ) -> None:
+        """
+        Store refresh token metadata (hashed).
+
+        Args:
+            token_id: Refresh token jti
+            user_id: Token owner
+            token_hash: SHA256 hash of refresh token
+            expires_at: Token expiration timestamp
+            user_agent: Optional user agent
+            ip_address: Optional IP address
+        """
+        conn = None
+        try:
+            if _common_available:
+                conn = create_write_connection(
+                    host=self.db_conn_params['host'],
+                    port=int(self.db_conn_params.get('port', 5432)),
+                    database=self.db_conn_params['database'],
+                    user=self.db_conn_params['user'],
+                    password=self.db_conn_params['password'],
+                    isolation_level=IsolationLevel.READ_COMMITTED,
+                    logger=_logger
+                )
+            else:
+                import psycopg2
+                conn = psycopg2.connect(
+                    host=self.db_conn_params['host'],
+                    port=int(self.db_conn_params.get('port', 5432)),
+                    database=self.db_conn_params['database'],
+                    user=self.db_conn_params['user'],
+                    password=self.db_conn_params['password']
+                )
+
+            cur = conn.cursor()
+            cur.execute("""
+                INSERT INTO rbac_refresh_tokens (
+                    token_id, user_id, token_hash, issued_at, expires_at,
+                    revoked_at, revoked_by, revocation_reason, user_agent, ip_address
+                ) VALUES (%s, %s, %s, %s, %s, NULL, NULL, NULL, %s, %s)
+            """, (
+                token_id, user_id, token_hash, datetime.now(timezone.utc), expires_at,
+                user_agent, ip_address
+            ))
+            conn.commit()
+            cur.close()
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            raise RBACAPIError(f"Failed to store refresh token: {e}") from e
+        finally:
+            if conn:
+                conn.close()
+
+    def revoke_refresh_token(
+        self,
+        token_id: str,
+        revoked_by: str = "ui-backend",
+        reason: str = "logout"
+    ) -> None:
+        """
+        Revoke a refresh token.
+
+        Args:
+            token_id: Refresh token jti
+            revoked_by: Revoker identifier
+            reason: Revocation reason
+        """
+        conn = None
+        try:
+            if _common_available:
+                conn = create_write_connection(
+                    host=self.db_conn_params['host'],
+                    port=int(self.db_conn_params.get('port', 5432)),
+                    database=self.db_conn_params['database'],
+                    user=self.db_conn_params['user'],
+                    password=self.db_conn_params['password'],
+                    isolation_level=IsolationLevel.READ_COMMITTED,
+                    logger=_logger
+                )
+            else:
+                import psycopg2
+                conn = psycopg2.connect(
+                    host=self.db_conn_params['host'],
+                    port=int(self.db_conn_params.get('port', 5432)),
+                    database=self.db_conn_params['database'],
+                    user=self.db_conn_params['user'],
+                    password=self.db_conn_params['password']
+                )
+
+            cur = conn.cursor()
+            cur.execute("""
+                UPDATE rbac_refresh_tokens
+                SET revoked_at = %s, revoked_by = %s, revocation_reason = %s
+                WHERE token_id = %s AND revoked_at IS NULL
+            """, (datetime.now(timezone.utc), revoked_by, reason, token_id))
+            conn.commit()
+            cur.close()
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            raise RBACAPIError(f"Failed to revoke refresh token: {e}") from e
+        finally:
+            if conn:
+                conn.close()
+
+    def revoke_refresh_tokens_for_user(
+        self,
+        user_id: str,
+        revoked_by: str = "ui-backend",
+        reason: str = "logout_all"
+    ) -> int:
+        """
+        Revoke all refresh tokens for a user.
+
+        Args:
+            user_id: User identifier
+            revoked_by: Revoker identifier
+            reason: Revocation reason
+
+        Returns:
+            Count of revoked tokens
+        """
+        conn = None
+        try:
+            if _common_available:
+                conn = create_write_connection(
+                    host=self.db_conn_params['host'],
+                    port=int(self.db_conn_params.get('port', 5432)),
+                    database=self.db_conn_params['database'],
+                    user=self.db_conn_params['user'],
+                    password=self.db_conn_params['password'],
+                    isolation_level=IsolationLevel.READ_COMMITTED,
+                    logger=_logger
+                )
+            else:
+                import psycopg2
+                conn = psycopg2.connect(
+                    host=self.db_conn_params['host'],
+                    port=int(self.db_conn_params.get('port', 5432)),
+                    database=self.db_conn_params['database'],
+                    user=self.db_conn_params['user'],
+                    password=self.db_conn_params['password']
+                )
+
+            cur = conn.cursor()
+            cur.execute("""
+                UPDATE rbac_refresh_tokens
+                SET revoked_at = %s, revoked_by = %s, revocation_reason = %s
+                WHERE user_id = %s AND revoked_at IS NULL
+            """, (datetime.now(timezone.utc), revoked_by, reason, user_id))
+            revoked = cur.rowcount
+            conn.commit()
+            cur.close()
+            return revoked
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            raise RBACAPIError(f"Failed to revoke refresh tokens: {e}") from e
+        finally:
+            if conn:
+                conn.close()
+
+    def validate_refresh_token(self, token_id: str, token_hash: str) -> Optional[Dict[str, Any]]:
+        """
+        Validate refresh token against stored hash and revocation state.
+
+        Args:
+            token_id: Refresh token jti
+            token_hash: SHA256 hash of refresh token
+
+        Returns:
+            Dictionary with user_id if valid, None otherwise
+        """
+        conn = None
+        try:
+            if _common_available:
+                conn = create_readonly_connection(
+                    host=self.db_conn_params['host'],
+                    port=int(self.db_conn_params.get('port', 5432)),
+                    database=self.db_conn_params['database'],
+                    user=self.db_conn_params['user'],
+                    password=self.db_conn_params['password'],
+                    isolation_level=IsolationLevel.READ_COMMITTED,
+                    logger=_logger
+                )
+            else:
+                import psycopg2
+                conn = psycopg2.connect(
+                    host=self.db_conn_params['host'],
+                    port=int(self.db_conn_params.get('port', 5432)),
+                    database=self.db_conn_params['database'],
+                    user=self.db_conn_params['user'],
+                    password=self.db_conn_params['password']
+                )
+
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT user_id, expires_at, revoked_at
+                FROM rbac_refresh_tokens
+                WHERE token_id = %s AND token_hash = %s
+            """, (token_id, token_hash))
+            row = cur.fetchone()
+            cur.close()
+
+            if not row:
+                return None
+
+            user_id, expires_at, revoked_at = row
+            if revoked_at is not None:
+                return None
+            if expires_at <= datetime.now(timezone.utc):
+                return None
+
+            return {
+                'user_id': user_id,
+                'expires_at': expires_at
+            }
+        except Exception as e:
+            raise RBACAPIError(f"Failed to validate refresh token: {e}") from e
+        finally:
+            if conn:
+                conn.close()

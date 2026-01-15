@@ -20,9 +20,9 @@ from common.shutdown import ShutdownHandler
 
 if __name__ == "__main__":
     try:
-        run_core()
+        exit_code = run_core()
         logger.shutdown("Core runtime completed successfully")
-        sys.exit(ExitCode.SUCCESS)
+        sys.exit(exit_code)
     except KeyboardInterrupt:
         logger.shutdown("Received interrupt, shutting down")
         sys.exit(ExitCode.SUCCESS)

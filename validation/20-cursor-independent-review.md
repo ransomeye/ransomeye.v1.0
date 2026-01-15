@@ -1,5 +1,7 @@
 # Validation Step 20 — Independent Review, Gap Analysis & Cursor Recommendations
 
+**NOTICE:** Superseded by Phase-3 DPI Unified Architecture. DPI stub references in this document are historical.
+
 **Reviewer Identity:**
 - **Name:** Cursor (Independent Architecture Reviewer)
 - **Role:** Secondary Auditor, Hostile but Fair Reviewer

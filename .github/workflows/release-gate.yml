@@ -38,6 +38,10 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       
+      - name: Preflight python3
+        run: |
+          bash scripts/preflight_python3.sh
+      
       - name: Install dependencies
         run: |
           pip install --upgrade pip
@@ -54,64 +58,98 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Release version: $VERSION"
       
-      - name: Download validation results
+      - name: Download release bundle
         uses: actions/download-artifact@v4
         with:
-          name: ga-verdict
-          path: validation/reports/phase_c
-          # PHASE 6: Fail-closed - validation results must exist
+          name: release-bundle
+          path: release/bundles
+          # PHASE-9: Fail-closed - release bundle must exist
           continue-on-error: false
-          # Note: Artifact may not exist if validation workflow didn't run
-          # This is acceptable for manual workflow_dispatch, but will fail if validation didn't complete
       
-      - name: Download signed artifacts
+      - name: Download release bundle checksum
         uses: actions/download-artifact@v4
         with:
-          name: signed-artifacts
-          path: build/artifacts
-          # PHASE 6: Fail-closed - signed artifacts must exist
+          name: release-bundle-checksum
+          path: release/bundles
+          # PHASE-9: Fail-closed - checksum must exist
           continue-on-error: false
       
-      - name: Download signing public key
-        uses: actions/download-artifact@v4
-        with:
-          name: signing-public-key
-          path: build/signing-keys
-          # PHASE 6: Fail-closed - signing public key must exist
-          continue-on-error: false
-      
-      - name: PHASE 6 Gate 1 - Validation Complete
+      - name: PHASE-9 Gate 0 - Extract Release Bundle
         run: |
           echo "=========================================="
-          echo "PHASE 6 Gate 1: Validation Complete"
+          echo "PHASE-9 Gate 0: Extract Release Bundle"
           echo "=========================================="
           
-          if [ ! -f "validation/reports/phase_c/phase_c_aggregate_verdict.json" ]; then
-            echo "❌ FAIL: GA verdict file not found"
+          # Find release bundle tarball
+          BUNDLE_FILE=$(find release/bundles -name "ransomeye-*.tar.gz" | head -1)
+          if [ -z "$BUNDLE_FILE" ]; then
+            echo "❌ FAIL: Release bundle not found"
             exit 1
           fi
           
-          VERDICT=$(python3 -c "import json; print(json.load(open('validation/reports/phase_c/phase_c_aggregate_verdict.json'))['ga_verdict'])")
+          echo "Found bundle: $BUNDLE_FILE"
           
-          if [ "$VERDICT" != "PASS" ]; then
-            echo "❌ FAIL: GA verdict is $VERDICT (must be PASS)"
+          # Extract bundle
+          mkdir -p release/bundles/extracted
+          tar xzf "$BUNDLE_FILE" -C release/bundles/extracted
+          
+          BUNDLE_DIR=$(find release/bundles/extracted -type d -name "ransomeye-*-release-bundle" | head -1)
+          if [ -z "$BUNDLE_DIR" ]; then
+            echo "❌ FAIL: Could not find bundle directory after extraction"
             exit 1
           fi
           
-          echo "✅ PASS: GA verdict is PASS"
-        # PHASE 6: Fail-closed - validation must be complete and PASS
+          echo "Bundle extracted to: $BUNDLE_DIR"
+          echo "BUNDLE_DIR=$BUNDLE_DIR" >> $GITHUB_ENV
+          
+          # Verify bundle checksum if available
+          CHECKSUM_FILE=$(find release/bundles -name "*.tar.gz.sha256" | head -1)
+          if [ -n "$CHECKSUM_FILE" ]; then
+            echo "Verifying bundle checksum..."
+            EXPECTED_HASH=$(awk '{print $1}' "$CHECKSUM_FILE")
+            ACTUAL_HASH=$(sha256sum "$BUNDLE_FILE" | awk '{print $1}')
+            if [ "$EXPECTED_HASH" != "$ACTUAL_HASH" ]; then
+              echo "❌ FAIL: Bundle checksum mismatch"
+              exit 1
+            fi
+            echo "✅ Bundle checksum verified"
+          fi
+        # PHASE-9: Fail-closed - bundle must be extractable
         continue-on-error: false
       
-      - name: PHASE 6 Gate 2 - All Artifacts Signed
+      - name: PHASE-9 Gate 1 - Validation Complete (from Evidence)
         run: |
           echo "=========================================="
-          echo "PHASE 6 Gate 2: All Artifacts Signed"
+          echo "PHASE-9 Gate 1: Validation Complete (from Evidence)"
+          echo "=========================================="
+          
+          EVIDENCE_BUNDLE="$BUNDLE_DIR/evidence/evidence_bundle.json"
+          if [ ! -f "$EVIDENCE_BUNDLE" ]; then
+            echo "❌ FAIL: Evidence bundle not found in release bundle"
+            exit 1
+          fi
+          
+          GA_VERDICT=$(python3 -c "import json; print(json.load(open('$EVIDENCE_BUNDLE')).get('overall_status', 'UNKNOWN'))")
+          
+          if [ "$GA_VERDICT" != "PASS" ]; then
+            echo "❌ FAIL: GA verdict is $GA_VERDICT (must be PASS)"
+            exit 1
+          fi
+          
+          echo "✅ PASS: GA verdict is PASS (from evidence bundle)"
+        # PHASE-9: Fail-closed - validation must be complete and PASS
+        continue-on-error: false
+      
+      - name: PHASE-9 Gate 2 - All Artifacts Signed (from Bundle)
+        run: |
+          echo "=========================================="
+          echo "PHASE-9 Gate 2: All Artifacts Signed (from Bundle)"
           echo "=========================================="
           
           UNSIGNED_COUNT=0
           SIGNED_COUNT=0
           
-          cd build/artifacts/signed
+          cd "$BUNDLE_DIR/signatures"
           for manifest in *.manifest.json; do
             if [ -f "$manifest" ]; then
               ARTIFACT_NAME="${manifest%.manifest.json}"
@@ -133,143 +171,173 @@ jobs:
           fi
           
           echo "✅ PASS: All $SIGNED_COUNT artifact(s) signed"
-        # PHASE 6: Fail-closed - all artifacts must be signed
+        # PHASE-9: Fail-closed - all artifacts must be signed
         continue-on-error: false
       
-      - name: PHASE 6 Gate 3 - SBOM Generated and Signed
+      - name: PHASE-9 Gate 3 - SBOM Generated and Signed (from Bundle)
         run: |
           echo "=========================================="
-          echo "PHASE 6 Gate 3: SBOM Generated and Signed"
+          echo "PHASE-9 Gate 3: SBOM Generated and Signed (from Bundle)"
           echo "=========================================="
           
-          if [ ! -f "build/artifacts/sbom/manifest.json" ]; then
-            echo "❌ FAIL: SBOM manifest not found"
+          if [ ! -f "$BUNDLE_DIR/sbom/manifest.json" ]; then
+            echo "❌ FAIL: SBOM manifest not found in release bundle"
             exit 1
           fi
           
-          if [ ! -f "build/artifacts/sbom/manifest.json.sig" ]; then
-            echo "❌ FAIL: SBOM signature not found"
+          if [ ! -f "$BUNDLE_DIR/sbom/manifest.json.sig" ]; then
+            echo "❌ FAIL: SBOM signature not found in release bundle"
             exit 1
           fi
           
-          echo "✅ PASS: SBOM generated and signed"
-        # PHASE 6: Fail-closed - SBOM must be generated and signed
+          echo "✅ PASS: SBOM generated and signed (from bundle)"
+        # PHASE-9: Fail-closed - SBOM must be generated and signed
         continue-on-error: false
       
-      - name: PHASE 6 Gate 4 - Signature Verification
+      - name: PHASE-9 Gate 4 - Signature Verification (Offline from Bundle)
         env:
-          SIGNING_KEY_DIR: build/signing-keys
+          RANSOMEYE_KEY_REGISTRY_PATH: ${{ secrets.RANSOMEYE_KEY_REGISTRY_PATH || 'keys/registry.json' }}
         run: |
           echo "=========================================="
-          echo "PHASE 6 Gate 4: Signature Verification"
+          echo "PHASE-9 Gate 4: Signature Verification (Offline from Bundle)"
           echo "=========================================="
           
-          # Verify SBOM signature
+          # Use bundled public key for verification (no CI dependency)
+          PUBLIC_KEY_PATH="$BUNDLE_DIR/keys/vendor-signing-key-1.pub"
+          if [ ! -f "$PUBLIC_KEY_PATH" ]; then
+            # Try to find any .pub file in keys directory
+            PUBLIC_KEY_PATH=$(find "$BUNDLE_DIR/keys" -name "*.pub" | head -1)
+          fi
+          
+          if [ -z "$PUBLIC_KEY_PATH" ] || [ ! -f "$PUBLIC_KEY_PATH" ]; then
+            echo "❌ FAIL: Public key not found in release bundle"
+            exit 1
+          fi
+          
+          echo "Using public key from bundle: $PUBLIC_KEY_PATH"
+          
+          # Verify SBOM signature using bundled public key
           python3 release/verify_sbom.py \
-            --release-root build/artifacts \
-            --manifest build/artifacts/sbom/manifest.json \
-            --signature build/artifacts/sbom/manifest.json.sig \
-            --key-dir "$SIGNING_KEY_DIR"
+            --release-root "$BUNDLE_DIR/artifacts" \
+            --manifest "$BUNDLE_DIR/sbom/manifest.json" \
+            --signature "$BUNDLE_DIR/sbom/manifest.json.sig" \
+            --public-key "$PUBLIC_KEY_PATH"
           
           if [ $? -ne 0 ]; then
             echo "❌ FAIL: SBOM signature verification failed"
             exit 1
           fi
           
-          # Verify all artifact signatures
-          cd build/artifacts/signed
+          echo "✅ SBOM signature verified"
+          
+          # Verify all artifact signatures using bundled public key
+          cd "$BUNDLE_DIR/signatures"
           for manifest in *.manifest.json; do
             ARTIFACT_NAME="${manifest%.manifest.json}"
-            ARTIFACT_FILE="../${ARTIFACT_NAME}"
+            ARTIFACT_FILE="../artifacts/${ARTIFACT_NAME}"
             
             if [ -f "$ARTIFACT_FILE" ]; then
-              python3 ../../../supply-chain/cli/verify_artifacts.py \
+              python3 ../../../../supply-chain/cli/verify_artifacts.py \
                 --artifact "$ARTIFACT_FILE" \
                 --manifest "$manifest" \
-                --key-dir "../../../$SIGNING_KEY_DIR"
+                --public-key "$PUBLIC_KEY_PATH"
               
               if [ $? -ne 0 ]; then
                 echo "❌ FAIL: Signature verification failed for $ARTIFACT_NAME"
                 exit 1
               fi
+              echo "✅ Signature verified: $ARTIFACT_NAME"
             fi
           done
           
-          echo "✅ PASS: All signatures verified"
-        # PHASE 6: Fail-closed - all signatures must be valid
+          echo "✅ PASS: All signatures verified (using bundled public key)"
+        # PHASE-9: Fail-closed - all signatures must be valid
         continue-on-error: false
       
-      - name: PHASE 6 Gate 5 - Audit Steps Complete
+      - name: PHASE-9 Gate 5 - Audit Steps Complete (from Bundle)
         run: |
           echo "=========================================="
-          echo "PHASE 6 Gate 5: Audit Steps Complete"
+          echo "PHASE-9 Gate 5: Audit Steps Complete (from Bundle)"
           echo "=========================================="
           
-          # Check that validation reports exist
-          REQUIRED_REPORTS=(
-            "validation/reports/phase_c/phase_c_linux_results.json"
-            "validation/reports/phase_c/phase_c_windows_results.json"
-            "validation/reports/phase_c/phase_c_aggregate_verdict.json"
-          )
-          
-          for report in "${REQUIRED_REPORTS[@]}"; do
-            if [ ! -f "$report" ]; then
-              echo "❌ FAIL: Required audit report not found: $report"
-              exit 1
-            fi
-          done
-          
-          # Check that SBOM exists
-          if [ ! -f "build/artifacts/sbom/manifest.json" ]; then
-            echo "❌ FAIL: SBOM manifest not found"
+          # Check RELEASE_MANIFEST.json exists
+          if [ ! -f "$BUNDLE_DIR/RELEASE_MANIFEST.json" ]; then
+            echo "❌ FAIL: RELEASE_MANIFEST.json not found in bundle"
             exit 1
           fi
           
-          echo "✅ PASS: All audit steps complete"
-        # PHASE 6: Fail-closed - all audit steps must be complete
-        continue-on-error: false
-      
-      - name: PHASE 6 Gate 6 - Release Validation Script
-        run: |
-          echo "=========================================="
-          echo "PHASE 6 Gate 6: Release Validation Script"
-          echo "=========================================="
-          
-          # Run release validation script
-          if [ -f "release/ransomeye-v1.0/validate-release.sh" ]; then
-            cd release/ransomeye-v1.0
-            bash validate-release.sh
-            
-            if [ $? -ne 0 ]; then
-              echo "❌ FAIL: Release validation script failed"
-              exit 1
-            fi
-          else
-            echo "⚠ WARNING: Release validation script not found"
-            # This is a warning, not a failure, as the script may be in a different location
+          # Check that evidence bundle exists (contains validation results)
+          if [ ! -f "$BUNDLE_DIR/evidence/evidence_bundle.json" ]; then
+            echo "❌ FAIL: Evidence bundle not found in release bundle"
+            exit 1
           fi
           
-          echo "✅ PASS: Release validation passed"
-        # PHASE 6: Fail-closed - release validation must pass
+          # Check that SBOM exists
+          if [ ! -f "$BUNDLE_DIR/sbom/manifest.json" ]; then
+            echo "❌ FAIL: SBOM manifest not found in release bundle"
+            exit 1
+          fi
+          
+          # Check that all artifacts exist
+          ARTIFACT_COUNT=$(find "$BUNDLE_DIR/artifacts" -type f | wc -l)
+          if [ "$ARTIFACT_COUNT" -lt 4 ]; then
+            echo "❌ FAIL: Expected at least 4 artifacts, found $ARTIFACT_COUNT"
+            exit 1
+          fi
+          
+          echo "✅ PASS: All audit steps complete (from bundle)"
+        # PHASE-9: Fail-closed - all audit steps must be complete
+        continue-on-error: false
+      
+      - name: PHASE-9 Gate 6 - Complete Bundle Verification
+        env:
+          RANSOMEYE_KEY_REGISTRY_PATH: ${{ secrets.RANSOMEYE_KEY_REGISTRY_PATH || 'keys/registry.json' }}
+        run: |
+          echo "=========================================="
+          echo "PHASE-9 Gate 6: Complete Bundle Verification"
+          echo "=========================================="
+          
+          # Run comprehensive bundle verification script
+          python3 scripts/verify_release_bundle.py \
+            --bundle "$(find release/bundles -name "ransomeye-*.tar.gz" | head -1)" \
+            --checksum "$(find release/bundles -name "*.tar.gz.sha256" | head -1)" \
+            --registry-path "$RANSOMEYE_KEY_REGISTRY_PATH" \
+            --extract-dir release/bundles/verification-extract
+          
+          VERIFICATION_EXIT_CODE=$?
+          
+          if [ $VERIFICATION_EXIT_CODE -ne 0 ]; then
+            echo "❌ FAIL: Release bundle verification failed"
+            exit 1
+          fi
+          
+          echo "✅ PASS: Complete bundle verification passed"
+        # PHASE-9: Fail-closed - complete bundle verification must pass
         continue-on-error: false
       
       - name: Generate Release Gate Report
         if: always()
         run: |
           echo "=========================================="
-          echo "PHASE 6: Release Gate Report"
+          echo "PHASE-9: Release Gate Report"
           echo "=========================================="
           echo ""
-          echo "Gate 1: Validation Complete - ✅ PASS"
-          echo "Gate 2: All Artifacts Signed - ✅ PASS"
-          echo "Gate 3: SBOM Generated and Signed - ✅ PASS"
-          echo "Gate 4: Signature Verification - ✅ PASS"
-          echo "Gate 5: Audit Steps Complete - ✅ PASS"
-          echo "Gate 6: Release Validation Script - ✅ PASS"
+          echo "Gate 0: Extract Release Bundle - ✅ PASS"
+          echo "Gate 1: Validation Complete (from Evidence) - ✅ PASS"
+          echo "Gate 2: All Artifacts Signed (from Bundle) - ✅ PASS"
+          echo "Gate 3: SBOM Generated and Signed (from Bundle) - ✅ PASS"
+          echo "Gate 4: Signature Verification (Offline from Bundle) - ✅ PASS"
+          echo "Gate 5: Audit Steps Complete (from Bundle) - ✅ PASS"
+          echo "Gate 6: Complete Bundle Verification - ✅ PASS"
           echo ""
           echo "=========================================="
-          echo "✅ ALL GATES PASSED - RELEASE APPROVED"
+          echo "✅ ALL GATES PASSED - FOR-RELEASE"
           echo "=========================================="
+          echo ""
+          echo "Release bundle verified offline using bundled keys and evidence."
+          echo "No CI artifact retention or network access required."
+          echo ""
+          echo "Bundle location: $BUNDLE_DIR"
       
       - name: Upload Release Gate Report
         if: always()
@@ -277,6 +345,5 @@ jobs:
         with:
           name: release-gate-report
           path: |
-            validation/reports/phase_c/
-            build/artifacts/sbom/
+            release/bundles/extracted/
           retention-days: 365

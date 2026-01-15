@@ -162,7 +162,7 @@ def run_training_with_limits(config_path: Path, session_manager: TrainingSession
         
         # Run training
         training_process = subprocess.Popen(
-            [sys.executable, 'scripts/train_phase1.py', '--config', str(config_path)],
+            ["python3", 'scripts/train_phase1.py', '--config', str(config_path)],
             cwd=Path(__file__).parent.parent
         )
         

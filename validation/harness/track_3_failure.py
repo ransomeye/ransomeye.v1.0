@@ -13,7 +13,7 @@ import shutil
 from datetime import datetime, timezone
 from typing import Dict, Any
 
-from validation.harness.phase_c_executor import TestStatus
+from validation.harness.phase_c_executor import ValidationStatus
 from validation.harness.test_helpers import get_test_db_connection, clean_database
 
 
@@ -52,11 +52,11 @@ def execute_track_3_failure(executor) -> Dict[str, Any]:
             try:
                 test_result = test_func(executor, conn)
                 results["tests"][test_id] = test_result
-                if test_result["status"] != TestStatus.PASSED.value:
+                if test_result["status"] != ValidationStatus.PASSED.value:
                     results["all_passed"] = False
             except Exception as e:
                 results["tests"][test_id] = {
-                    "status": TestStatus.FAILED.value,
+                    "status": ValidationStatus.FAILED.value,
                     "error": str(e)
                 }
                 results["all_passed"] = False
@@ -133,14 +133,14 @@ def test_fail_001_db_connection_loss(executor, conn) -> Dict[str, Any]:
         passed = no_partial_writes and can_reingest
         
         return {
-            "status": TestStatus.PASSED.value if passed else TestStatus.FAILED.value,
+            "status": ValidationStatus.PASSED.value if passed else ValidationStatus.FAILED.value,
             "no_partial_writes": no_partial_writes,
             "can_reingest": can_reingest
         }
     
     except Exception as e:
         return {
-            "status": TestStatus.FAILED.value,
+            "status": ValidationStatus.FAILED.value,
             "error": str(e)
         }
     finally:
@@ -155,7 +155,7 @@ def test_fail_002_agent_disconnect(executor, conn) -> Dict[str, Any]:
     """
     # Simplified - would simulate agent disconnect
     return {
-        "status": TestStatus.PASSED.value,
+        "status": ValidationStatus.PASSED.value,
         "gap_detected": True,
         "gap_logged": True,
         "processing_continues": True
@@ -170,7 +170,7 @@ def test_fail_003_queue_overflow(executor, conn) -> Dict[str, Any]:
     """
     # Simplified - would test actual queue overflow
     return {
-        "status": TestStatus.PASSED.value,
+        "status": ValidationStatus.PASSED.value,
         "backpressure_activated": True,
         "events_buffered": True,
         "no_silent_loss": True
@@ -233,14 +233,14 @@ def test_fail_004_duplicate_events(executor, conn) -> Dict[str, Any]:
         passed = no_duplicates and not duplicate_allowed
         
         return {
-            "status": TestStatus.PASSED.value if passed else TestStatus.FAILED.value,
+            "status": ValidationStatus.PASSED.value if passed else ValidationStatus.FAILED.value,
             "no_duplicates": no_duplicates,
             "idempotent": True
         }
     
     except Exception as e:
         return {
-            "status": TestStatus.FAILED.value,
+            "status": ValidationStatus.FAILED.value,
             "error": str(e)
         }
     finally:
@@ -344,7 +344,7 @@ def test_fail_006_database_restart(executor, conn) -> Dict[str, Any]:
     # 4. Verify processing resumes
     
     return {
-        "status": TestStatus.PASSED.value,
+        "status": ValidationStatus.PASSED.value,
         "restart_mode": db_restart_mode,
         "clean_restart": True,
         "no_corruption": True,

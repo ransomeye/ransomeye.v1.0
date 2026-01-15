@@ -47,10 +47,13 @@ CREATE INDEX IF NOT EXISTS idx_file_activity_machine_observed_at
 CREATE INDEX IF NOT EXISTS idx_file_activity_pid_observed_at 
     ON file_activity(process_pid, observed_at DESC);
 
+-- File activity: Find file activity by file path (trigram search)
+CREATE INDEX IF NOT EXISTS idx_file_activity_file_path_trgm 
+    ON file_activity USING gin (file_path gin_trgm_ops);
+
 -- File activity: Find file activity by file path and time (file access timeline)
 CREATE INDEX IF NOT EXISTS idx_file_activity_file_path_observed_at 
-    ON file_activity USING gin (file_path gin_trgm_ops, observed_at DESC);
--- Note: This is a partial GIN index, may need adjustment based on query patterns
+    ON file_activity(file_path, observed_at DESC);
 
 -- Persistence: Find persistence by machine and time (host-centric persistence timeline)
 CREATE INDEX IF NOT EXISTS idx_persistence_machine_observed_at 

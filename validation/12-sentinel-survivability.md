@@ -9,7 +9,6 @@
   - `/home/ransomeye/rebuild/contracts/failure-semantics.md` - Failure semantics contract
   - `/home/ransomeye/rebuild/agents/linux/command_gate.py` - Agent autonomy (offline enforcement)
   - `/home/ransomeye/rebuild/agents/windows/agent/telemetry/sender.py` - Windows agent offline buffering
-  - `/home/ransomeye/rebuild/dpi-advanced/engine/uploader.py` - DPI offline buffering
 - **Entry Points:**
   - Core runtime: `core/runtime.py:544` - `run_core()` (startup validation)
   - Agent autonomy: `agents/linux/command_gate.py:614-678` - `_check_cached_policy_if_offline()` (offline enforcement)
@@ -51,7 +50,7 @@ This validation does NOT validate UI, reporting, installer, or provide fixes/rec
 
 1. **Agent Autonomy Guarantees** — Agents enforce policy autonomously when Core is offline (fail-closed, default deny)
 2. **Explicit Fail-Closed Paths** — All failure paths are fail-closed (default deny, no fail-open)
-3. **Survivability Without Core** — System continues operating securely without Core (agents enforce policy, DPI buffers flows)
+3. **Survivability Without Core** — System continues operating securely without Core (agents enforce policy, DPI fails fast)
 4. **Logging & Forensic Traceability** — All survivability decisions are logged and auditable
 5. **No "Limp Mode" or Silent Degradation** — No silent degradation, no best-effort mode, all failures are explicit
 6. **Credential Validity During Outages** — Credentials remain valid during outages (policy cache, agent keys)
@@ -213,7 +212,6 @@ This validation does NOT validate UI, reporting, installer, or provide fixes/rec
 **System Continues Operating Securely Without Core:**
 - ✅ Agent autonomy: `agents/linux/command_gate.py:614-678` - Agents enforce cached policy autonomously when Core is offline
 - ✅ Offline buffering (Windows agent): `agents/windows/agent/telemetry/sender.py:68-181` - Events are buffered locally if Core is unavailable
-- ✅ Offline buffering (DPI): `dpi-advanced/engine/uploader.py:102-121` - Chunks are buffered for offline upload
 - ✅ Agent does not crash: `agents/linux/tests/test_agent_autonomy.py:156-217` - Agent does not crash when Core is offline (tested)
 - ⚠️ **ISSUE:** No explicit Core degradation handling: No explicit Core degradation handling found (agents handle offline, but no explicit degradation handling)
 
@@ -222,34 +220,31 @@ This validation does NOT validate UI, reporting, installer, or provide fixes/rec
 - ✅ Default deny enforcement: `agents/linux/command_gate.py:471-492` - Default deny is enforced when no policy exists
 - ✅ Offline enforcement is logged: `agents/linux/command_gate.py:643-647` - Offline enforcement is logged with "GA-BLOCKING" prefix
 
-**DPI Buffers Flows Offline:**
-- ✅ DPI offline buffering: `dpi-advanced/engine/uploader.py:102-121` - Chunks are buffered to file for offline upload
-- ✅ DPI buffering is file-based: `dpi-advanced/engine/uploader.py:114-119` - Chunks are buffered to file (append-only)
-- ⚠️ **ISSUE:** No explicit buffer size limit: No explicit buffer size limit found (buffering may grow unbounded)
+**DPI Behavior Without Core:**
+- ✅ DPI fails fast: DPI exits on telemetry failure so Core can react
 
 **System Does NOT Continue Operating Securely Without Core:**
-- ✅ **VERIFIED:** System continues operating securely: Agents enforce policy autonomously, offline buffering exists, agent does not crash
+- ✅ **VERIFIED:** System continues operating securely: Agents enforce policy autonomously, offline buffering exists for agents, agent does not crash
 
 ### Verdict: **PARTIAL**
 
 **Justification:**
-- System continues operating securely without Core (agents enforce policy autonomously, offline buffering exists)
+- System continues operating securely without Core (agents enforce policy autonomously, offline buffering exists for agents)
 - Agents enforce policy autonomously (cached policy is enforced, default deny is enforced)
-- DPI buffers flows offline (chunks are buffered to file)
+- DPI fails fast on telemetry failure (no offline buffering)
 - **ISSUE:** No explicit Core degradation handling (agents handle offline, but no explicit degradation handling)
-- **ISSUE:** No explicit buffer size limit (buffering may grow unbounded)
 
 **PASS Conditions (Met):**
-- System continues operating securely without Core — **CONFIRMED** (agents enforce policy autonomously, offline buffering exists)
+- System continues operating securely without Core — **CONFIRMED** (agents enforce policy autonomously, offline buffering exists for agents)
 - Agents enforce policy autonomously — **CONFIRMED** (cached policy is enforced, default deny is enforced)
-- DPI buffers flows offline — **CONFIRMED** (chunks are buffered to file)
+- DPI fails fast on telemetry failure — **CONFIRMED**
 
 **FAIL Conditions (Met):**
 - System does NOT continue operating securely without Core — **NOT CONFIRMED** (system continues operating securely)
 
 **Evidence Required:**
-- File paths: `agents/linux/command_gate.py:614-678,471-492,643-647`, `agents/windows/agent/telemetry/sender.py:68-181`, `dpi-advanced/engine/uploader.py:102-121,114-119`, `agents/linux/tests/test_agent_autonomy.py:156-217`
-- Survivability: Agent autonomy, offline buffering, Core degradation handling
+- File paths: `agents/linux/command_gate.py:614-678,471-492,643-647`, `agents/windows/agent/telemetry/sender.py:68-181`, `agents/linux/tests/test_agent_autonomy.py:156-217`
+- Survivability: Agent autonomy, offline buffering (agents), Core degradation handling
 
 ---
 
@@ -458,7 +453,7 @@ This validation does NOT validate UI, reporting, installer, or provide fixes/rec
 - Fail-closed paths: Default deny, integrity check failure, policy load failure, validation failure
 
 ### Survivability Without Core
-- File paths: `agents/linux/command_gate.py:614-678,471-492,643-647`, `agents/windows/agent/telemetry/sender.py:68-181`, `dpi-advanced/engine/uploader.py:102-121,114-119`, `agents/linux/tests/test_agent_autonomy.py:156-217`
+- File paths: `agents/linux/command_gate.py:614-678,471-492,643-647`, `agents/windows/agent/telemetry/sender.py:68-181`, `agents/linux/tests/test_agent_autonomy.py:156-217`
 - Survivability: Agent autonomy, offline buffering, Core degradation handling
 
 ### Logging & Forensic Traceability

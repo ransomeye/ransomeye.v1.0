@@ -123,7 +123,7 @@ The installer generates `${INSTALL_ROOT}/config/environment` with all required e
 - **Installation paths**: All absolute paths based on install root
 - **Agent identity**: Component instance ID (UUID), version
 - **Core endpoint**: Ingest service URL (configurable, defaults to `http://localhost:8000/events`)
-- **Database credentials**: username: `gagan`, password: `gagan` (for future use, if needed)
+- **Database credentials**: Provided via environment variables if needed (no defaults)
 - **Runtime identity**: User/group IDs
 
 **DO NOT EDIT MANUALLY**: Regenerate using installer if paths change.

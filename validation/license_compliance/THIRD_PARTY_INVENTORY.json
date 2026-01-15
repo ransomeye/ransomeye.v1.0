@@ -276,6 +276,30 @@
     "notes": "Settings management"
   },
   {
+    "name": "PyJWT",
+    "version": "2.10.1",
+    "component": "ui-backend",
+    "language": "python",
+    "license": "MIT",
+    "license_type": "permissive",
+    "static_or_dynamic": "dynamic",
+    "distribution_scope": "core",
+    "risk_level": "low",
+    "notes": "JWT library. Source: https://pypi.org/project/PyJWT/2.10.1/ (license metadata), https://github.com/jpadilla/pyjwt/blob/2.10.1/LICENSE (license text)."
+  },
+  {
+    "name": "bcrypt",
+    "version": "4.2.1",
+    "component": "ui-backend",
+    "language": "python",
+    "license": "Apache-2.0",
+    "license_type": "permissive",
+    "static_or_dynamic": "dynamic",
+    "distribution_scope": "core",
+    "risk_level": "low",
+    "notes": "Password hashing library. Source: https://pypi.org/project/bcrypt/4.2.1/ (license metadata), https://github.com/pyca/bcrypt/blob/4.2.1/LICENSE (license text)."
+  },
+  {
     "name": "cryptography",
     "version": "41.0.7",
     "component": "policy-engine",

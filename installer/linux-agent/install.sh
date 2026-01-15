@@ -23,6 +23,35 @@ error_exit() {
     exit 1
 }
 
+# Transaction framework
+TRANSACTION_PY=""
+INSTALL_STATE_FILE=""
+
+init_transaction() {
+    TRANSACTION_PY="$(cd "$(dirname "${BASH_SOURCE[0]}")/../common" && pwd)/install_transaction.py"
+    if [[ ! -f "$TRANSACTION_PY" ]]; then
+        error_exit "Transaction framework not found: $TRANSACTION_PY"
+    fi
+    INSTALL_STATE_FILE="${INSTALL_ROOT}/.install_state.json"
+    python3 "$TRANSACTION_PY" init --state-file "$INSTALL_STATE_FILE" --component "linux-agent"
+}
+
+record_step() {
+    local action="$1"
+    local rollback_action="$2"
+    shift 2
+    python3 "$TRANSACTION_PY" record --state-file "$INSTALL_STATE_FILE" \
+        --action "$action" --rollback-action "$rollback_action" "$@"
+}
+
+run_rollback() {
+    trap - ERR
+    if [[ -n "${INSTALL_STATE_FILE}" && -f "${INSTALL_STATE_FILE}" ]]; then
+        python3 "$TRANSACTION_PY" rollback --state-file "$INSTALL_STATE_FILE" || true
+    fi
+    exit 1
+}
+
 # Validate root privileges (needed for systemd, user creation)
 check_root() {
     if [[ $EUID -ne 0 ]]; then
@@ -72,10 +101,28 @@ prompt_install_root() {
     echo -e "${GREEN}✓${NC} Install root: ${INSTALL_ROOT}"
 }
 
+# Enforce empty install root for transactional install
+ensure_clean_install_root() {
+    if [[ -d "${INSTALL_ROOT}" ]] && [[ "$(ls -A "${INSTALL_ROOT}")" ]]; then
+        error_exit "Install root must be empty for transactional install: ${INSTALL_ROOT}"
+    fi
+}
+
 # Detect installer directory (where install.sh is located)
 detect_installer_dir() {
     INSTALLER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     SRC_ROOT="$(cd "${INSTALLER_DIR}/../../services/linux-agent" && pwd)"
+}
+
+# Preflight: enforce python3 availability and minimum version
+preflight_python3() {
+    local preflight_script="${INSTALLER_DIR}/../common/preflight_python3.sh"
+    if [[ ! -f "$preflight_script" ]]; then
+        error_exit "Python3 preflight script not found: $preflight_script"
+    fi
+    if ! bash "$preflight_script"; then
+        error_exit "Python3 preflight failed"
+    fi
 }
 
 # Check if Rust and cargo are available
@@ -111,6 +158,7 @@ create_directory_structure() {
     echo "Creating directory structure..."
     
     local dirs=(
+        "${INSTALL_ROOT}"
         "${INSTALL_ROOT}/bin"
         "${INSTALL_ROOT}/config"
         "${INSTALL_ROOT}/logs"
@@ -120,6 +168,12 @@ create_directory_structure() {
     for dir in "${dirs[@]}"; do
         if [[ ! -d "$dir" ]]; then
             mkdir -p "$dir" || error_exit "Failed to create directory: $dir"
+            if [[ "$dir" == "${INSTALL_ROOT}" ]]; then
+                init_transaction
+                record_step "create_install_root" "remove_tree" --meta "path=${INSTALL_ROOT}" --rollback-meta "path=${INSTALL_ROOT}"
+            else
+                record_step "create_directory" "remove_tree" --meta "path=${dir}" --rollback-meta "path=${dir}"
+            fi
             echo -e "${GREEN}✓${NC} Created: $dir"
         else
             echo -e "${YELLOW}✓${NC} Exists: $dir"
@@ -136,6 +190,7 @@ create_system_user() {
         echo -e "${YELLOW}✓${NC} User 'ransomeye-agent' already exists"
     else
         useradd --system --no-create-home --shell /bin/false ransomeye-agent || error_exit "Failed to create user 'ransomeye-agent'"
+        record_step "create_user" "remove_user" --meta "username=ransomeye-agent" --rollback-meta "username=ransomeye-agent"
         echo -e "${GREEN}✓${NC} Created user: ransomeye-agent"
     fi
     
@@ -156,6 +211,7 @@ install_agent_binary() {
     chmod +x "${INSTALL_ROOT}/bin/ransomeye-linux-agent" || error_exit "Failed to make binary executable"
     chown ransomeye-agent:ransomeye-agent "${INSTALL_ROOT}/bin/ransomeye-linux-agent" || \
         error_exit "Failed to set ownership on binary"
+    record_step "install_binary" "remove_path" --meta "path=${INSTALL_ROOT}/bin/ransomeye-linux-agent" --rollback-meta "path=${INSTALL_ROOT}/bin/ransomeye-linux-agent"
     
     echo -e "${GREEN}✓${NC} Installed: ${INSTALL_ROOT}/bin/ransomeye-linux-agent"
 }
@@ -234,6 +290,7 @@ EOF
     chmod 600 "${INSTALL_ROOT}/config/environment" || error_exit "Failed to set permissions on environment file"
     chown ransomeye-agent:ransomeye-agent "${INSTALL_ROOT}/config/environment" || \
         error_exit "Failed to set ownership on environment file"
+    record_step "create_environment" "remove_path" --meta "path=${INSTALL_ROOT}/config/environment" --rollback-meta "path=${INSTALL_ROOT}/config/environment"
     echo -e "${GREEN}✓${NC} Created: ${INSTALL_ROOT}/config/environment"
 }
 
@@ -275,6 +332,11 @@ install_systemd_service() {
         error_exit "Failed to install systemd service"
     
     systemctl daemon-reload || error_exit "Failed to reload systemd daemon"
+    record_step "install_systemd_service" "remove_systemd_service" \
+        --meta "service=ransomeye-linux-agent.service" \
+        --meta "service_file=/etc/systemd/system/ransomeye-linux-agent.service" \
+        --rollback-meta "service=ransomeye-linux-agent.service" \
+        --rollback-meta "service_file=/etc/systemd/system/ransomeye-linux-agent.service"
     echo -e "${GREEN}✓${NC} Installed systemd service: ransomeye-linux-agent.service"
 }
 
@@ -313,6 +375,7 @@ EOF
     chmod 644 "$manifest_file" || error_exit "Failed to set permissions on manifest"
     chown ransomeye-agent:ransomeye-agent "$manifest_file" || \
         error_exit "Failed to set ownership on manifest"
+    record_step "create_manifest" "remove_path" --meta "path=${manifest_file}" --rollback-meta "path=${manifest_file}"
     echo -e "${GREEN}✓${NC} Created: $manifest_file"
 }
 
@@ -336,11 +399,8 @@ validate_installation() {
         local exit_status=$(systemctl show -p ExecMainStatus --value ransomeye-linux-agent 2>/dev/null || echo "unknown")
         if [[ "$exit_status" == "0" ]]; then
             echo -e "${GREEN}✓${NC} Agent completed successfully (exit code: 0)"
-        elif [[ "$exit_status" == "3" ]]; then
-            # Exit code 3 = RuntimeError (Core unreachable) - this is expected if Core is not installed
-            echo -e "${YELLOW}✓${NC} Agent exited with RuntimeError (exit code: 3) - Core may be unreachable (this is expected if Core is not installed)"
         else
-            echo -e "${YELLOW}WARNING:${NC} Agent exited with status: $exit_status (may be expected if Core is not installed)"
+            error_exit "Agent exited with status: $exit_status"
         fi
     fi
     
@@ -348,7 +408,7 @@ validate_installation() {
     if journalctl -u ransomeye-linux-agent --no-pager -n 5 2>/dev/null | grep -q "STARTUP: Linux Agent starting"; then
         echo -e "${GREEN}✓${NC} Agent process was created and executed"
     else
-        echo -e "${YELLOW}WARNING:${NC} Agent execution log not found (service may not have run yet)"
+        error_exit "Agent execution log not found"
     fi
     
     echo -e "${GREEN}✓${NC} Installation validation complete"
@@ -356,10 +416,13 @@ validate_installation() {
 
 # Main installation flow
 main() {
+    trap 'run_rollback' ERR
     check_root
     check_ubuntu
     detect_installer_dir
+    preflight_python3
     prompt_install_root
+    ensure_clean_install_root
     check_rust
     build_agent
     create_directory_structure
@@ -371,6 +434,9 @@ main() {
     install_systemd_service
     create_manifest
     validate_installation
+    
+    rm -f "${INSTALL_STATE_FILE}" 2>/dev/null || true
+    trap - ERR
     
     echo ""
     echo "================================================================================"

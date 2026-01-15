@@ -1,6 +1,8 @@
 # RansomEye v1.0 — Independent Deep Validation Phase
 ## Comprehensive Remediation Blueprint
 
+**NOTICE:** Superseded by Phase-3 DPI Unified Architecture. DPI stub references in this document are historical.
+
 **Document Status:** AUTHORITATIVE  
 **Review Date:** 2025-01-13  
 **Validation Scope:** All 40 validation files (01-40)  

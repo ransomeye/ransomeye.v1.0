@@ -11,7 +11,7 @@ import statistics
 from datetime import datetime, timezone
 from typing import Dict, Any, List
 
-from validation.harness.phase_c_executor import TestStatus
+from validation.harness.phase_c_executor import ValidationStatus
 from validation.harness.test_helpers import get_test_db_connection, clean_database
 
 
@@ -49,7 +49,7 @@ def execute_track_4_scale(executor) -> Dict[str, Any]:
             try:
                 test_result = test_func(executor, conn)
                 results["tests"][test_id] = test_result
-                if test_result["status"] != TestStatus.PASSED.value:
+                if test_result["status"] != ValidationStatus.PASSED.value:
                     results["all_passed"] = False
                 
                 # Collect metrics
@@ -57,7 +57,7 @@ def execute_track_4_scale(executor) -> Dict[str, Any]:
                     results["metrics"][test_id] = test_result["metrics"]
             except Exception as e:
                 results["tests"][test_id] = {
-                    "status": TestStatus.FAILED.value,
+                    "status": ValidationStatus.FAILED.value,
                     "error": str(e)
                 }
                 results["all_passed"] = False
@@ -143,13 +143,13 @@ def test_scale_001_burst_ingestion(executor, conn) -> Dict[str, Any]:
         }
         
         return {
-            "status": TestStatus.PASSED.value if passed else TestStatus.FAILED.value,
+            "status": ValidationStatus.PASSED.value if passed else ValidationStatus.FAILED.value,
             "metrics": metrics
         }
     
     except Exception as e:
         return {
-            "status": TestStatus.FAILED.value,
+            "status": ValidationStatus.FAILED.value,
             "error": str(e)
         }
     finally:
@@ -187,7 +187,7 @@ def test_scale_004_colocated(executor, conn) -> Dict[str, Any]:
     """
     # Simplified
     return {
-        "status": TestStatus.PASSED.value,
+        "status": ValidationStatus.PASSED.value,
         "metrics": {
             "resource_isolation": True,
             "port_conflicts": 0
@@ -204,7 +204,7 @@ def test_scale_005_backpressure_recovery(executor, conn) -> Dict[str, Any]:
     """
     # Simplified
     return {
-        "status": TestStatus.PASSED.value,
+        "status": ValidationStatus.PASSED.value,
         "metrics": {
             "backpressure_activated": True,
             "recovery_time_seconds": 10,

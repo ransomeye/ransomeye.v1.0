@@ -7,9 +7,17 @@ Python 3.10+ only
 
 import os
 import sys
+from datetime import datetime, timezone
 from typing import Optional, Callable, Dict, Any
 from fastapi import Request, HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+
+try:
+    import jwt
+    _jwt_available = True
+except ImportError:
+    jwt = None
+    _jwt_available = False
 
 # Add common utilities to path
 _current_file = os.path.abspath(__file__)
@@ -25,8 +33,8 @@ if os.path.exists(_rbac_path) and _rbac_path not in sys.path:
 from api.rbac_api import RBACAPI, RBACAPIError
 from engine.permission_checker import PermissionChecker, PermissionDeniedError
 
-# Security scheme
-security = HTTPBearer()
+# Security scheme (explicit 401 handling)
+security = HTTPBearer(auto_error=False)
 
 
 class RBACAuth:
@@ -37,18 +45,74 @@ class RBACAuth:
     UI hiding is insufficient; backend must block unauthorized actions.
     """
     
-    def __init__(self, rbac_api: RBACAPI):
+    def __init__(
+        self,
+        rbac_api: RBACAPI,
+        jwt_signing_key: str,
+        jwt_issuer: str = "ransomeye-ui",
+        jwt_audience: str = "ransomeye-ui",
+        leeway_seconds: int = 30,
+        logger: Optional[Any] = None,
+        auth_audit_logger: Optional[Callable[[Dict[str, Any]], None]] = None
+    ):
         """
         Initialize RBAC auth.
         
         Args:
             rbac_api: RBAC API instance
+            jwt_signing_key: JWT signing key (HS256)
+            jwt_issuer: JWT issuer claim
+            jwt_audience: JWT audience claim
+            leeway_seconds: Allowed clock skew in seconds
+            logger: Optional logger instance
+            auth_audit_logger: Optional auth decision audit logger
         """
         self.rbac_api = rbac_api
         self.permission_checker = rbac_api.permission_checker
+        self.jwt_signing_key = jwt_signing_key
+        self.jwt_issuer = jwt_issuer
+        self.jwt_audience = jwt_audience
+        self.leeway_seconds = leeway_seconds
+        self.logger = logger
+        self.auth_audit_logger = auth_audit_logger
+
+        if not self.jwt_signing_key:
+            raise RBACAPIError("JWT signing key is required")
+        if not _jwt_available:
+            raise RBACAPIError("JWT library not available (PyJWT not installed)")
+
+    def _audit_auth(self, payload: Dict[str, Any]) -> None:
+        if self.auth_audit_logger:
+            try:
+                self.auth_audit_logger(payload)
+            except Exception:
+                if self.logger:
+                    self.logger.warning("Auth audit logging failed")
+
+    def _decode_token(self, token: str) -> Dict[str, Any]:
+        try:
+            return jwt.decode(
+                token,
+                self.jwt_signing_key,
+                algorithms=["HS256"],
+                audience=self.jwt_audience,
+                issuer=self.jwt_issuer,
+                options={
+                    "require": ["sub", "iat", "exp", "token_type"],
+                    "verify_signature": True,
+                    "verify_exp": True,
+                    "verify_iat": True
+                },
+                leeway=self.leeway_seconds
+            )
+        except jwt.ExpiredSignatureError as exc:
+            raise HTTPException(status_code=401, detail="Token expired") from exc
+        except jwt.InvalidTokenError as exc:
+            raise HTTPException(status_code=401, detail="Invalid token") from exc
     
     async def get_current_user(
         self,
+        request: Request,
         credentials: HTTPAuthorizationCredentials = Depends(security)
     ) -> Dict[str, Any]:
         """
@@ -63,27 +127,75 @@ class RBACAuth:
         Raises:
             HTTPException: If authentication fails
         """
-        # TODO: Implement JWT token validation
-        # For now, extract user_id from token (placeholder)
+        if not credentials or not credentials.credentials:
+            self._audit_auth({
+                "decision": "DENY",
+                "reason": "missing_token",
+                "path": str(request.url.path),
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            })
+            raise HTTPException(status_code=401, detail="Missing token")
+
         token = credentials.credentials
-        
-        # Simple token format: user_id:username (temporary)
-        # In production, use JWT with proper signing
+        payload = self._decode_token(token)
+        token_type = payload.get("token_type")
+        if token_type not in ("access", "service"):
+            self._audit_auth({
+                "decision": "DENY",
+                "reason": "invalid_token_type",
+                "token_type": token_type,
+                "path": str(request.url.path),
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            })
+            raise HTTPException(status_code=401, detail="Invalid token type")
+
+        user_id = payload.get("sub")
+        if not user_id:
+            self._audit_auth({
+                "decision": "DENY",
+                "reason": "missing_subject",
+                "path": str(request.url.path),
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            })
+            raise HTTPException(status_code=401, detail="Invalid token subject")
+
         try:
-            user_id, username = token.split(':', 1)
-        except ValueError:
-            raise HTTPException(status_code=401, detail="Invalid token format")
-        
-        # Verify user exists and is active
-        # This is a simplified check; in production, validate JWT signature
-        try:
-            # For now, return user dict (in production, validate JWT)
-            return {
-                'user_id': user_id,
-                'username': username
-            }
-        except Exception as e:
-            raise HTTPException(status_code=401, detail=f"Authentication failed: {e}")
+            user = self.rbac_api.get_user_by_id(user_id)
+        except Exception as exc:
+            self._audit_auth({
+                "decision": "DENY",
+                "reason": "rbac_user_lookup_failed",
+                "user_id": user_id,
+                "path": str(request.url.path),
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            })
+            raise HTTPException(status_code=503, detail="Authentication backend unavailable") from exc
+
+        if not user or not user.get("is_active"):
+            self._audit_auth({
+                "decision": "DENY",
+                "reason": "user_inactive",
+                "user_id": user_id,
+                "path": str(request.url.path),
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            })
+            raise HTTPException(status_code=401, detail="User inactive or missing")
+
+        current_user = {
+            "user_id": user_id,
+            "username": payload.get("username", user.get("username")),
+            "role": payload.get("role"),
+            "token_type": token_type
+        }
+
+        self._audit_auth({
+            "decision": "ALLOW",
+            "reason": "token_valid",
+            "user_id": user_id,
+            "path": str(request.url.path),
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+        return current_user
     
     def require_permission(
         self,

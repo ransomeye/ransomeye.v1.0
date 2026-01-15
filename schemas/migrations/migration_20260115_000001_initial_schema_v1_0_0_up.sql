@@ -1,0 +1,15 @@
+-- RansomEye v1.0 Initial Schema Migration (UP)
+-- Phase 1: Schema lifecycle baseline for v1.0.0
+-- Includes authoritative schema bundle files (no modifications)
+
+-- RANSOMEYE_INCLUDE: ../00_extensions.sql
+-- RANSOMEYE_INCLUDE: ../00_core_identity.sql
+-- RANSOMEYE_INCLUDE: ../01_raw_events.sql
+-- RANSOMEYE_INCLUDE: ../02_normalized_agent.sql
+-- RANSOMEYE_INCLUDE: ../03_normalized_dpi.sql
+-- RANSOMEYE_INCLUDE: ../04_correlation.sql
+-- RANSOMEYE_INCLUDE: ../05_ai_metadata.sql
+-- RANSOMEYE_INCLUDE: ../06_indexes.sql
+-- RANSOMEYE_INCLUDE: ../07_retention.sql
+-- RANSOMEYE_INCLUDE: ../09_ui_views.sql
+-- RANSOMEYE_INCLUDE: ../08_db_users_roles.sql

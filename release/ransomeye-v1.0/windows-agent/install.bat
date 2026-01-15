@@ -25,6 +25,29 @@ REM Detect installer directory
 set "INSTALLER_DIR=%~dp0"
 set "INSTALLER_DIR=%INSTALLER_DIR:~0,-1%"
 set "SRC_ROOT=%INSTALLER_DIR%\..\..\services\windows-agent"
+set "TRANSACTION_PY=%INSTALLER_DIR%\..\common\install_transaction.py"
+set "PREFLIGHT_PS1=%INSTALLER_DIR%\..\common\preflight_python3.ps1"
+set "INSTALL_STATE_FILE="
+
+REM Ensure python3 is available for transaction framework
+where python3 >nul 2>&1
+if errorlevel 1 (
+    echo FATAL: python3 is required for transactional rollback
+    exit /b 1
+)
+if not exist "%PREFLIGHT_PS1%" (
+    echo FATAL: Python3 preflight script not found: %PREFLIGHT_PS1%
+    exit /b 1
+)
+powershell -ExecutionPolicy Bypass -File "%PREFLIGHT_PS1%"
+if errorlevel 1 (
+    echo FATAL: Python3 preflight failed
+    exit /b 1
+)
+if not exist "%TRANSACTION_PY%" (
+    echo FATAL: Transaction framework not found: %TRANSACTION_PY%
+    exit /b 1
+)
 
 REM Prompt for install directory (no hardcoded paths)
 echo.
@@ -34,21 +57,28 @@ echo.
 set /p "INSTALL_ROOT=Enter installation directory (absolute path, example: C:\RansomEye\Agent): "
 
 if "!INSTALL_ROOT!"=="" (
-    echo FATAL: Install root cannot be empty
-    exit /b 1
+    call :fail "Install root cannot be empty"
 )
 
 REM Validate: must be absolute path
 echo !INSTALL_ROOT! | findstr /R "^[A-Z]:" >nul 2>&1
 if errorlevel 1 (
-    echo FATAL: Install root must be an absolute path (starting with drive letter, e.g., C:\)
-    exit /b 1
+    call :fail "Install root must be an absolute path (starting with drive letter, e.g., C:\)"
 )
 
 REM Normalize path (remove trailing backslash if present)
 if "!INSTALL_ROOT:~-1!"=="\" set "INSTALL_ROOT=!INSTALL_ROOT:~0,-1!"
 
 echo Install root: !INSTALL_ROOT!
+
+REM Enforce empty install root for transactional install
+if exist "!INSTALL_ROOT!\" (
+    set "HAS_CONTENT="
+    for /f %%A in ('dir /b "!INSTALL_ROOT!" 2^>nul') do set "HAS_CONTENT=1"
+    if defined HAS_CONTENT (
+        call :fail "Install root must be empty for transactional install"
+    )
+)
 
 REM Check if Windows Agent binary exists (assumes pre-built binary)
 echo.
@@ -65,12 +95,10 @@ if exist "%SRC_ROOT%\target\release\ransomeye-windows-agent.exe" (
     echo          Please build the agent first or provide binary path
     set /p "AGENT_BINARY=Enter path to Windows Agent binary (.exe): "
     if "!AGENT_BINARY!"=="" (
-        echo FATAL: Agent binary path cannot be empty
-        exit /b 1
+        call :fail "Agent binary path cannot be empty"
     )
     if not exist "!AGENT_BINARY!" (
-        echo FATAL: Agent binary not found: !AGENT_BINARY!
-        exit /b 1
+        call :fail "Agent binary not found: !AGENT_BINARY!"
     )
 )
 
@@ -78,24 +106,26 @@ REM Create directory structure
 echo.
 echo Creating directory structure...
 if not exist "!INSTALL_ROOT!" mkdir "!INSTALL_ROOT!" 2>nul || (
-    echo FATAL: Failed to create install root: !INSTALL_ROOT!
-    exit /b 1
+    call :fail "Failed to create install root: !INSTALL_ROOT!"
+)
+set "INSTALL_STATE_FILE=!INSTALL_ROOT!\.install_state.json"
+python3 "%TRANSACTION_PY%" init --state-file "!INSTALL_STATE_FILE!" --component "windows-agent" || (
+    call :fail "Failed to initialize transaction state"
+)
+python3 "%TRANSACTION_PY%" record --state-file "!INSTALL_STATE_FILE!" --action "create_install_root" --rollback-action "remove_tree" --meta "path=!INSTALL_ROOT!" --rollback-meta "path=!INSTALL_ROOT!" || (
+    call :fail "Failed to record install root"
 )
 if not exist "!INSTALL_ROOT!\bin" mkdir "!INSTALL_ROOT!\bin" || (
-    echo FATAL: Failed to create directory: !INSTALL_ROOT!\bin
-    exit /b 1
+    call :fail "Failed to create directory: !INSTALL_ROOT!\bin"
 )
 if not exist "!INSTALL_ROOT!\config" mkdir "!INSTALL_ROOT!\config" || (
-    echo FATAL: Failed to create directory: !INSTALL_ROOT!\config
-    exit /b 1
+    call :fail "Failed to create directory: !INSTALL_ROOT!\config"
 )
 if not exist "!INSTALL_ROOT!\logs" mkdir "!INSTALL_ROOT!\logs" || (
-    echo FATAL: Failed to create directory: !INSTALL_ROOT!\logs
-    exit /b 1
+    call :fail "Failed to create directory: !INSTALL_ROOT!\logs"
 )
 if not exist "!INSTALL_ROOT!\runtime" mkdir "!INSTALL_ROOT!\runtime" || (
-    echo FATAL: Failed to create directory: !INSTALL_ROOT!\runtime
-    exit /b 1
+    call :fail "Failed to create directory: !INSTALL_ROOT!\runtime"
 )
 
 REM Create Windows service user
@@ -106,10 +136,12 @@ if errorlevel 1 (
     REM User does not exist, create it
     net user ransomeye-agent /add /passwordreq:no /logonpasswordchg:no /expires:never /comment:"RansomEye Windows Agent service account" >nul 2>&1
     if errorlevel 1 (
-        echo FATAL: Failed to create user 'ransomeye-agent'
-        exit /b 1
+        call :fail "Failed to create user 'ransomeye-agent'"
     )
     echo Created user: ransomeye-agent
+    python3 "%TRANSACTION_PY%" record --state-file "!INSTALL_STATE_FILE!" --action "create_user" --rollback-action "remove_user" --meta "username=ransomeye-agent" --rollback-meta "username=ransomeye-agent" || (
+        call :fail "Failed to record user creation"
+    )
 ) else (
     echo User 'ransomeye-agent' already exists
 )
@@ -122,10 +154,12 @@ REM Install agent binary
 echo.
 echo Installing agent binary...
 copy /Y "!AGENT_BINARY!" "!INSTALL_ROOT!\bin\ransomeye-windows-agent.exe" >nul || (
-    echo FATAL: Failed to copy agent binary
-    exit /b 1
+    call :fail "Failed to copy agent binary"
 )
 echo Installed: !INSTALL_ROOT!\bin\ransomeye-windows-agent.exe
+python3 "%TRANSACTION_PY%" record --state-file "!INSTALL_STATE_FILE!" --action "install_binary" --rollback-action "remove_path" --meta "path=!INSTALL_ROOT!\bin\ransomeye-windows-agent.exe" --rollback-meta "path=!INSTALL_ROOT!\bin\ransomeye-windows-agent.exe" || (
+    call :fail "Failed to record binary install"
+)
 
 REM Generate component instance ID (BAT only, no PowerShell)
 REM Generate UUID-like string using random numbers
@@ -156,8 +190,7 @@ if "!INGEST_URL!"=="" set "INGEST_URL=http://localhost:8000/events"
 REM Basic URL validation
 echo !INGEST_URL! | findstr /R "^http:// ^https://" >nul 2>&1
 if errorlevel 1 (
-    echo FATAL: Ingest URL must start with http:// or https://
-    exit /b 1
+    call :fail "Ingest URL must start with http:// or https://"
 )
 
 echo Core Ingest URL: !INGEST_URL!
@@ -192,6 +225,9 @@ echo Generating configuration file...
     echo RANSOMEYE_DB_USER=gagan
     echo RANSOMEYE_DB_PASSWORD=gagan
 ) > "!INSTALL_ROOT!\config\environment.txt"
+python3 "%TRANSACTION_PY%" record --state-file "!INSTALL_STATE_FILE!" --action "create_environment" --rollback-action "remove_path" --meta "path=!INSTALL_ROOT!\config\environment.txt" --rollback-meta "path=!INSTALL_ROOT!\config\environment.txt" || (
+    call :fail "Failed to record environment file"
+)
 
 REM Set filesystem permissions (minimal access)
 echo.
@@ -229,6 +265,9 @@ echo Creating installation manifest...
     echo   "windows_service": "RansomEyeWindowsAgent"
     echo }
 ) > "!INSTALL_ROOT!\config\installer.manifest.json"
+python3 "%TRANSACTION_PY%" record --state-file "!INSTALL_STATE_FILE!" --action "create_manifest" --rollback-action "remove_path" --meta "path=!INSTALL_ROOT!\config\installer.manifest.json" --rollback-meta "path=!INSTALL_ROOT!\config\installer.manifest.json" || (
+    call :fail "Failed to record manifest"
+)
 
 REM Install Windows Service (ONE service only)
 echo.
@@ -291,6 +330,9 @@ REM Use that to construct paths - no need to embed INSTALL_ROOT directly in wrap
     echo REM Run agent binary with environment variables set
     echo "%%RANSOMEYE_INSTALL_ROOT%%\\bin\\ransomeye-windows-agent.exe" || exit /b 1
 ) > "!INSTALL_ROOT!\bin\ransomeye-windows-agent-wrapper.bat"
+python3 "%TRANSACTION_PY%" record --state-file "!INSTALL_STATE_FILE!" --action "create_wrapper" --rollback-action "remove_path" --meta "path=!INSTALL_ROOT!\bin\ransomeye-windows-agent-wrapper.bat" --rollback-meta "path=!INSTALL_ROOT!\bin\ransomeye-windows-agent-wrapper.bat" || (
+    call :fail "Failed to record wrapper"
+)
 
 REM Install service with wrapper script (use cmd.exe to run batch file)
 REM Windows Service requires executable, so use cmd.exe to run batch wrapper
@@ -302,8 +344,10 @@ sc create "RansomEyeWindowsAgent" ^
     password= "" >nul 2>&1
 
 if errorlevel 1 (
-    echo FATAL: Failed to create Windows service
-    exit /b 1
+    call :fail "Failed to create Windows service"
+)
+python3 "%TRANSACTION_PY%" record --state-file "!INSTALL_STATE_FILE!" --action "install_windows_service" --rollback-action "remove_windows_service" --meta "service=RansomEyeWindowsAgent" --meta "registry_key=HKLM\SYSTEM\CurrentControlSet\Services\RansomEyeWindowsAgent" --rollback-meta "service=RansomEyeWindowsAgent" --rollback-meta "registry_key=HKLM\SYSTEM\CurrentControlSet\Services\RansomEyeWindowsAgent" || (
+    call :fail "Failed to record service install"
 )
 
 REM Configure service: Auto-restart on failure, but with delays to prevent crash-loop
@@ -343,7 +387,7 @@ if not errorlevel 1 (
         echo Service executed and exited (agent is one-shot, may have completed event transmission)
         echo NOTE: If Core is unreachable, agent exits with code 3 (RuntimeError) - this is expected behavior
     ) else (
-        echo WARNING: Service status unknown - check with: sc query RansomEyeWindowsAgent
+        call :fail "Service status unknown after start"
     )
 )
 
@@ -370,3 +414,11 @@ echo.
 
 endlocal
 exit /b 0
+
+:fail
+set "FAIL_MSG=%~1"
+echo FATAL: %FAIL_MSG%
+if defined INSTALL_STATE_FILE (
+    python3 "%TRANSACTION_PY%" rollback --state-file "%INSTALL_STATE_FILE%" >nul 2>&1
+)
+exit /b 1

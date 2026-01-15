@@ -35,27 +35,20 @@ Before running the installer, ensure:
    sudo systemctl enable postgresql
    ```
 
-2. **PostgreSQL database and user created:**
-   ```bash
-   sudo -u postgres psql -c "CREATE DATABASE ransomeye;"
-   sudo -u postgres psql -c "CREATE USER gagan WITH PASSWORD 'gagan';"
-   sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE ransomeye TO gagan;"
-   sudo -u postgres psql -d ransomeye -c "GRANT ALL ON SCHEMA public TO gagan;"
-   ```
+2. **PostgreSQL database and user provisioned:**
+   - Use your organization's standard database provisioning process.
+   - The installer prompts for credentials and validates connectivity.
+   - No default credentials are accepted.
 
 3. **Python 3 and dependencies installed:**
    ```bash
    sudo apt-get install -y python3 python3-pip python3-psycopg2
-   pip3 install fastapi uvicorn psycopg2-binary jsonschema pydantic
+   pip3 install fastapi uvicorn psycopg2-binary jsonschema pydantic PyJWT bcrypt
    ```
 
-4. **Database schemas applied:**
-   ```bash
-   # Apply all schema files from schemas/ directory
-   for schema_file in schemas/*.sql; do
-       psql -h localhost -U gagan -d ransomeye -f "$schema_file"
-   done
-   ```
+4. **Database schemas applied automatically:**
+   - The installer runs the migration runner and applies all migrations in order.
+   - No manual schema application steps are required.
 
 ## How to Install
 
@@ -101,7 +94,7 @@ sudo journalctl -u ransomeye-core -f
 
 # Check health endpoints (if services are running)
 curl http://localhost:8000/health  # Ingest service
-curl http://localhost:8080/health  # UI Backend
+curl -H "Authorization: Bearer $RANSOMEYE_UI_HEALTH_TOKEN" http://localhost:8080/health  # UI Backend
 ```
 
 ## Installation Paths
@@ -132,10 +125,11 @@ Example installation structure (if install root is `/opt/ransomeye`):
 The installer generates `${INSTALL_ROOT}/config/environment` with all required environment variables:
 
 - **Installation paths**: All absolute paths based on install root
-- **Database credentials**: user: `gagan`, password: `gagan`
+- **Database credentials**: Provided via installer prompts (no defaults)
 - **Service ports**: Ingest (8000), UI Backend (8080)
 - **Component identity**: Component instance ID (UUID)
 - **Runtime identity**: User/group IDs
+- **UI auth**: JWT signing key, audit ledger path/key dir, UI health token
 
 **DO NOT EDIT MANUALLY**: Regenerate using installer if paths change.
 
@@ -192,16 +186,12 @@ The uninstaller will:
 2. Stop and remove systemd service
 3. Remove installation directory (with confirmation)
 4. Optionally remove system user (with confirmation)
-5. **NOTE**: PostgreSQL database and user are NOT removed (manual cleanup required)
+5. **NOTE**: PostgreSQL database and roles are NOT removed (optional rollback supported)
 
-### Step 2: Manual Cleanup (Optional)
+### Step 2: Database Schema Rollback (Optional)
 
-If you want to remove PostgreSQL database and user:
-
-```bash
-sudo -u postgres psql -c "DROP DATABASE ransomeye;"
-sudo -u postgres psql -c "DROP USER gagan;"
-```
+The uninstaller can rollback schema migrations to base (no schema objects) using the
+migration runner before removing files.
 
 ## Idempotency
 
@@ -235,8 +225,6 @@ If installation fails:
 **Solution**: Ensure PostgreSQL is running and database exists:
 ```bash
 sudo systemctl status postgresql
-sudo -u postgres psql -c "SELECT 1;"  # Test connection
-sudo -u postgres psql -c "\l"  # List databases (should see 'ransomeye')
 ```
 
 ### Installation Fails: "Cannot create directory"
@@ -269,7 +257,6 @@ sudo -u ransomeye python3 -c "import fastapi, uvicorn, psycopg2"  # Should succe
 **Solution**: Check service logs and database connectivity:
 ```bash
 sudo journalctl -u ransomeye-core -n 100
-sudo -u ransomeye psql -h localhost -U gagan -d ransomeye -c "SELECT 1;"
 ```
 
 ## Security Considerations

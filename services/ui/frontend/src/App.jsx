@@ -1,59 +1,250 @@
-// RansomEye v1.0 SOC UI (Phase 8 - Read-Only)
-// AUTHORITATIVE: Minimal read-only frontend for SOC UI
-// React - aligns with Phase 8 requirements
-
-import { useState, useEffect } from 'react';
-
-// Phase 8 requirement: UI is read-only (no edits, no actions, no buttons that execute)
+import { useState, useEffect, useCallback } from 'react';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
 
 function App() {
+  const [accessToken, setAccessToken] = useState(null);
+  const [user, setUser] = useState(null);
+  const [permissions, setPermissions] = useState([]);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [authError, setAuthError] = useState('');
+  const [loginForm, setLoginForm] = useState({ username: '', password: '' });
+
   const [incidents, setIncidents] = useState([]);
   const [selectedIncident, setSelectedIncident] = useState(null);
   const [incidentDetail, setIncidentDetail] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
-  // Phase 8 requirement: Read-only data fetching (no writes, no actions)
-  useEffect(() => {
-    fetchIncidents();
+  const hasPermission = useCallback(
+    (permission) => permissions.includes(permission),
+    [permissions]
+  );
+
+  const refreshSession = useCallback(async () => {
+    setAuthLoading(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+        method: 'POST',
+        credentials: 'include'
+      });
+      if (!response.ok) {
+        setAccessToken(null);
+        setUser(null);
+        setPermissions([]);
+        return false;
+      }
+      const data = await response.json();
+      setAccessToken(data.access_token);
+
+      const meResponse = await fetch(`${API_BASE_URL}/auth/me`, {
+        headers: { Authorization: `Bearer ${data.access_token}` }
+      });
+      if (meResponse.ok) {
+        const meData = await meResponse.json();
+        setUser(meData.user || null);
+      }
+
+      const permResponse = await fetch(`${API_BASE_URL}/auth/permissions`, {
+        headers: { Authorization: `Bearer ${data.access_token}` }
+      });
+      if (permResponse.ok) {
+        const permData = await permResponse.json();
+        setPermissions(permData.permissions || []);
+      }
+
+      return true;
+    } finally {
+      setAuthLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    refreshSession();
+  }, [refreshSession]);
+
+  const apiFetch = useCallback(
+    async (path, options = {}, retry = true) => {
+      if (!accessToken) {
+        throw new Error('Missing access token');
+      }
+      const response = await fetch(`${API_BASE_URL}${path}`, {
+        ...options,
+        credentials: 'include',
+        headers: {
+          ...(options.headers || {}),
+          Authorization: `Bearer ${accessToken}`
+        }
+      });
+      if (response.status === 401 && retry) {
+        const refreshed = await refreshSession();
+        if (refreshed) {
+          return apiFetch(path, options, false);
+        }
+      }
+      return response;
+    },
+    [accessToken, refreshSession]
+  );
+
+  const handleLogin = async (event) => {
+    event.preventDefault();
+    setAuthError('');
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(loginForm)
+      });
+      if (!response.ok) {
+        setAuthError('Invalid credentials');
+        return;
+      }
+      const data = await response.json();
+      setAccessToken(data.access_token);
+      setUser(data.user || null);
+
+      const permResponse = await fetch(`${API_BASE_URL}/auth/permissions`, {
+        headers: { Authorization: `Bearer ${data.access_token}` }
+      });
+      if (permResponse.ok) {
+        const permData = await permResponse.json();
+        setPermissions(permData.permissions || []);
+      }
+    } catch (error) {
+      setAuthError('Login failed');
+    }
+  };
+
+  const handleLogout = async () => {
+    if (accessToken) {
+      await fetch(`${API_BASE_URL}/auth/logout`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}` },
+        credentials: 'include'
+      });
+    }
+    setAccessToken(null);
+    setUser(null);
+    setPermissions([]);
+    setIncidents([]);
+    setSelectedIncident(null);
+    setIncidentDetail(null);
+  };
+
+  const fetchIncidents = useCallback(async () => {
+    if (!hasPermission('incident:view_all')) {
+      return;
+    }
+    setLoading(true);
+    try {
+      const response = await apiFetch('/api/incidents');
+      if (!response.ok) {
+        setLoading(false);
+        return;
+      }
+      const data = await response.json();
+      setIncidents(data.incidents || []);
+    } catch (error) {
+      console.error('Error fetching incidents:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [apiFetch, hasPermission]);
+
+  const fetchIncidentDetail = useCallback(
+    async (incidentId) => {
+      if (!hasPermission('incident:view')) {
+        return;
+      }
+      try {
+        const response = await apiFetch(`/api/incidents/${incidentId}`);
+        if (!response.ok) {
+          return;
+        }
+        const data = await response.json();
+        setIncidentDetail(data);
+      } catch (error) {
+        console.error('Error fetching incident detail:', error);
+      }
+    },
+    [apiFetch, hasPermission]
+  );
+
+  useEffect(() => {
+    if (accessToken && hasPermission('incident:view_all')) {
+      fetchIncidents();
+    }
+  }, [accessToken, fetchIncidents, hasPermission]);
 
   useEffect(() => {
     if (selectedIncident) {
       fetchIncidentDetail(selectedIncident);
     }
-  }, [selectedIncident]);
+  }, [selectedIncident, fetchIncidentDetail]);
 
-  const fetchIncidents = async () => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/incidents`);
-      const data = await response.json();
-      setIncidents(data.incidents || []);
-      setLoading(false);
-    } catch (error) {
-      console.error('Error fetching incidents:', error);
-      setLoading(false);
-    }
-  };
+  if (authLoading) {
+    return (
+      <div style={{ padding: '20px', fontFamily: 'Arial, sans-serif' }}>
+        <p>Loading session...</p>
+      </div>
+    );
+  }
 
-  const fetchIncidentDetail = async (incidentId) => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/incidents/${incidentId}`);
-      const data = await response.json();
-      setIncidentDetail(data);
-    } catch (error) {
-      console.error('Error fetching incident detail:', error);
-    }
-  };
+  if (!accessToken) {
+    return (
+      <div style={{ padding: '20px', fontFamily: 'Arial, sans-serif', maxWidth: '360px' }}>
+        <h1>RansomEye SOC UI</h1>
+        <p style={{ color: '#666' }}>Authenticated access required.</p>
+        <form onSubmit={handleLogin}>
+          <div style={{ marginBottom: '10px' }}>
+            <label>
+              Username
+              <input
+                type="text"
+                value={loginForm.username}
+                onChange={(event) => setLoginForm({ ...loginForm, username: event.target.value })}
+                style={{ width: '100%', padding: '8px', marginTop: '4px' }}
+                required
+              />
+            </label>
+          </div>
+          <div style={{ marginBottom: '10px' }}>
+            <label>
+              Password
+              <input
+                type="password"
+                value={loginForm.password}
+                onChange={(event) => setLoginForm({ ...loginForm, password: event.target.value })}
+                style={{ width: '100%', padding: '8px', marginTop: '4px' }}
+                required
+              />
+            </label>
+          </div>
+          {authError && <p style={{ color: '#c0392b' }}>{authError}</p>}
+          <button type="submit" style={{ padding: '8px 12px' }}>Login</button>
+        </form>
+      </div>
+    );
+  }
 
-  // Phase 8 requirement: Read-only display (no edits, no actions)
   return (
     <div style={{ padding: '20px', fontFamily: 'Arial, sans-serif' }}>
-      <h1>RansomEye SOC UI (Read-Only)</h1>
-      <p style={{ color: '#666' }}>Phase 8 - Observational Only. No edits, no actions.</p>
-      
-      {loading ? (
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+          <h1>RansomEye SOC UI</h1>
+          <p style={{ color: '#666' }}>Authenticated, RBAC-enforced visibility.</p>
+        </div>
+        <div>
+          <p style={{ margin: 0 }}>User: {user?.username || 'unknown'}</p>
+          <p style={{ margin: 0 }}>Role: {user?.role || 'unknown'}</p>
+          <button onClick={handleLogout} style={{ marginTop: '8px' }}>Logout</button>
+        </div>
+      </div>
+
+      {!hasPermission('incident:view_all') ? (
+        <p>You do not have permission to view incidents.</p>
+      ) : loading ? (
         <p>Loading incidents...</p>
       ) : (
         <div style={{ display: 'flex', gap: '20px' }}>
@@ -81,7 +272,6 @@ function App() {
                     <br />
                     Machine: {incident.machine_id}
                     <br />
-                    {/* PHASE 5: Separate confidence from certainty */}
                     <span>Stage: <strong>{incident.stage}</strong></span>
                     <br />
                     <span>Confidence: {incident.confidence}%</span>
@@ -103,12 +293,13 @@ function App() {
 
           {/* Incident Detail */}
           <div style={{ flex: '2', border: '1px solid #ccc', padding: '10px', borderRadius: '4px' }}>
-            {selectedIncident ? (
+            {!hasPermission('incident:view') ? (
+              <p>You do not have permission to view incident details.</p>
+            ) : selectedIncident ? (
               incidentDetail ? (
                 <div>
                   <h2>Incident Detail</h2>
                   
-                  {/* PHASE 5: Operator Action Warnings */}
                   {incidentDetail.evidence_quality && (
                     <div style={{
                       padding: '15px',
@@ -152,7 +343,6 @@ function App() {
                   <p><strong>Incident ID:</strong> {incidentDetail.incident?.incident_id}</p>
                   <p><strong>Machine ID:</strong> {incidentDetail.incident?.machine_id}</p>
                   
-                  {/* PHASE 5: Separate confidence from certainty */}
                   <div style={{ marginBottom: '10px' }}>
                     <p><strong>Stage:</strong> {incidentDetail.incident?.stage}</p>
                     <p><strong>Confidence Score:</strong> {incidentDetail.incident?.confidence}%</p>
@@ -191,7 +381,6 @@ function App() {
                     <p>No timeline data</p>
                   )}
 
-                  {/* PHASE 5: Evidence Quality Indicators */}
                   <h3>Evidence Quality Indicators</h3>
                   {incidentDetail.evidence_quality ? (
                     <div style={{ padding: '10px', backgroundColor: '#f5f5f5', borderRadius: '4px', marginBottom: '10px' }}>
@@ -268,11 +457,9 @@ function App() {
                     <p>No evidence data</p>
                   )}
 
-                  {/* PHASE 5: AI Insights with Provenance */}
                   <h3>AI Insights</h3>
                   {incidentDetail.ai_insights ? (
                     <div>
-                      {/* PHASE 5: Warning if AI output is advisory only */}
                       {incidentDetail.evidence_quality && !incidentDetail.evidence_quality.has_ai_provenance && (
                         <div style={{
                           padding: '10px',
@@ -302,7 +489,6 @@ function App() {
                     <p>No AI insights</p>
                   )}
                   
-                  {/* PHASE 5: AI Provenance Information */}
                   {incidentDetail.ai_provenance && incidentDetail.ai_provenance.length > 0 && (
                     <div style={{ marginTop: '20px' }}>
                       <h3>AI Provenance</h3>
@@ -319,13 +505,11 @@ function App() {
                     </div>
                   )}
 
-                  {/* PHASE 5: Policy Recommendations with Warnings */}
                   <h3>Policy Recommendations</h3>
                   {incidentDetail.policy_recommendations && incidentDetail.policy_recommendations.length > 0 ? (
                     <div>
                       {incidentDetail.policy_recommendations.map((rec, idx) => (
                         <div key={idx} style={{ marginBottom: '10px', padding: '10px', backgroundColor: '#f5f5f5', borderRadius: '4px' }}>
-                          {/* PHASE 5: Warning for ambiguous intelligence */}
                           {(incidentDetail.evidence_quality?.has_contradiction || 
                             incidentDetail.evidence_quality?.evidence_completeness === 'INCOMPLETE' ||
                             incidentDetail.evidence_quality?.evidence_completeness === 'NO_EVIDENCE' ||
@@ -357,11 +541,6 @@ function App() {
                   ) : (
                     <p>No policy recommendations</p>
                   )}
-
-                  {/* Phase 8 requirement: NO buttons that execute actions */}
-                  {/* NO "acknowledge", "resolve", or "close" buttons */}
-                  {/* NO edit forms */}
-                  {/* NO action triggers */}
                 </div>
               ) : (
                 <p>Loading incident detail...</p>

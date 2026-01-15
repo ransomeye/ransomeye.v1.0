@@ -229,7 +229,7 @@ If database connection fails:
 
 1. Verify PostgreSQL is running: `systemctl status postgresql`
 2. Check credentials: Ensure `RANSOMEYE_DB_USER` and `RANSOMEYE_DB_PASSWORD` are correct
-3. Verify database exists: `psql -U <user> -d <database> -c "SELECT 1"`
+3. Verify database connectivity via migration runner (idempotent)
 
 ### Import Errors
 

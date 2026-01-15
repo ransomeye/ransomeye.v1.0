@@ -138,21 +138,8 @@ Each component can be installed **standalone** without other components:
 
 ## Credentials Policy
 
-**CRITICAL**: RansomEye v1.0 uses **fixed credentials** for database access:
-
-- **Database Username**: `gagan`
-- **Database Password**: `gagan`
-
-**Note**: These are **default credentials** for v1.0. **Change credentials in production deployments** for security.
-
-### Database Setup Example (PostgreSQL):
-
-```bash
-sudo -u postgres psql -c "CREATE DATABASE ransomeye;"
-sudo -u postgres psql -c "CREATE USER gagan WITH PASSWORD 'gagan';"
-sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE ransomeye TO gagan;"
-sudo -u postgres psql -d ransomeye -c "GRANT ALL ON SCHEMA public TO gagan;"
-```
+**CRITICAL**: Database credentials are **provided during installation** and must be
+secure (no defaults). Use your organization's standard database provisioning process.
 
 ## Supported OS Matrix
 

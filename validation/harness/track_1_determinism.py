@@ -11,7 +11,7 @@ import hashlib
 from datetime import datetime, timezone
 from typing import Dict, Any, List
 
-from validation.harness.phase_c_executor import TestStatus
+from validation.harness.phase_c_executor import ValidationStatus
 from validation.harness.test_helpers import get_test_db_connection, clean_database
 
 
@@ -40,42 +40,42 @@ def execute_track_1_determinism(executor) -> Dict[str, Any]:
         print("\n[DET-001] Detection Determinism")
         det001_result = test_det_001(executor, conn)
         results["tests"]["DET-001"] = det001_result
-        if det001_result["status"] != TestStatus.PASSED.value:
+        if det001_result["status"] != ValidationStatus.PASSED.value:
             results["all_passed"] = False
         
         # DET-002: Normalization Determinism
         print("\n[DET-002] Normalization Determinism")
         det002_result = test_det_002(executor, conn)
         results["tests"]["DET-002"] = det002_result
-        if det002_result["status"] != TestStatus.PASSED.value:
+        if det002_result["status"] != ValidationStatus.PASSED.value:
             results["all_passed"] = False
         
         # DET-003: Correlation Determinism
         print("\n[DET-003] Correlation Determinism")
         det003_result = test_det_003(executor, conn)
         results["tests"]["DET-003"] = det003_result
-        if det003_result["status"] != TestStatus.PASSED.value:
+        if det003_result["status"] != ValidationStatus.PASSED.value:
             results["all_passed"] = False
         
         # DET-004: Forensic Summarization Determinism
         print("\n[DET-004] Forensic Summarization Determinism")
         det004_result = test_det_004(executor, conn)
         results["tests"]["DET-004"] = det004_result
-        if det004_result["status"] != TestStatus.PASSED.value:
+        if det004_result["status"] != ValidationStatus.PASSED.value:
             results["all_passed"] = False
         
         # DET-005: LLM Semantic Determinism
         print("\n[DET-005] LLM Semantic Determinism")
         det005_result = test_det_005(executor, conn)
         results["tests"]["DET-005"] = det005_result
-        if det005_result["status"] != TestStatus.PASSED.value:
+        if det005_result["status"] != ValidationStatus.PASSED.value:
             results["all_passed"] = False
         
         # DET-006: Identity Disambiguation Determinism
         print("\n[DET-006] Identity Disambiguation Determinism")
         det006_result = test_det_006(executor, conn)
         results["tests"]["DET-006"] = det006_result
-        if det006_result["status"] != TestStatus.PASSED.value:
+        if det006_result["status"] != ValidationStatus.PASSED.value:
             results["all_passed"] = False
         
         # Save determinism proof artifacts
@@ -140,7 +140,7 @@ def test_det_001(executor, conn) -> Dict[str, Any]:
         passed = len(mismatches) == 0 and len(run1_hashes) == len(run2_hashes)
         
         return {
-            "status": TestStatus.PASSED.value if passed else TestStatus.FAILED.value,
+            "status": ValidationStatus.PASSED.value if passed else ValidationStatus.FAILED.value,
             "matches": matches,
             "mismatches": len(mismatches),
             "mismatch_details": mismatches,
@@ -149,7 +149,7 @@ def test_det_001(executor, conn) -> Dict[str, Any]:
     
     except Exception as e:
         return {
-            "status": TestStatus.FAILED.value,
+            "status": ValidationStatus.FAILED.value,
             "error": str(e)
         }
     finally:
@@ -195,14 +195,14 @@ def test_det_002(executor, conn) -> Dict[str, Any]:
         passed = mismatches == 0
         
         return {
-            "status": TestStatus.PASSED.value if passed else TestStatus.FAILED.value,
+            "status": ValidationStatus.PASSED.value if passed else ValidationStatus.FAILED.value,
             "matches": matches,
             "mismatches": mismatches
         }
     
     except Exception as e:
         return {
-            "status": TestStatus.FAILED.value,
+            "status": ValidationStatus.FAILED.value,
             "error": str(e)
         }
     finally:
@@ -245,14 +245,14 @@ def test_det_003(executor, conn) -> Dict[str, Any]:
         passed = mismatches == 0
         
         return {
-            "status": TestStatus.PASSED.value if passed else TestStatus.FAILED.value,
+            "status": ValidationStatus.PASSED.value if passed else ValidationStatus.FAILED.value,
             "matches": matches,
             "mismatches": mismatches
         }
     
     except Exception as e:
         return {
-            "status": TestStatus.FAILED.value,
+            "status": ValidationStatus.FAILED.value,
             "error": str(e)
         }
     finally:
@@ -287,7 +287,7 @@ def test_det_004(executor, conn) -> Dict[str, Any]:
         passed = run1_summary_hash == run2_summary_hash
         
         return {
-            "status": TestStatus.PASSED.value if passed else TestStatus.FAILED.value,
+            "status": ValidationStatus.PASSED.value if passed else ValidationStatus.FAILED.value,
             "run1_hash": run1_summary_hash,
             "run2_hash": run2_summary_hash,
             "match": passed
@@ -295,7 +295,7 @@ def test_det_004(executor, conn) -> Dict[str, Any]:
     
     except Exception as e:
         return {
-            "status": TestStatus.FAILED.value,
+            "status": ValidationStatus.FAILED.value,
             "error": str(e)
         }
     finally:
@@ -338,7 +338,7 @@ def test_det_005(executor, conn) -> Dict[str, Any]:
         passed = schema_match and semantic_match and no_forbidden
         
         return {
-            "status": TestStatus.PASSED.value if passed else TestStatus.FAILED.value,
+            "status": ValidationStatus.PASSED.value if passed else ValidationStatus.FAILED.value,
             "schema_match": schema_match,
             "semantic_match": semantic_match,
             "no_forbidden_language": no_forbidden
@@ -346,7 +346,7 @@ def test_det_005(executor, conn) -> Dict[str, Any]:
     
     except Exception as e:
         return {
-            "status": TestStatus.FAILED.value,
+            "status": ValidationStatus.FAILED.value,
             "error": str(e)
         }
     finally:
@@ -482,7 +482,7 @@ def test_det_006(executor, conn) -> Dict[str, Any]:
         )
         
         return {
-            "status": TestStatus.PASSED.value if passed else TestStatus.FAILED.value,
+            "status": ValidationStatus.PASSED.value if passed else ValidationStatus.FAILED.value,
             "distinct_identities_created": distinct_identities_created,
             "run1_unique_identities": run1_unique_identities,
             "run2_unique_identities": run2_unique_identities,
@@ -496,7 +496,7 @@ def test_det_006(executor, conn) -> Dict[str, Any]:
     
     except Exception as e:
         return {
-            "status": TestStatus.FAILED.value,
+            "status": ValidationStatus.FAILED.value,
             "error": str(e)
         }
     finally:

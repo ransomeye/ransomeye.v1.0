@@ -22,6 +22,8 @@ psycopg2-binary,2.9.9,"ui-backend,policy-engine,ai-core,correlation-engine,inges
 fastapi-cors,0.0.6,ui-backend,python,MIT,permissive,dynamic,core,low,CORS middleware
 pydantic,2.5.0,"ui-backend,policy-engine,ai-core,correlation-engine,ingest",python,MIT,permissive,dynamic,core,low,Data validation
 pydantic-settings,2.1.0,"ui-backend,policy-engine,ai-core,correlation-engine,ingest",python,MIT,permissive,dynamic,core,low,Settings management
+PyJWT,2.10.1,ui-backend,python,MIT,permissive,dynamic,core,low,"JWT library. Source: https://pypi.org/project/PyJWT/2.10.1/ (license metadata), https://github.com/jpadilla/pyjwt/blob/2.10.1/LICENSE (license text)."
+bcrypt,4.2.1,ui-backend,python,Apache-2.0,permissive,dynamic,core,low,"Password hashing library. Source: https://pypi.org/project/bcrypt/4.2.1/ (license metadata), https://github.com/pyca/bcrypt/blob/4.2.1/LICENSE (license text)."
 cryptography,41.0.7,policy-engine,python,Apache-2.0,permissive,dynamic,core,low,Cryptographic primitives
 python-dateutil,2.8.2,"policy-engine,ai-core,ingest",python,Apache-2.0,permissive,dynamic,core,low,Date/time utilities
 uuid,1.30,"ai-core,correlation-engine",python,BSD-2-Clause,permissive,dynamic,core,low,Python UUID generation library (distinct from Rust uuid crate)

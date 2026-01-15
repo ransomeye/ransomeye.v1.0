@@ -1,21 +1,26 @@
 #!/usr/bin/env python3
 """
-RansomEye v1.0 SOC UI Backend (Phase 8 - Read-Only)
-AUTHORITATIVE: Minimal read-only backend for SOC UI
-Python 3.10+ only - aligns with Phase 8 requirements
+RansomEye v1.0 SOC UI Backend (Phase 4 - Authenticated + RBAC)
+AUTHORITATIVE: Production-grade UI backend with JWT auth and RBAC enforcement
+Python 3.10+ only
 """
 
 import os
 import sys
 import json
 import re
+import uuid
+from functools import wraps
+from datetime import datetime, timezone
 import psycopg2
 from psycopg2 import pool
 from typing import List, Dict, Any, Optional, Tuple
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.security import HTTPAuthorizationCredentials
+from pydantic import BaseModel
 import uvicorn
 
 # Add common utilities to path (Phase 10 requirement)
@@ -32,6 +37,7 @@ try:
                                    execute_read_operation, validate_connection_health,
                                    enforce_read_only_connection)
     from common.resource.safety import check_file_descriptors
+    from common.security.secrets import validate_signing_key
     _common_available = True
     _common_db_safety_available = True
     _common_resource_safety_available = True
@@ -78,7 +84,7 @@ except ImportError:
         print(f"STARTUP_ERROR: {m}", file=sys.stderr)
         sys.exit(2)
 
-# Phase 10 requirement: Centralized configuration
+# Phase 4 requirement: Centralized configuration (auth + RBAC)
 if _common_available:
     config_loader = ConfigLoader('ui-backend')
     config_loader.require('RANSOMEYE_DB_PASSWORD', description='Database password (security-sensitive)')
@@ -87,7 +93,17 @@ if _common_available:
     config_loader.optional('RANSOMEYE_DB_NAME', default='ransomeye')
     config_loader.require('RANSOMEYE_DB_USER', description='Database user (PHASE 1: per-service user required, no defaults)')
     config_loader.optional('RANSOMEYE_UI_PORT', default='8080', validator=validate_port)
+    config_loader.optional('RANSOMEYE_UI_BIND_ADDRESS', default='127.0.0.1')
     config_loader.optional('RANSOMEYE_POLICY_DIR', default='/tmp/ransomeye/policy')
+    config_loader.optional('RANSOMEYE_UI_CORS_ALLOW_ORIGINS', default='http://127.0.0.1:5173,http://localhost:5173')
+    config_loader.optional('RANSOMEYE_UI_CORS_ALLOW_METHODS', default='GET,POST')
+    config_loader.optional('RANSOMEYE_UI_COOKIE_SECURE', default='true')
+    config_loader.optional('RANSOMEYE_UI_COOKIE_SAMESITE', default='strict')
+    config_loader.optional('RANSOMEYE_UI_ACCESS_TOKEN_TTL_SECONDS', default='900', validator=lambda v: int(v))
+    config_loader.optional('RANSOMEYE_UI_REFRESH_TOKEN_TTL_SECONDS', default='604800', validator=lambda v: int(v))
+    config_loader.require('RANSOMEYE_UI_JWT_SIGNING_KEY', description='JWT signing key (no defaults allowed)')
+    config_loader.require('RANSOMEYE_AUDIT_LEDGER_PATH', description='Audit ledger path (auth decisions)')
+    config_loader.require('RANSOMEYE_AUDIT_LEDGER_KEY_DIR', description='Audit ledger signing key directory')
     config_loader.optional('RANSOMEYE_DB_POOL_MIN', default='2', validator=lambda v: int(v))
     config_loader.optional('RANSOMEYE_DB_POOL_MAX', default='10', validator=lambda v: int(v))
     try:
@@ -107,6 +123,26 @@ else:
 
 logger = setup_logging('ui-backend')
 shutdown_handler = ShutdownHandler('ui-backend', cleanup_func=lambda: _cleanup())
+
+# JWT config validation (fail-closed)
+if _common_available:
+    _jwt_signing_key = validate_signing_key('RANSOMEYE_UI_JWT_SIGNING_KEY', min_length=32, fail_on_default=True)
+else:
+    _jwt_signing_key = os.getenv('RANSOMEYE_UI_JWT_SIGNING_KEY')
+    if not _jwt_signing_key:
+        exit_config_error('RANSOMEYE_UI_JWT_SIGNING_KEY required')
+    if len(_jwt_signing_key) < 32:
+        exit_config_error('RANSOMEYE_UI_JWT_SIGNING_KEY too short (minimum 32 characters)')
+
+_jwt_issuer = 'ransomeye-ui'
+_jwt_audience = 'ransomeye-ui'
+
+# Audit ledger configuration
+_audit_ledger_path = config.get('RANSOMEYE_AUDIT_LEDGER_PATH', os.getenv('RANSOMEYE_AUDIT_LEDGER_PATH'))
+_audit_ledger_key_dir = config.get('RANSOMEYE_AUDIT_LEDGER_KEY_DIR', os.getenv('RANSOMEYE_AUDIT_LEDGER_KEY_DIR'))
+
+if not _audit_ledger_path or not _audit_ledger_key_dir:
+    exit_config_error("RANSOMEYE_AUDIT_LEDGER_PATH and RANSOMEYE_AUDIT_LEDGER_KEY_DIR are required")
 
 # Database connection pool (Phase 10 requirement: Resource safety)
 db_pool: Optional[pool.ThreadedConnectionPool] = None
@@ -176,60 +212,246 @@ def _cleanup():
                 safe_error = str(e)
             logger.error(f"Error closing database pool: {safe_error}")
 
-# Contract compliance: No async, no background threads (Phase 8 requirements)
+# Contract compliance: No async, no background threads (read-only UI)
 # Synchronous read-only operations only
 
 app = FastAPI(title="RansomEye SOC UI Backend", version="1.0.0")
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
-# Phase 8 requirement: CORS support for frontend
+def _parse_cors_origins(raw: str) -> List[str]:
+    origins = [o.strip() for o in raw.split(",") if o.strip()]
+    if not origins:
+        exit_config_error("RANSOMEYE_UI_CORS_ALLOW_ORIGINS must be a non-empty allowlist")
+    if any(origin == "*" for origin in origins):
+        exit_config_error("CORS wildcard origins are not allowed; use explicit allowlist")
+    return origins
+
+cors_origins = _parse_cors_origins(config.get('RANSOMEYE_UI_CORS_ALLOW_ORIGINS', ''))
+cors_methods = [m.strip().upper() for m in config.get('RANSOMEYE_UI_CORS_ALLOW_METHODS', 'GET,POST').split(",") if m.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Phase 8 minimal: Allow all origins (restrict in production)
+    allow_origins=cors_origins,
     allow_credentials=True,
-    allow_methods=["GET"],  # Phase 8 requirement: Read-only (GET only)
-    allow_headers=["*"],
+    allow_methods=cors_methods,
+    allow_headers=["Authorization", "Content-Type", "Accept"],
 )
 
-# PHASE 5: RBAC Authentication (if available)
-_rbac_available = False
-_rbac_auth = None
+# RBAC + Auth initialization (fail-closed)
 try:
     from rbac.middleware.fastapi_auth import RBACAuth
     from rbac.api.rbac_api import RBACAPI
-    _rbac_available = True
-    # Initialize RBAC (if available)
-    # Note: In production, RBAC should be properly initialized with database connection
-    # For now, this is a placeholder that will be integrated when RBAC is fully configured
-    logger.info("PHASE 5: RBAC middleware available (not yet integrated)")
-except ImportError:
-    logger.warning("PHASE 5: RBAC middleware not available - endpoints are public (restrict in production)")
+    _audit_ledger_path_mod = os.path.join(_project_root, 'audit-ledger')
+    if os.path.exists(_audit_ledger_path_mod) and _audit_ledger_path_mod not in sys.path:
+        sys.path.insert(0, _audit_ledger_path_mod)
+    from api import AuditLedger
+    from auth import (
+        create_access_token,
+        create_refresh_token,
+        decode_token,
+        hash_token,
+        utc_now
+    )
+except ImportError as exc:
+    logger.fatal(f"RBAC/Auth imports failed: {exc}")
+    exit_startup_error("RBAC/Auth dependencies missing")
 
-# PHASE 5: RBAC permission decorator helper
-def require_ui_permission(permission: str):
+rbac_api = None
+rbac_auth = None
+audit_ledger = None
+
+def _init_rbac_backend() -> None:
+    global rbac_api, rbac_auth, audit_ledger
+    if os.getenv("RANSOMEYE_RBAC_FORCE_UNAVAILABLE") == "1":
+        raise RuntimeError("RBAC backend forced unavailable")
+
+    db_params = {
+        "host": config.get('RANSOMEYE_DB_HOST', 'localhost'),
+        "port": int(config.get('RANSOMEYE_DB_PORT', 5432)),
+        "database": config.get('RANSOMEYE_DB_NAME', 'ransomeye'),
+        "user": config.get('RANSOMEYE_DB_USER'),
+        "password": config_loader.get_secret('RANSOMEYE_DB_PASSWORD')
+    }
+
+    audit_ledger = AuditLedger(
+        ledger_path=validate_path(_audit_ledger_path, must_exist=False),
+        key_dir=validate_path(_audit_ledger_key_dir, must_exist=True)
+    )
+
+    rbac_api = RBACAPI(
+        db_conn_params=db_params,
+        ledger_path=validate_path(_audit_ledger_path, must_exist=False),
+        ledger_key_dir=validate_path(_audit_ledger_key_dir, must_exist=True)
+    )
+
+    rbac_auth = RBACAuth(
+        rbac_api=rbac_api,
+        jwt_signing_key=_jwt_signing_key.decode("utf-8") if isinstance(_jwt_signing_key, (bytes, bytearray)) else _jwt_signing_key,
+        jwt_issuer=_jwt_issuer,
+        jwt_audience=_jwt_audience,
+        logger=logger,
+        auth_audit_logger=_audit_auth_decision
+    )
+
+    _validate_rbac_tables()
+    _validate_role_permissions()
+
+def _validate_rbac_tables() -> None:
+    try:
+        conn = psycopg2.connect(
+            host=config.get('RANSOMEYE_DB_HOST', 'localhost'),
+            port=config.get('RANSOMEYE_DB_PORT', 5432),
+            database=config.get('RANSOMEYE_DB_NAME', 'ransomeye'),
+            user=config.get('RANSOMEYE_DB_USER'),
+            password=config_loader.get_secret('RANSOMEYE_DB_PASSWORD')
+        )
+        cur = conn.cursor()
+        required_tables = [
+            "rbac_users",
+            "rbac_user_roles",
+            "rbac_role_permissions",
+            "rbac_permission_audit",
+            "rbac_refresh_tokens"
+        ]
+        cur.execute("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")
+        existing = {row[0] for row in cur.fetchall()}
+        missing = [t for t in required_tables if t not in existing]
+        cur.close()
+        conn.close()
+        if missing:
+            raise RuntimeError(f"Missing RBAC tables: {', '.join(missing)}")
+    except Exception as exc:
+        raise RuntimeError(f"RBAC schema validation failed: {exc}") from exc
+
+def _validate_role_permissions() -> None:
+    try:
+        conn = psycopg2.connect(
+            host=config.get('RANSOMEYE_DB_HOST', 'localhost'),
+            port=config.get('RANSOMEYE_DB_PORT', 5432),
+            database=config.get('RANSOMEYE_DB_NAME', 'ransomeye'),
+            user=config.get('RANSOMEYE_DB_USER'),
+            password=config_loader.get_secret('RANSOMEYE_DB_PASSWORD')
+        )
+        cur = conn.cursor()
+        cur.execute("SELECT COUNT(*) FROM rbac_role_permissions")
+        count = cur.fetchone()[0]
+        cur.close()
+        conn.close()
+        if count <= 0:
+            raise RuntimeError("RBAC role-permission mappings not initialized")
+    except Exception as exc:
+        raise RuntimeError(f"RBAC role permission validation failed: {exc}") from exc
+
+def _audit_auth_decision(entry: Dict[str, Any]) -> None:
+    if not audit_ledger:
+        return
+    audit_ledger.append(
+        component="ui-backend",
+        component_instance_id="ui-auth",
+        action_type="ui_auth_decision",
+        subject={"type": "auth", "id": entry.get("user_id", "unknown")},
+        actor={"type": "request", "identifier": entry.get("path", "unknown")},
+        payload=entry
+    )
+
+def require_ui_permission(permission: str, resource_type: str = "ui"):
     """
-    PHASE 5: Decorator to require UI permission.
-    
-    Args:
-        permission: Permission name (e.g., 'ui:read', 'ui:write')
-    
-    Returns:
-        Decorator function
+    Decorator to enforce UI permission via RBAC.
     """
     def decorator(func):
+        @wraps(func)
         async def wrapper(*args, **kwargs):
-            # PHASE 5: RBAC enforcement (if available)
-            if _rbac_available and _rbac_auth:
-                # TODO: Extract user from request and check permission
-                # For now, this is a placeholder
-                # In production, use: user = await _rbac_auth.get_current_user(request)
-                # has_permission = _rbac_auth.permission_checker.check_permission(user['user_id'], permission, 'ui', None)
-                # if not has_permission:
-                #     raise HTTPException(status_code=403, detail={"error_code": "PERMISSION_DENIED"})
-                pass
+            request = kwargs.get("request")
+            if request is None:
+                for arg in args:
+                    if isinstance(arg, Request):
+                        request = arg
+                        break
+            if not rbac_auth:
+                raise HTTPException(status_code=503, detail={"error_code": "RBAC_UNAVAILABLE"})
+            current_user = getattr(request.state, "user", None)
+            if not current_user or not current_user.get("user_id"):
+                raise HTTPException(status_code=401, detail={"error_code": "AUTH_REQUIRED"})
+            user_id = current_user["user_id"]
+            try:
+                allowed = rbac_auth.permission_checker.check_permission(
+                    user_id=user_id,
+                    permission=permission,
+                    resource_type=resource_type,
+                    resource_id=None
+                )
+                if not allowed:
+                    raise HTTPException(status_code=403, detail={"error_code": "PERMISSION_DENIED"})
+            except HTTPException:
+                raise
+            except Exception as exc:
+                logger.error(f"RBAC check failed: {exc}")
+                raise HTTPException(status_code=503, detail={"error_code": "RBAC_UNAVAILABLE"})
             return await func(*args, **kwargs)
         return wrapper
     return decorator
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+def _cookie_secure() -> bool:
+    return str(config.get("RANSOMEYE_UI_COOKIE_SECURE", "true")).lower() == "true"
+
+
+def _cookie_samesite() -> str:
+    samesite = str(config.get("RANSOMEYE_UI_COOKIE_SAMESITE", "strict")).lower()
+    return samesite if samesite in ("strict", "lax", "none") else "strict"
+
+
+def _set_refresh_cookie(response: Response, token: str, max_age: int) -> None:
+    response.set_cookie(
+        key="ransomeye_refresh",
+        value=token,
+        httponly=True,
+        secure=_cookie_secure(),
+        samesite=_cookie_samesite(),
+        path="/auth",
+        max_age=max_age
+    )
+
+
+def _clear_refresh_cookie(response: Response) -> None:
+    response.set_cookie(
+        key="ransomeye_refresh",
+        value="",
+        httponly=True,
+        secure=_cookie_secure(),
+        samesite=_cookie_samesite(),
+        path="/auth",
+        max_age=0
+    )
+
+
+@app.middleware("http")
+async def _auth_middleware(request: Request, call_next):
+    if request.method == "OPTIONS":
+        return await call_next(request)
+    if request.url.path in ("/auth/login", "/auth/refresh"):
+        return await call_next(request)
+    if not rbac_auth:
+        return JSONResponse(status_code=503, content={"error_code": "RBAC_UNAVAILABLE"})
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.lower().startswith("bearer "):
+        return JSONResponse(status_code=401, content={"error_code": "AUTH_REQUIRED"})
+    token = auth_header.split(" ", 1)[1].strip()
+    credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
+
+    try:
+        current_user = await rbac_auth.get_current_user(request, credentials)
+    except HTTPException as exc:
+        return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+
+    request.state.user = current_user
+    return await call_next(request)
 
 # PHASE 5: Helper function to check if action requires warning
 def requires_operator_warning(evidence_quality: Optional[Dict[str, Any]], 
@@ -275,7 +497,8 @@ async def startup_event():
         # Resource safety: Check file descriptors at startup
         if _common_resource_safety_available:
             check_file_descriptors(logger)
-        
+
+        _init_rbac_backend()
         _init_db_pool()
         logger.startup("UI backend started successfully")
     except Exception as e:
@@ -377,17 +600,290 @@ def query_view(conn, view_name: str, where_column: Optional[str] = None, where_v
         return _do_query()
 
 
+@app.post("/auth/login")
+async def login(request: Request, payload: LoginRequest):
+    """
+    Authenticate user and issue access + refresh tokens.
+    """
+    if not rbac_api:
+        raise HTTPException(status_code=503, detail={"error_code": "RBAC_UNAVAILABLE"})
+
+    try:
+        user = rbac_api.authenticate_user(payload.username, payload.password)
+    except Exception as exc:
+        _audit_auth_decision({
+            "decision": "DENY",
+            "reason": "rbac_auth_error",
+            "username": payload.username,
+            "path": "/auth/login",
+            "timestamp": utc_now().isoformat()
+        })
+        raise HTTPException(status_code=503, detail={"error_code": "RBAC_UNAVAILABLE"}) from exc
+
+    if not user:
+        _audit_auth_decision({
+            "decision": "DENY",
+            "reason": "invalid_credentials",
+            "username": payload.username,
+            "path": "/auth/login",
+            "timestamp": utc_now().isoformat()
+        })
+        raise HTTPException(status_code=401, detail={"error_code": "AUTH_FAILED"})
+    if not user.get("role"):
+        _audit_auth_decision({
+            "decision": "DENY",
+            "reason": "missing_role_assignment",
+            "user_id": user.get("user_id"),
+            "path": "/auth/login",
+            "timestamp": utc_now().isoformat()
+        })
+        raise HTTPException(status_code=403, detail={"error_code": "ROLE_REQUIRED"})
+
+    access_ttl = int(config.get("RANSOMEYE_UI_ACCESS_TOKEN_TTL_SECONDS", 900))
+    refresh_ttl = int(config.get("RANSOMEYE_UI_REFRESH_TOKEN_TTL_SECONDS", 604800))
+    token_id = str(uuid.uuid4())
+
+    access_token, access_exp = create_access_token(
+        user=user,
+        signing_key=_jwt_signing_key.decode("utf-8") if isinstance(_jwt_signing_key, (bytes, bytearray)) else _jwt_signing_key,
+        issuer=_jwt_issuer,
+        audience=_jwt_audience,
+        ttl_seconds=access_ttl
+    )
+    refresh_token, refresh_exp = create_refresh_token(
+        user_id=user["user_id"],
+        token_id=token_id,
+        signing_key=_jwt_signing_key.decode("utf-8") if isinstance(_jwt_signing_key, (bytes, bytearray)) else _jwt_signing_key,
+        issuer=_jwt_issuer,
+        audience=_jwt_audience,
+        ttl_seconds=refresh_ttl
+    )
+
+    rbac_api.store_refresh_token(
+        token_id=token_id,
+        user_id=user["user_id"],
+        token_hash=hash_token(refresh_token),
+        expires_at=refresh_exp,
+        user_agent=request.headers.get("User-Agent"),
+        ip_address=request.client.host if request.client else None
+    )
+
+    response = JSONResponse({
+        "access_token": access_token,
+        "token_type": "Bearer",
+        "expires_in": access_ttl,
+        "user": {
+            "user_id": user["user_id"],
+            "username": user["username"],
+            "role": user.get("role")
+        }
+    })
+    _set_refresh_cookie(response, refresh_token, refresh_ttl)
+
+    _audit_auth_decision({
+        "decision": "ALLOW",
+        "reason": "login_success",
+        "user_id": user["user_id"],
+        "path": "/auth/login",
+        "timestamp": utc_now().isoformat()
+    })
+    return response
+
+
+@app.post("/auth/refresh")
+async def refresh(request: Request):
+    """
+    Refresh access token using HttpOnly refresh cookie (rotation enforced).
+    """
+    if not rbac_api:
+        raise HTTPException(status_code=503, detail={"error_code": "RBAC_UNAVAILABLE"})
+
+    refresh_cookie = request.cookies.get("ransomeye_refresh")
+    if not refresh_cookie:
+        _audit_auth_decision({
+            "decision": "DENY",
+            "reason": "missing_refresh_cookie",
+            "path": "/auth/refresh",
+            "timestamp": utc_now().isoformat()
+        })
+        raise HTTPException(status_code=401, detail={"error_code": "AUTH_REQUIRED"})
+
+    try:
+        payload = decode_token(
+            refresh_cookie,
+            signing_key=_jwt_signing_key.decode("utf-8") if isinstance(_jwt_signing_key, (bytes, bytearray)) else _jwt_signing_key,
+            issuer=_jwt_issuer,
+            audience=_jwt_audience
+        )
+    except Exception:
+        _audit_auth_decision({
+            "decision": "DENY",
+            "reason": "invalid_refresh_token",
+            "path": "/auth/refresh",
+            "timestamp": utc_now().isoformat()
+        })
+        raise HTTPException(status_code=401, detail={"error_code": "INVALID_TOKEN"})
+
+    if payload.get("token_type") != "refresh":
+        _audit_auth_decision({
+            "decision": "DENY",
+            "reason": "invalid_token_type",
+            "path": "/auth/refresh",
+            "timestamp": utc_now().isoformat()
+        })
+        raise HTTPException(status_code=401, detail={"error_code": "INVALID_TOKEN_TYPE"})
+
+    token_id = payload.get("jti")
+    user_id = payload.get("sub")
+    if not token_id or not user_id:
+        _audit_auth_decision({
+            "decision": "DENY",
+            "reason": "missing_refresh_claims",
+            "path": "/auth/refresh",
+            "timestamp": utc_now().isoformat()
+        })
+        raise HTTPException(status_code=401, detail={"error_code": "INVALID_TOKEN"})
+
+    token_record = rbac_api.validate_refresh_token(token_id, hash_token(refresh_cookie))
+    if not token_record:
+        _audit_auth_decision({
+            "decision": "DENY",
+            "reason": "refresh_token_revoked",
+            "user_id": user_id,
+            "path": "/auth/refresh",
+            "timestamp": utc_now().isoformat()
+        })
+        raise HTTPException(status_code=401, detail={"error_code": "INVALID_TOKEN"})
+
+    # Rotate refresh token
+    rbac_api.revoke_refresh_token(token_id, reason="rotated")
+    new_token_id = str(uuid.uuid4())
+    refresh_ttl = int(config.get("RANSOMEYE_UI_REFRESH_TOKEN_TTL_SECONDS", 604800))
+    access_ttl = int(config.get("RANSOMEYE_UI_ACCESS_TOKEN_TTL_SECONDS", 900))
+
+    new_refresh, refresh_exp = create_refresh_token(
+        user_id=user_id,
+        token_id=new_token_id,
+        signing_key=_jwt_signing_key.decode("utf-8") if isinstance(_jwt_signing_key, (bytes, bytearray)) else _jwt_signing_key,
+        issuer=_jwt_issuer,
+        audience=_jwt_audience,
+        ttl_seconds=refresh_ttl
+    )
+    rbac_api.store_refresh_token(
+        token_id=new_token_id,
+        user_id=user_id,
+        token_hash=hash_token(new_refresh),
+        expires_at=refresh_exp,
+        user_agent=request.headers.get("User-Agent"),
+        ip_address=request.client.host if request.client else None
+    )
+
+    user = rbac_api.get_user_by_id(user_id)
+    if not user:
+        raise HTTPException(status_code=401, detail={"error_code": "AUTH_FAILED"})
+    user_role = rbac_api.get_user_role(user_id)
+    if not user_role:
+        raise HTTPException(status_code=403, detail={"error_code": "ROLE_REQUIRED"})
+
+    access_token, _ = create_access_token(
+        user={**user, "role": user_role},
+        signing_key=_jwt_signing_key.decode("utf-8") if isinstance(_jwt_signing_key, (bytes, bytearray)) else _jwt_signing_key,
+        issuer=_jwt_issuer,
+        audience=_jwt_audience,
+        ttl_seconds=access_ttl
+    )
+
+    response = JSONResponse({
+        "access_token": access_token,
+        "token_type": "Bearer",
+        "expires_in": access_ttl
+    })
+    _set_refresh_cookie(response, new_refresh, refresh_ttl)
+    _audit_auth_decision({
+        "decision": "ALLOW",
+        "reason": "refresh_success",
+        "user_id": user_id,
+        "path": "/auth/refresh",
+        "timestamp": utc_now().isoformat()
+    })
+    return response
+
+
+@app.post("/auth/logout")
+@require_ui_permission("incident:view_all", resource_type="incident")
+async def logout(request: Request):
+    """
+    Logout current session (refresh token revoked).
+    """
+    if not rbac_api:
+        raise HTTPException(status_code=503, detail={"error_code": "RBAC_UNAVAILABLE"})
+
+    current_user = getattr(request.state, "user", {})
+    user_id = current_user.get("user_id")
+
+    refresh_cookie = request.cookies.get("ransomeye_refresh")
+    if refresh_cookie:
+        try:
+            payload = decode_token(
+                refresh_cookie,
+                signing_key=_jwt_signing_key.decode("utf-8") if isinstance(_jwt_signing_key, (bytes, bytearray)) else _jwt_signing_key,
+                issuer=_jwt_issuer,
+                audience=_jwt_audience
+            )
+            token_id = payload.get("jti")
+            if token_id:
+                rbac_api.revoke_refresh_token(token_id, reason="logout")
+        except Exception:
+            if user_id:
+                rbac_api.revoke_refresh_tokens_for_user(user_id, reason="logout")
+    elif user_id:
+        rbac_api.revoke_refresh_tokens_for_user(user_id, reason="logout")
+
+    response = JSONResponse({"status": "logged_out"})
+    _clear_refresh_cookie(response)
+    if user_id:
+        _audit_auth_decision({
+            "decision": "ALLOW",
+            "reason": "logout_success",
+            "user_id": user_id,
+            "path": "/auth/logout",
+            "timestamp": utc_now().isoformat()
+        })
+    return response
+
+
+@app.get("/auth/me")
+@require_ui_permission("incident:view_all", resource_type="incident")
+async def auth_me(request: Request):
+    current_user = getattr(request.state, "user", {})
+    return {"user": current_user}
+
+
+@app.get("/auth/permissions")
+@require_ui_permission("incident:view_all", resource_type="incident")
+async def auth_permissions(request: Request):
+    current_user = getattr(request.state, "user", {})
+    user_id = current_user.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail={"error_code": "AUTH_REQUIRED"})
+    if not rbac_auth:
+        raise HTTPException(status_code=503, detail={"error_code": "RBAC_UNAVAILABLE"})
+    return rbac_auth.get_user_permissions(user_id)
+
+
 @app.get("/")
+@require_ui_permission("system:view_logs", resource_type="system")
 async def root():
     """Root endpoint (health check)."""
     return {"status": "ok", "service": "RansomEye SOC UI Backend", "read_only": True}
 
 
 @app.get("/api/incidents")
-async def get_active_incidents():
+@require_ui_permission("incident:view_all", resource_type="incident")
+async def get_active_incidents(request: Request):
     """
     Get active incidents.
-    Phase 8 requirement: Read-only, queries v_active_incidents view only
+    Read-only requirement: queries v_active_incidents view only
     Phase 10 requirement: Proper error handling and resource cleanup
     PHASE 5: RBAC enforcement - requires ui:read permission (if RBAC available)
     """
@@ -400,7 +896,7 @@ async def get_active_incidents():
     
     conn = None
     try:
-        # Phase 8 requirement: Query view only, not base table
+        # Read-only requirement: Query view only, not base table
         conn = get_db_connection()
         incidents = query_view(conn, "v_active_incidents")
         
@@ -451,10 +947,11 @@ async def get_active_incidents():
 
 
 @app.get("/api/incidents/{incident_id}")
-async def get_incident_detail(incident_id: str):
+@require_ui_permission("incident:view", resource_type="incident")
+async def get_incident_detail(request: Request, incident_id: str):
     """
     Get incident detail (including timeline, evidence, AI insights).
-    Phase 8 requirement: Read-only, queries views only
+    Read-only requirement: queries views only
     Security: Validates incident_id format before processing.
     PHASE 5: RBAC enforcement - requires ui:read permission (if RBAC available)
     PHASE 5: Returns evidence quality indicators and separates confidence from certainty
@@ -478,7 +975,7 @@ async def get_incident_detail(incident_id: str):
     
     conn = None
     try:
-        # Phase 8 requirement: Query view only, not base table
+        # Read-only requirement: Query view only, not base table
         conn = get_db_connection()
         incident_detail = query_view(conn, "v_incident_detail", "incident_id", incident_id)
         
@@ -487,13 +984,13 @@ async def get_incident_detail(incident_id: str):
         
         incident = incident_detail[0]
         
-        # Phase 8 requirement: Get timeline from view
+        # Read-only requirement: Get timeline from view
         timeline = query_view(conn, "v_incident_timeline", "incident_id", incident_id)
         
-        # Phase 8 requirement: Get evidence summary from view
+        # Read-only requirement: Get evidence summary from view
         evidence_summary = query_view(conn, "v_incident_evidence_summary", "incident_id", incident_id)
         
-        # Phase 8 requirement: Get AI insights from view
+        # Read-only requirement: Get AI insights from view
         ai_insights = query_view(conn, "v_ai_insights", "incident_id", incident_id)
         
         # PHASE 5: Get evidence quality indicators
@@ -505,7 +1002,7 @@ async def get_incident_detail(incident_id: str):
         # PHASE 5: Get contradiction information
         contradictions = query_view(conn, "v_incident_contradictions", "incident_id", incident_id)
         
-        # Phase 8 requirement: Get policy recommendations (file-based for Phase 8 minimal)
+        # Read-only requirement: Get policy recommendations (file-based when DB empty)
         policy_recommendations = []
         policy_dir = config.get("RANSOMEYE_POLICY_DIR", "/tmp/ransomeye/policy")
         policy_file = os.path.join(policy_dir, f"policy_decision_{incident_id}.json")
@@ -577,10 +1074,11 @@ async def get_incident_detail(incident_id: str):
 
 
 @app.get("/api/incidents/{incident_id}/timeline")
-async def get_incident_timeline(incident_id: str):
+@require_ui_permission("incident:view", resource_type="incident")
+async def get_incident_timeline(request: Request, incident_id: str):
     """
     Get incident timeline (stage transitions).
-    Phase 8 requirement: Read-only, queries v_incident_timeline view only
+    Read-only requirement: queries v_incident_timeline view only
     Security: Validates incident_id format before processing.
     PHASE 5: RBAC enforcement - requires ui:read permission (if RBAC available)
     """
@@ -603,7 +1101,7 @@ async def get_incident_timeline(incident_id: str):
     
     conn = None
     try:
-        # Phase 8 requirement: Query view only, not base table
+        # Read-only requirement: Query view only, not base table
         conn = get_db_connection()
         timeline = query_view(conn, "v_incident_timeline", "incident_id", incident_id)
         return {"timeline": timeline}
@@ -621,15 +1119,27 @@ async def get_incident_timeline(incident_id: str):
         if conn:
             put_db_connection(conn)
 
+_last_successful_cycle = None
+_failure_reason = None
+
 @app.get("/health")
-async def health_check():
+@require_ui_permission("system:view_logs", resource_type="system")
+async def health_check(request: Request):
     """Health check endpoint."""
     try:
         conn = get_db_connection()
         try:
             with conn.cursor() as cur:
                 cur.execute("SELECT 1")
-            return {"status": "healthy", "component": "ui-backend"}
+            global _last_successful_cycle, _failure_reason
+            _last_successful_cycle = datetime.now(timezone.utc).isoformat()
+            _failure_reason = None
+            return {
+                "status": "healthy",
+                "component": "ui-backend",
+                "last_successful_cycle": _last_successful_cycle,
+                "failure_reason": _failure_reason
+            }
         finally:
             put_db_connection(conn)
     except Exception as e:
@@ -639,15 +1149,45 @@ async def health_check():
             safe_error = sanitize_exception(e)
         except ImportError:
             safe_error = str(e)
+        global _failure_reason
+        _failure_reason = safe_error
         logger.error(f"Health check failed: {safe_error}")
         # Security: Never expose full error details in response (avoid secret leakage)
-        raise HTTPException(status_code=503, detail={"status": "unhealthy"})
+        raise HTTPException(status_code=503, detail={
+            "status": "unhealthy",
+            "last_successful_cycle": _last_successful_cycle,
+            "failure_reason": _failure_reason
+        })
+
+def _assert_supervised():
+    if os.getenv("RANSOMEYE_SUPERVISED") != "1":
+        error_msg = "UI Backend must be started by Core orchestrator"
+        logger.fatal(error_msg)
+        exit_startup_error(error_msg)
+    core_pid = os.getenv("RANSOMEYE_CORE_PID")
+    core_token = os.getenv("RANSOMEYE_CORE_TOKEN")
+    if not core_pid or not core_token:
+        error_msg = "UI Backend missing Core supervision metadata"
+        logger.fatal(error_msg)
+        exit_startup_error(error_msg)
+    try:
+        uuid.UUID(core_token)
+    except Exception:
+        error_msg = "UI Backend invalid Core token"
+        logger.fatal(error_msg)
+        exit_startup_error(error_msg)
+    if os.getppid() != int(core_pid):
+        error_msg = "UI Backend parent PID mismatch"
+        logger.fatal(error_msg)
+        exit_startup_error(error_msg)
 
 if __name__ == "__main__":
     try:
+        _assert_supervised()
         port = int(config.get('RANSOMEYE_UI_PORT', 8080))
-        logger.startup(f"Starting UI backend on port {port}")
-        uvicorn.run(app, host="0.0.0.0", port=port, log_config=None)
+        bind_address = config.get('RANSOMEYE_UI_BIND_ADDRESS', '127.0.0.1')
+        logger.startup(f"Starting UI backend on {bind_address}:{port}")
+        uvicorn.run(app, host=bind_address, port=port, log_config=None)
     except KeyboardInterrupt:
         logger.shutdown("Received interrupt, shutting down")
         shutdown_handler.exit(ExitCode.SUCCESS)

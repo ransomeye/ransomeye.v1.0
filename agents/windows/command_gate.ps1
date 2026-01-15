@@ -163,7 +163,7 @@ function Test-CommandSignature {
     )
     
     try {
-        $Result = & python $PythonArgs 2>&1
+        $Result = & python3 $PythonArgs 2>&1
         $ExitCode = $LASTEXITCODE
         
         if ($ExitCode -ne 0) {

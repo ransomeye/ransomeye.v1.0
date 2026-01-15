@@ -9,7 +9,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Dict, Any
 
-from validation.harness.phase_c_executor import TestStatus
+from validation.harness.phase_c_executor import ValidationStatus
 from validation.harness.test_helpers import get_test_db_connection, clean_database
 
 
@@ -45,7 +45,7 @@ def execute_track_2_replay(executor) -> Dict[str, Any]:
             print(f"\n[{test_id}] {test_name}")
             test_result = test_replay_identity(executor, conn, test_id)
             results["tests"][test_id] = test_result
-            if test_result["status"] != TestStatus.PASSED.value:
+            if test_result["status"] != ValidationStatus.PASSED.value:
                 results["all_passed"] = False
         
         # REP-B: Evolution Replay (semantic equivalence)
@@ -63,7 +63,7 @@ def execute_track_2_replay(executor) -> Dict[str, Any]:
             print(f"\n[{test_id}] {test_name}")
             test_result = test_replay_evolution(executor, conn, test_id)
             results["tests"][test_id] = test_result
-            if test_result["status"] != TestStatus.PASSED.value:
+            if test_result["status"] != ValidationStatus.PASSED.value:
                 results["all_passed"] = False
         
         # Save replay artifacts
@@ -116,7 +116,7 @@ def test_replay_identity(executor, conn, test_id: str) -> Dict[str, Any]:
         passed = len(mismatches) == 0 and len(baseline_hashes) == len(rebuilt_hashes)
         
         return {
-            "status": TestStatus.PASSED.value if passed else TestStatus.FAILED.value,
+            "status": ValidationStatus.PASSED.value if passed else ValidationStatus.FAILED.value,
             "matches": matches,
             "mismatches": len(mismatches),
             "mismatch_details": mismatches[:5]  # Limit details
@@ -124,7 +124,7 @@ def test_replay_identity(executor, conn, test_id: str) -> Dict[str, Any]:
     
     except Exception as e:
         return {
-            "status": TestStatus.FAILED.value,
+            "status": ValidationStatus.FAILED.value,
             "error": str(e)
         }
     finally:
@@ -166,7 +166,7 @@ def test_replay_evolution(executor, conn, test_id: str) -> Dict[str, Any]:
         passed = schema_match and semantic_match and no_forbidden
         
         return {
-            "status": TestStatus.PASSED.value if passed else TestStatus.FAILED.value,
+            "status": ValidationStatus.PASSED.value if passed else ValidationStatus.FAILED.value,
             "schema_match": schema_match,
             "semantic_match": semantic_match,
             "no_forbidden_language": no_forbidden
@@ -174,7 +174,7 @@ def test_replay_evolution(executor, conn, test_id: str) -> Dict[str, Any]:
     
     except Exception as e:
         return {
-            "status": TestStatus.FAILED.value,
+            "status": ValidationStatus.FAILED.value,
             "error": str(e)
         }
     finally:

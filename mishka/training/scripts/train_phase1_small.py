@@ -78,7 +78,7 @@ def main():
     # Run training
     try:
         subprocess.run([
-            sys.executable,
+            "python3",
             Path(__file__).parent / 'train_phase1.py',
             '--config', str(test_config)
         ], check=True)

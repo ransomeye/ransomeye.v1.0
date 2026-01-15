@@ -149,15 +149,14 @@ class ServiceIdentity:
         
         # Sign with Ed25519 private key
         try:
-            # Convert Ed25519 private key to bytes for PyJWT
+            # Convert Ed25519 private key to PEM for PyJWT
             private_key_bytes = self.private_key.private_bytes(
-                encoding=serialization.Encoding.Raw,
-                format=serialization.PrivateFormat.Raw,
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.PKCS8,
                 encryption_algorithm=serialization.NoEncryption()
             )
             
-            # PyJWT with Ed25519 requires the key in a specific format
-            # We'll use the private key bytes directly
+            # PyJWT with Ed25519 expects PEM-encoded key material
             token = jwt.encode(
                 payload,
                 private_key_bytes,
@@ -185,10 +184,10 @@ class ServiceIdentity:
             raise ServiceAuthError("JWT library not available (PyJWT not installed)")
         
         try:
-            # Convert Ed25519 public key to bytes for PyJWT
+            # Convert Ed25519 public key to PEM for PyJWT
             public_key_bytes = self.public_key.public_bytes(
-                encoding=serialization.Encoding.Raw,
-                format=serialization.PublicFormat.Raw
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PublicFormat.SubjectPublicKeyInfo
             )
             
             # Verify token
@@ -285,4 +284,5 @@ class ServiceAuthManager:
         Returns:
             Decoded JWT payload
         """
-        return self.identity.verify_jwt(token, expected_audience=self.service_name if source_service else None)
+        expected_audience = self.service_name
+        return self.identity.verify_jwt(token, expected_audience=expected_audience)

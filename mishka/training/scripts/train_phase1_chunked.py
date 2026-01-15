@@ -53,7 +53,7 @@ def train_chunk(chunk_data: list, chunk_num: int, config_path: Path, output_base
     # Run training
     print(f"\nTraining chunk {chunk_num} ({len(chunk_data)} samples)...")
     result = subprocess.run([
-        sys.executable,
+        "python3",
         Path(__file__).parent / 'train_phase1.py',
         '--config', str(chunk_config)
     ])

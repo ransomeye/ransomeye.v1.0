@@ -101,11 +101,16 @@ GRANT SELECT ON TABLE cluster_memberships TO ransomeye_ui;
 GRANT SELECT ON TABLE shap_explanations TO ransomeye_ui;
 -- NO WRITE ACCESS (UI is read-only)
 
+
 -- ============================================================================
 -- REVOKE STATEMENTS (Explicit Deny)
 -- ============================================================================
 -- Revoke all privileges from public role (default deny)
-REVOKE ALL ON DATABASE ransomeye FROM PUBLIC;
+DO $$
+BEGIN
+    EXECUTE format('REVOKE ALL ON DATABASE %I FROM PUBLIC', current_database());
+END
+$$;
 REVOKE ALL ON SCHEMA public FROM PUBLIC;
 
 -- Revoke any default privileges that might exist

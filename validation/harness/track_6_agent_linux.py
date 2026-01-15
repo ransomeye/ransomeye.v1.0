@@ -11,7 +11,7 @@ import json
 from datetime import datetime, timezone
 from typing import Dict, Any
 
-from validation.harness.phase_c_executor import TestStatus
+from validation.harness.phase_c_executor import ValidationStatus
 from validation.harness.test_helpers import get_test_db_connection, clean_database
 
 
@@ -39,11 +39,11 @@ def execute_track_6_agent_linux(executor) -> Dict[str, Any]:
         try:
             test_result = test_agent_001_linux_real_vs_simulator(executor, conn)
             results["tests"]["AGENT-001"] = test_result
-            if test_result["status"] != TestStatus.PASSED.value:
+            if test_result["status"] != ValidationStatus.PASSED.value:
                 results["all_passed"] = False
         except Exception as e:
             results["tests"]["AGENT-001"] = {
-                "status": TestStatus.FAILED.value,
+                "status": ValidationStatus.FAILED.value,
                 "error": str(e)
             }
             results["all_passed"] = False
@@ -53,7 +53,7 @@ def execute_track_6_agent_linux(executor) -> Dict[str, Any]:
         print("⚠️  SKIPPED: Windows Agent validation must be run on Windows host")
         print("   Phase C-W execution required for AGENT-002")
         results["tests"]["AGENT-002"] = {
-            "status": TestStatus.SKIPPED.value,
+            "status": ValidationStatus.SKIPPED.value,
             "skip_reason": "Windows Agent validation must be run on Windows host. Phase C-W execution required for AGENT-002."
         }
         
@@ -81,7 +81,7 @@ def test_agent_001_linux_real_vs_simulator(executor, conn) -> Dict[str, Any]:
     # 5. Check for simulator-only assumptions
     
     return {
-        "status": TestStatus.PASSED.value,
+        "status": ValidationStatus.PASSED.value,
         "structural_equivalence": True,
         "semantic_equivalence": True,
         "no_simulator_only_assumptions": True
@@ -104,7 +104,7 @@ def save_agent_artifacts(executor, results: Dict[str, Any]):
         status = test_result.get("status", "unknown")
         report_lines.append(f"### {test_name}")
         report_lines.append(f"**Status**: {status.upper()}")
-        if status == TestStatus.SKIPPED.value:
+        if status == ValidationStatus.SKIPPED.value:
             report_lines.append(f"**Skip Reason**: {test_result.get('skip_reason', 'N/A')}")
         report_lines.append("")
     

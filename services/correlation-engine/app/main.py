@@ -8,7 +8,12 @@ Python 3.10+ only - aligns with Phase 10 requirements
 import os
 import sys
 import uuid
-from typing import Dict, Any
+import signal
+import time
+import json
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Dict, Any, Optional
 
 # Add common utilities to path
 _current_file = os.path.abspath(__file__)
@@ -92,6 +97,34 @@ if _common_resource_safety_available:
 
 # Phase 10 requirement: Graceful shutdown handler (for batch jobs, tracks shutdown signal)
 shutdown_handler = ShutdownHandler('correlation-engine')
+_shutdown_requested = False
+
+def _handle_signal(signum, frame):
+    global _shutdown_requested
+    _shutdown_requested = True
+    if hasattr(shutdown_handler, "shutdown_requested") and hasattr(shutdown_handler.shutdown_requested, "set"):
+        shutdown_handler.shutdown_requested.set()
+
+def _should_shutdown() -> bool:
+    if hasattr(shutdown_handler, "is_shutdown_requested"):
+        try:
+            return shutdown_handler.is_shutdown_requested()
+        except Exception:
+            return _shutdown_requested
+    return _shutdown_requested
+
+def _status_path():
+    return Path(os.getenv("RANSOMEYE_COMPONENT_STATUS_PATH", "/tmp/ransomeye/correlation-engine.status.json"))
+
+def _write_status(state: str, last_successful_cycle: Optional[str], failure_reason: Optional[str]):
+    payload = {
+        "state": state,
+        "last_successful_cycle": last_successful_cycle,
+        "failure_reason": failure_reason
+    }
+    path = _status_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
 
 def process_event(conn, event: Dict[str, Any]) -> bool:
     """
@@ -295,9 +328,52 @@ def run_correlation_engine():
         logger.fatal(f"Fatal error in correlation engine: {safe_error}")
         exit_startup_error(safe_error)
 
+def run_correlation_daemon():
+    cycle_seconds = int(os.getenv("RANSOMEYE_COMPONENT_CYCLE_SECONDS", "60"))
+    signal.signal(signal.SIGTERM, _handle_signal)
+    signal.signal(signal.SIGINT, _handle_signal)
+    last_success = None
+    failure_reason = None
+    _write_status("RUNNING", last_success, failure_reason)
+    while not _should_shutdown():
+        try:
+            run_correlation_engine()
+            last_success = datetime.now(timezone.utc).isoformat()
+            failure_reason = None
+            _write_status("RUNNING", last_success, failure_reason)
+        except Exception as e:
+            failure_reason = str(e)
+            _write_status("FAILED", last_success, failure_reason)
+            raise
+        time.sleep(cycle_seconds)
+    _write_status("STOPPED", last_success, failure_reason)
+
+def _assert_supervised():
+    if os.getenv("RANSOMEYE_SUPERVISED") != "1":
+        error_msg = "Correlation Engine must be started by Core orchestrator"
+        logger.fatal(error_msg)
+        exit_startup_error(error_msg)
+    core_pid = os.getenv("RANSOMEYE_CORE_PID")
+    core_token = os.getenv("RANSOMEYE_CORE_TOKEN")
+    if not core_pid or not core_token:
+        error_msg = "Correlation Engine missing Core supervision metadata"
+        logger.fatal(error_msg)
+        exit_startup_error(error_msg)
+    try:
+        uuid.UUID(core_token)
+    except Exception:
+        error_msg = "Correlation Engine invalid Core token"
+        logger.fatal(error_msg)
+        exit_startup_error(error_msg)
+    if os.getppid() != int(core_pid):
+        error_msg = "Correlation Engine parent PID mismatch"
+        logger.fatal(error_msg)
+        exit_startup_error(error_msg)
+
 if __name__ == "__main__":
     try:
-        run_correlation_engine()
+        _assert_supervised()
+        run_correlation_daemon()
         logger.shutdown("Correlation engine completed successfully")
         sys.exit(ExitCode.SUCCESS)
     except KeyboardInterrupt:
