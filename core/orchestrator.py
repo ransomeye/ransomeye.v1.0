@@ -236,7 +236,7 @@ class CoreOrchestrator:
                 required_services = ["ransomeye-secure-bus.service", "ransomeye-ingest.service", "ransomeye-core-runtime.service"]
                 missing_services = []
                 for service in required_services:
-                    result = subprocess.run(
+                    result = subprocess_run(
                         ["systemctl", "list-unit-files", "--no-legend", service],
                         capture_output=True,
                         text=True,
