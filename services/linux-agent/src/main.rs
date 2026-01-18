@@ -380,7 +380,7 @@ fn construct_event_envelope() -> Result<EventEnvelope> {
 /// Transmit event to ingest service via HTTP (hardened)
 /// Phase 10 requirement: Proper error handling, clear error messages, timeout handling
 /// Contract compliance: No retries, no batching, no buffering (Phase 4 requirements)
-fn transmit_event(client: &Client, envelope: &EventEnvelope, ingest_url: &str) -> Result<()> {
+fn transmit_event(client: &Client, envelope: &EventEnvelope, ingest_url: &str, auth_token: &str) -> Result<()> {
     // Phase 10 requirement: Explicit error handling for network operations
     eprintln!("INFO: Transmitting event to ingest service: {}", ingest_url);
     
@@ -388,6 +388,7 @@ fn transmit_event(client: &Client, envelope: &EventEnvelope, ingest_url: &str) -
     // Single HTTP POST request, fail if it fails
     let response = match client
         .post(ingest_url)
+        .header("Authorization", format!("Bearer {}", auth_token))
         .json(envelope)
         .send()
     {
