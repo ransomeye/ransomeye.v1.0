@@ -231,6 +231,30 @@ class CoreOrchestrator:
             # Check if systemd is managing components - if so, skip orchestrator startup
             orchestrator_mode = os.getenv("RANSOMEYE_ORCHESTRATOR", "")
             if orchestrator_mode == "systemd":
+                # D.6.3: Validate that required systemd services exist when in systemd mode
+                # Fail-hard if systemd mode is declared but services are missing
+                required_services = ["ransomeye-secure-bus.service", "ransomeye-ingest.service", "ransomeye-core-runtime.service"]
+                missing_services = []
+                for service in required_services:
+                    result = subprocess.run(
+                        ["systemctl", "list-unit-files", "--no-legend", service],
+                        capture_output=True,
+                        text=True,
+                        timeout=5
+                    )
+                    if result.returncode != 0 or service not in result.stdout:
+                        missing_services.append(service)
+                
+                if missing_services:
+                    error_msg = f"ORCHESTRATION MODE MISMATCH: RANSOMEYE_ORCHESTRATOR=systemd but required systemd services are missing: {', '.join(missing_services)}"
+                    self.logger.fatal(error_msg)
+                    self.state = ComponentState.FAILED
+                    self.global_state = "FAILED"
+                    self.failure_reason_code = "ORCHESTRATION_MODE_MISMATCH"
+                    self.failure_reason = error_msg
+                    self._write_status()
+                    raise RuntimeError(error_msg)
+                
                 # Systemd is managing components - orchestrator should only supervise, not start
                 self.logger.startup("Systemd orchestrator mode: components managed by systemd, orchestrator in supervision-only mode")
                 
