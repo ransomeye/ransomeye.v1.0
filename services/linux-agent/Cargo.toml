@@ -22,3 +22,7 @@ chrono = { version = "0.4", features = ["serde"] }
 anyhow = "1.0"
 # Hostname retrieval
 hostname = "0.4"
+# JWT authentication
+jsonwebtoken = "9.2"
+# Ed25519 key loading and signing
+ed25519-dalek = { version = "2.1", features = ["pem"] }
