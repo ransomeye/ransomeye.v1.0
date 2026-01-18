@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from subprocess import Popen
+from subprocess import Popen, run as subprocess_run
 from typing import Dict, List, Optional
 
 from core.status_schema import validate_status
