@@ -15,7 +15,6 @@ from datetime import datetime, timezone
 import uuid
 from pathlib import Path
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-from cryptography.hazmat.backends import default_backend
 
 from key_manager import PolicyEngineKeyManager
 
@@ -58,8 +57,7 @@ class PolicyEngineSigner:
         
         # Sign payload
         signature_bytes = self.private_key.sign(
-            payload_json.encode('utf-8'),
-            backend=default_backend()
+            payload_json.encode('utf-8')
         )
         
         # Encode signature as base64

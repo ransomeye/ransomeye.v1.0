@@ -62,7 +62,8 @@ def _apply_migrations() -> None:
 
 def _start_core(env: dict) -> subprocess.Popen:
     core_main = PROJECT_ROOT / "core" / "main.py"
-    return subprocess.Popen([os.environ.get("PYTHON", "python3"), str(core_main)], env=env)
+    python_bin = env.get("PYTHON") or os.environ.get("PYTHON", "python3")
+    return subprocess.Popen([python_bin, str(core_main)], env=env)
 
 
 def test_core_dpi_ingest_pipeline():
@@ -75,11 +76,17 @@ def test_core_dpi_ingest_pipeline():
 
     ui_port = _free_port()
     ingest_port = _free_port()
+    python_bin = str(PROJECT_ROOT / ".venv" / "bin" / "python")
+    coverage_config = str(PROJECT_ROOT / ".coveragerc")
     env = os.environ.copy()
     env.update(
         {
             "CI": "true",
             "RANSOMEYE_ENV": "ci",
+            "PYTHON": python_bin,
+            "RANSOMEYE_PYTHON_BIN": python_bin,
+            "PYTHONPATH": str(PROJECT_ROOT),
+            "COVERAGE_PROCESS_START": coverage_config,
             "RANSOMEYE_CORE_STATUS_PATH": str(status_path),
             "RANSOMEYE_RUN_DIR": str(temp_dir),
             "RANSOMEYE_LOG_DIR": str(temp_dir / "logs"),

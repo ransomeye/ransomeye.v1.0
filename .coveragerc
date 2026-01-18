@@ -1,7 +1,17 @@
 [run]
 branch = True
+parallel = True
+concurrency = multiprocessing
 source =
-    .
+    core
+    services/ingest
+    services/correlation-engine
+    services/ai-core
+    services/policy-engine
+    services/ui/backend
+    rbac
+    common/security
+    dpi/probe
 omit =
     */tests/*
     */validation/*
@@ -14,4 +24,4 @@ omit =
 
 [report]
 show_missing = True
-skip_covered = False
+skip_empty = True

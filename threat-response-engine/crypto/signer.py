@@ -11,7 +11,6 @@ from typing import Dict, Any
 from datetime import datetime, timezone
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.backends import default_backend
 
 
 class TRESigner:
@@ -47,10 +46,7 @@ class TRESigner:
         payload_json = json.dumps(payload, sort_keys=True, separators=(',', ':'), ensure_ascii=False)
         
         # Sign payload
-        signature_bytes = self.private_key.sign(
-            payload_json.encode('utf-8'),
-            backend=default_backend()
-        )
+        signature_bytes = self.private_key.sign(payload_json.encode('utf-8'))
         
         # Encode signature as base64
         signature = base64.b64encode(signature_bytes).decode('ascii')

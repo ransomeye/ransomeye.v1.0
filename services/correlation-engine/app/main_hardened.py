@@ -84,7 +84,7 @@ def process_event(conn, event: Dict[str, Any]) -> bool:
     
     try:
         # Phase 10 requirement: Rule evaluation with error handling
-        should_create, stage, confidence_score = evaluate_event(event)
+        should_create, stage, confidence_score, evidence_type = evaluate_event(event)
         
         if should_create:
             incident_id = str(uuid.uuid4())
@@ -92,7 +92,9 @@ def process_event(conn, event: Dict[str, Any]) -> bool:
             
             # Phase 10 requirement: Atomic transaction with rollback on error
             try:
-                create_incident(conn, incident_id, machine_id, event, stage, confidence_score, event_id)
+                if not evidence_type:
+                    evidence_type = 'CORRELATION_PATTERN'
+                create_incident(conn, incident_id, machine_id, event, stage, confidence_score, event_id, evidence_type)
                 logger.info(f"Created incident", 
                           incident_id=incident_id, event_id=event_id, 
                           stage=stage, confidence=confidence_score)

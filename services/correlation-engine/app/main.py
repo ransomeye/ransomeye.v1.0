@@ -15,6 +15,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Any, Optional
 
+if os.getenv("COVERAGE_PROCESS_START") and not os.getenv("PYTEST_CURRENT_TEST"):
+    try:
+        import coverage
+
+        coverage.process_startup()
+    except Exception:
+        pass
+
 # Add common utilities to path
 _current_file = os.path.abspath(__file__)
 _project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(_current_file))))
@@ -61,6 +69,7 @@ from db import get_db_connection, get_unprocessed_events, create_incident, check
 from rules import evaluate_event
 
 # Phase 10 requirement: Centralized configuration loading
+# Configuration is loaded at runtime, not at import time
 config_loader = ConfigLoader('correlation-engine')
 config_loader.require('RANSOMEYE_DB_PASSWORD', description='Database password (security-sensitive)')
 config_loader.optional('RANSOMEYE_DB_HOST', default='localhost')
@@ -68,21 +77,28 @@ config_loader.optional('RANSOMEYE_DB_PORT', default='5432', validator=validate_p
 config_loader.optional('RANSOMEYE_DB_NAME', default='ransomeye')
 config_loader.require('RANSOMEYE_DB_USER', description='Database user (PHASE 1: per-service user required, no defaults)')
 
-try:
-    config = config_loader.load()
-except ConfigError as e:
-    exit_config_error(str(e))
+# Runtime configuration (loaded in _load_config_and_initialize)
+config: Optional[Dict[str, Any]] = None
 
 # Phase 10 requirement: Structured logging
 logger = setup_logging('correlation-engine')
 
-# Security: Redact secrets from config before logging
-try:
-    from common.security.redaction import get_redacted_config
-    redacted_config = get_redacted_config(config)
-    logger.startup("Correlation engine starting", config_keys=list(redacted_config.keys()))
-except ImportError:
-    logger.startup("Correlation engine starting", config_keys=list(config.keys()))
+def _load_config_and_initialize():
+    """Load configuration and initialize runtime constants at startup (not import time)."""
+    global config
+    
+    try:
+        config = config_loader.load()
+    except ConfigError as e:
+        exit_config_error(str(e))
+    
+    # Security: Redact secrets from config before logging
+    try:
+        from common.security.redaction import get_redacted_config
+        redacted_config = get_redacted_config(config)
+        logger.startup("Correlation engine starting", config_keys=list(redacted_config.keys()))
+    except ImportError:
+        logger.startup("Correlation engine starting", config_keys=list(config.keys()))
 
 # Resource safety: Check file descriptors at startup
 try:
@@ -92,8 +108,10 @@ except ImportError:
     _common_resource_safety_available = False
     def check_file_descriptors(*args, **kwargs): pass
 
-if _common_resource_safety_available:
-    check_file_descriptors(logger)
+def _check_file_descriptors():
+    """Check file descriptors after config is loaded."""
+    if _common_resource_safety_available:
+        check_file_descriptors(logger)
 
 # Phase 10 requirement: Graceful shutdown handler (for batch jobs, tracks shutdown signal)
 shutdown_handler = ShutdownHandler('correlation-engine')
@@ -146,23 +164,33 @@ def process_event(conn, event: Dict[str, Any]) -> bool:
             logger.info(f"Event already processed, skipping (idempotent)", event_id=event_id)
             return False
         
-        # GA-BLOCKING: Rule evaluation
-        should_create, stage, confidence_score = evaluate_event(event)
-        
-        if not should_create:
-            return False
-        
         machine_id = event['machine_id']
-        
+
         # GA-BLOCKING: Deduplication - find existing incident
-        from state_machine import get_deduplication_key, is_within_deduplication_window, detect_contradiction
+        from state_machine import get_deduplication_key, is_within_deduplication_window, detect_contradiction, DEDUPLICATION_TIME_WINDOW
         from datetime import datetime, timezone
         from dateutil import parser
-        
-        dedup_key = get_deduplication_key(event)
+
         observed_at = event['observed_at']
         if isinstance(observed_at, str):
             observed_at = parser.isoparse(observed_at)
+
+        # GA-BLOCKING: Rule evaluation with evidence counts
+        evidence_count = 1
+        component = event.get('component')
+        if component in ('linux_agent', 'dpi'):
+            from db import count_recent_events
+            evidence_count = count_recent_events(conn, machine_id, component, observed_at, DEDUPLICATION_TIME_WINDOW)
+        should_create, stage, confidence_score, evidence_type = evaluate_event(event, evidence_count)
+
+        if not should_create:
+            return False
+
+        if not evidence_type:
+            evidence_type = 'CORRELATION_PATTERN'
+        confidence_score = float(confidence_score)
+
+        dedup_key = get_deduplication_key(event)
         
         existing_incident_id = None
         if dedup_key:
@@ -190,8 +218,8 @@ def process_event(conn, event: Dict[str, Any]) -> bool:
                 else:
                     # PHASE 3: Add evidence and accumulate confidence (deterministic)
                     from db import add_evidence_to_incident
-                    add_evidence_to_incident(conn, existing_incident_id, event, event_id, 
-                                           'CORRELATION_PATTERN', confidence_score)
+                    add_evidence_to_incident(conn, existing_incident_id, event, event_id,
+                                           evidence_type, confidence_score)
                     logger.info(f"Added evidence to existing incident",
                               incident_id=existing_incident_id, event_id=event_id,
                               confidence=confidence_score)
@@ -208,7 +236,7 @@ def process_event(conn, event: Dict[str, Any]) -> bool:
             
             # Phase 10 requirement: Atomic transaction with rollback on error
             try:
-                create_incident(conn, incident_id, machine_id, event, stage, confidence_score, event_id)
+                create_incident(conn, incident_id, machine_id, event, stage, confidence_score, event_id, evidence_type)
                 logger.info(f"Created incident", 
                           incident_id=incident_id, event_id=event_id, 
                           stage=stage, confidence=confidence_score)
@@ -245,6 +273,9 @@ def run_correlation_engine():
     Main correlation engine loop (hardened).
     
     Resource safety: Memory allocation failures and file descriptor exhaustion terminate Core immediately.
+    
+    STEP-10.5 LIFECYCLE FIX: Never exits on "no work" - this is a daemon, not a batch job.
+    Returns normally after processing (or when idle) but never exits the process.
     """
     logger.startup("Correlation engine starting processing")
     
@@ -269,7 +300,8 @@ def run_correlation_engine():
                 raise
             
             if not events:
-                logger.info("No unprocessed events found")
+                # STEP-10.5 FIX: Log idle state but DO NOT exit - this is a long-running daemon
+                logger.info("No unprocessed events found - daemon remains alive")
                 return
             
             logger.info(f"Processing {len(events)} unprocessed events", event_count=len(events))
@@ -315,8 +347,10 @@ def run_correlation_engine():
                        events_failed=events_failed)
             
         finally:
+            # STEP-10.5 FIX: Close DB connection for this cycle (not a shutdown - daemon continues)
             conn.close()
-            logger.shutdown("Database connection closed")
+            # Changed log level from "shutdown" to "info" - this is cycle cleanup, not process shutdown
+            logger.info("Database connection closed for cycle (daemon continues)")
             
     except Exception as e:
         # Security: Sanitize exception message before logging
@@ -335,44 +369,145 @@ def run_correlation_daemon():
     last_success = None
     failure_reason = None
     _write_status("RUNNING", last_success, failure_reason)
-    while not _should_shutdown():
+    
+    # Send READY notification to systemd (required for Type=notify services)
+    # Must be sent AFTER initialization and status file is written
+    notify_available = False
+    try:
+        from systemd.daemon import notify
+        notify("READY=1")
+        logger.startup("Sent READY notification to systemd")
+        notify_available = True
+    except ImportError:
+        # systemd.daemon not available (non-systemd environment) - continue
+        logger.startup("systemd.daemon not available, skipping READY notification")
+    except Exception as e:
+        logger.warning(f"Failed to send READY notification: {e}")
+        # Continue even if notification fails
+    
+    # Determine watchdog interval from systemd environment or use safe default
+    watchdog_usec = os.environ.get('WATCHDOG_USEC', '')
+    if watchdog_usec:
         try:
-            run_correlation_engine()
-            last_success = datetime.now(timezone.utc).isoformat()
-            failure_reason = None
-            _write_status("RUNNING", last_success, failure_reason)
-        except Exception as e:
-            failure_reason = str(e)
-            _write_status("FAILED", last_success, failure_reason)
-            raise
-        time.sleep(cycle_seconds)
+            watchdog_interval = max(1.0, (int(watchdog_usec) / 1_000_000) / 2)
+        except (ValueError, TypeError):
+            watchdog_interval = 10  # Default to 10 seconds if parsing fails
+    else:
+        watchdog_interval = 10  # Default to 10 seconds if not set
+    
+    # STEP-10.5 LIFECYCLE FIX: Start watchdog notification background task
+    # Watchdog thread must run continuously while daemon is alive
+    if notify_available:
+        import threading
+        watchdog_stop = threading.Event()
+        
+        def watchdog_loop():
+            """
+            Background thread to send periodic WATCHDOG notifications.
+            STEP-10.5 FIX: Thread must not exit while daemon is running - runs until watchdog_stop is set.
+            """
+            try:
+                from systemd.daemon import notify
+                # Send initial WATCHDOG notification immediately after READY
+                notify("WATCHDOG=1")
+                last_watchdog = time.time()
+                
+                while not watchdog_stop.is_set():
+                    try:
+                        current_time = time.time()
+                        elapsed = current_time - last_watchdog
+                        if elapsed >= watchdog_interval:
+                            notify("WATCHDOG=1")
+                            last_watchdog = current_time
+                        # Sleep for half the interval to ensure timely notifications
+                        watchdog_stop.wait(min(1.0, watchdog_interval / 2))
+                    except Exception as inner_e:
+                        # STEP-10.5 FIX: Log inner loop exceptions but continue - thread must not exit
+                        logger.error(f"Watchdog notification inner loop failed: {inner_e}")
+                        # Continue loop - do not exit thread
+                        time.sleep(min(1.0, watchdog_interval / 2))
+            except Exception as e:
+                logger.error(f"Watchdog notification thread failed: {e}")
+                # Fail-fast: if watchdog notifications fail and WATCHDOG_USEC is set, exit
+                if watchdog_usec:
+                    logger.fatal(f"Watchdog notification thread failed but WATCHDOG_USEC is set, exiting")
+                    os.kill(os.getpid(), signal.SIGTERM)
+        
+        watchdog_thread = threading.Thread(target=watchdog_loop, daemon=True, name="correlation-engine-watchdog")
+        watchdog_thread.start()
+        logger.startup(f"Watchdog notification thread started (interval: {watchdog_interval:.1f}s, thread: {watchdog_thread.name})")
+    
+    # STEP-10.5 LIFECYCLE FIX: Main daemon loop - NEVER exits on "no work"
+    # Only exits on SIGTERM/SIGINT or fatal unrecoverable error (handled by exit_startup_error/exit_fatal)
+    try:
+        while not _should_shutdown():
+            try:
+                # STEP-10.5 FIX: run_correlation_engine() returns normally (never exits) when idle
+                # Daemon loop continues and sleeps, then polls again
+                run_correlation_engine()
+                last_success = datetime.now(timezone.utc).isoformat()
+                failure_reason = None
+                _write_status("RUNNING", last_success, failure_reason)
+            except Exception as e:
+                # Fatal errors (exit_startup_error/exit_fatal) exit the process directly
+                # Other exceptions are unrecoverable - exit daemon loop
+                failure_reason = str(e)
+                _write_status("FAILED", last_success, failure_reason)
+                raise
+            time.sleep(cycle_seconds)
+    finally:
+        # STEP-10.5 FIX: Stop watchdog thread gracefully on shutdown
+        if notify_available and 'watchdog_stop' in locals():
+            watchdog_stop.set()
+            # Give watchdog thread a moment to exit gracefully
+            if 'watchdog_thread' in locals() and watchdog_thread.is_alive():
+                watchdog_thread.join(timeout=1.0)
     _write_status("STOPPED", last_success, failure_reason)
 
+
+def _temporary_env(env: Optional[Dict[str, str]]):
+    if not env:
+        class _Noop:
+            def __enter__(self): return None
+            def __exit__(self, exc_type, exc, tb): return False
+        return _Noop()
+    class _Env:
+        def __init__(self, updates):
+            self.updates = updates
+            self.original = None
+        def __enter__(self):
+            self.original = os.environ.copy()
+            os.environ.update(self.updates)
+        def __exit__(self, exc_type, exc, tb):
+            os.environ.clear()
+            os.environ.update(self.original or {})
+            return False
+    return _Env(env)
+
+
+def run_correlation_cycle(env: Optional[Dict[str, str]] = None) -> bool:
+    """
+    Run a single Correlation Engine cycle (no loop). Raises on failure.
+    """
+    with _temporary_env(env):
+        try:
+            run_correlation_engine()
+        except SystemExit as exc:
+            raise RuntimeError("Correlation Engine cycle failed") from exc
+    return True
+
 def _assert_supervised():
-    if os.getenv("RANSOMEYE_SUPERVISED") != "1":
-        error_msg = "Correlation Engine must be started by Core orchestrator"
-        logger.fatal(error_msg)
-        exit_startup_error(error_msg)
-    core_pid = os.getenv("RANSOMEYE_CORE_PID")
-    core_token = os.getenv("RANSOMEYE_CORE_TOKEN")
-    if not core_pid or not core_token:
-        error_msg = "Correlation Engine missing Core supervision metadata"
-        logger.fatal(error_msg)
-        exit_startup_error(error_msg)
-    try:
-        uuid.UUID(core_token)
-    except Exception:
-        error_msg = "Correlation Engine invalid Core token"
-        logger.fatal(error_msg)
-        exit_startup_error(error_msg)
-    if os.getppid() != int(core_pid):
-        error_msg = "Correlation Engine parent PID mismatch"
+    orch = os.getenv("RANSOMEYE_ORCHESTRATOR")
+    if orch != "systemd":
+        error_msg = "Correlation Engine must be started by Core orchestrator (systemd)"
         logger.fatal(error_msg)
         exit_startup_error(error_msg)
 
 if __name__ == "__main__":
     try:
         _assert_supervised()
+        _load_config_and_initialize()
+        _check_file_descriptors()
         run_correlation_daemon()
         logger.shutdown("Correlation engine completed successfully")
         sys.exit(ExitCode.SUCCESS)

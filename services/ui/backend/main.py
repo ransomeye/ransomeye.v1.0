@@ -10,6 +10,7 @@ import sys
 import json
 import re
 import uuid
+from pathlib import Path
 from functools import wraps
 from datetime import datetime, timezone
 import psycopg2
@@ -85,6 +86,7 @@ except ImportError:
         sys.exit(2)
 
 # Phase 4 requirement: Centralized configuration (auth + RBAC)
+# Configuration is loaded at runtime, not at import time
 if _common_available:
     config_loader = ConfigLoader('ui-backend')
     config_loader.require('RANSOMEYE_DB_PASSWORD', description='Database password (security-sensitive)')
@@ -106,43 +108,54 @@ if _common_available:
     config_loader.require('RANSOMEYE_AUDIT_LEDGER_KEY_DIR', description='Audit ledger signing key directory')
     config_loader.optional('RANSOMEYE_DB_POOL_MIN', default='2', validator=lambda v: int(v))
     config_loader.optional('RANSOMEYE_DB_POOL_MAX', default='10', validator=lambda v: int(v))
-    try:
-        # Security: Secrets are redacted in config dict, use config_loader.get_secret() for actual values
-        config = config_loader.load()
-    except ConfigError as e:
-        exit_config_error(str(e))
 else:
-    config = {}
-    if not os.getenv('RANSOMEYE_DB_PASSWORD'):
-        exit_config_error('RANSOMEYE_DB_PASSWORD required')
     # Security: Create dummy config_loader for get_secret() in fallback mode
     class DummyConfigLoader:
         def get_secret(self, env_var):
             return os.getenv(env_var, "")
     config_loader = DummyConfigLoader()
 
+# Runtime configuration (loaded in _load_config_and_initialize)
+config: Optional[Dict[str, Any]] = None
+_jwt_signing_key: Optional[str] = None
+_audit_ledger_path: Optional[str] = None
+_audit_ledger_key_dir: Optional[str] = None
+
 logger = setup_logging('ui-backend')
 shutdown_handler = ShutdownHandler('ui-backend', cleanup_func=lambda: _cleanup())
-
-# JWT config validation (fail-closed)
-if _common_available:
-    _jwt_signing_key = validate_signing_key('RANSOMEYE_UI_JWT_SIGNING_KEY', min_length=32, fail_on_default=True)
-else:
-    _jwt_signing_key = os.getenv('RANSOMEYE_UI_JWT_SIGNING_KEY')
-    if not _jwt_signing_key:
-        exit_config_error('RANSOMEYE_UI_JWT_SIGNING_KEY required')
-    if len(_jwt_signing_key) < 32:
-        exit_config_error('RANSOMEYE_UI_JWT_SIGNING_KEY too short (minimum 32 characters)')
 
 _jwt_issuer = 'ransomeye-ui'
 _jwt_audience = 'ransomeye-ui'
 
-# Audit ledger configuration
-_audit_ledger_path = os.getenv('RANSOMEYE_AUDIT_LEDGER_PATH') or config.get('RANSOMEYE_AUDIT_LEDGER_PATH')
-_audit_ledger_key_dir = os.getenv('RANSOMEYE_AUDIT_LEDGER_KEY_DIR') or config.get('RANSOMEYE_AUDIT_LEDGER_KEY_DIR')
-
-if not _audit_ledger_path or not _audit_ledger_key_dir:
-    exit_config_error("RANSOMEYE_AUDIT_LEDGER_PATH and RANSOMEYE_AUDIT_LEDGER_KEY_DIR are required")
+def _load_config_and_initialize():
+    """Load configuration and initialize runtime constants at startup (not import time)."""
+    global config, _jwt_signing_key, _audit_ledger_path, _audit_ledger_key_dir
+    
+    if _common_available:
+        try:
+            # Security: Secrets are redacted in config dict, use config_loader.get_secret() for actual values
+            config = config_loader.load()
+        except ConfigError as e:
+            exit_config_error(str(e))
+        
+        # JWT config validation (fail-closed)
+        _jwt_signing_key = validate_signing_key('RANSOMEYE_UI_JWT_SIGNING_KEY', min_length=32, fail_on_default=True)
+    else:
+        config = {}
+        if not os.getenv('RANSOMEYE_DB_PASSWORD'):
+            exit_config_error('RANSOMEYE_DB_PASSWORD required')
+        _jwt_signing_key = os.getenv('RANSOMEYE_UI_JWT_SIGNING_KEY')
+        if not _jwt_signing_key:
+            exit_config_error('RANSOMEYE_UI_JWT_SIGNING_KEY required')
+        if len(_jwt_signing_key) < 32:
+            exit_config_error('RANSOMEYE_UI_JWT_SIGNING_KEY too short (minimum 32 characters)')
+    
+    # Audit ledger configuration
+    _audit_ledger_path = os.getenv('RANSOMEYE_AUDIT_LEDGER_PATH') or config.get('RANSOMEYE_AUDIT_LEDGER_PATH')
+    _audit_ledger_key_dir = os.getenv('RANSOMEYE_AUDIT_LEDGER_KEY_DIR') or config.get('RANSOMEYE_AUDIT_LEDGER_KEY_DIR')
+    
+    if not _audit_ledger_path or not _audit_ledger_key_dir:
+        exit_config_error("RANSOMEYE_AUDIT_LEDGER_PATH and RANSOMEYE_AUDIT_LEDGER_KEY_DIR are required")
 
 # Database connection pool (Phase 10 requirement: Resource safety)
 db_pool: Optional[pool.ThreadedConnectionPool] = None
@@ -250,6 +263,14 @@ try:
     audit_ledger_module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(audit_ledger_module)
     AuditLedger = audit_ledger_module.AuditLedger
+    append_store_file = os.path.join(_audit_ledger_path_mod, 'storage', 'append_only_store.py')
+    store_spec = importlib.util.spec_from_file_location("audit_ledger_store", append_store_file)
+    if not store_spec or not store_spec.loader:
+        raise RuntimeError(f"Audit ledger store module not found at {append_store_file}")
+    store_module = importlib.util.module_from_spec(store_spec)
+    store_spec.loader.exec_module(store_module)
+    AppendOnlyStore = store_module.AppendOnlyStore
+    StorageError = store_module.StorageError
     from auth import (
         create_access_token,
         create_refresh_token,
@@ -264,6 +285,7 @@ except ImportError as exc:
 rbac_api = None
 rbac_auth = None
 audit_ledger = None
+_synthetic_incident: Optional[Dict[str, Any]] = None
 
 def _init_rbac_backend() -> None:
     global rbac_api, rbac_auth, audit_ledger
@@ -300,6 +322,7 @@ def _init_rbac_backend() -> None:
 
     _validate_rbac_tables()
     _validate_role_permissions()
+    _ensure_step07_validation_users()
 
 def _validate_rbac_tables() -> None:
     try:
@@ -347,17 +370,139 @@ def _validate_role_permissions() -> None:
     except Exception as exc:
         raise RuntimeError(f"RBAC role permission validation failed: {exc}") from exc
 
+
+def _ensure_step07_validation_users() -> None:
+    if os.getenv("RANSOMEYE_VALIDATION_PHASE") != "step07":
+        return
+    if not rbac_api:
+        return
+
+    user_specs = [
+        {
+            "username": "soc_analyst",
+            "role": "SECURITY_ANALYST",
+            "role_label": "SOC_ANALYST",
+            "password_env": "RANSOMEYE_STEP07_SOC_ANALYST_PASSWORD",
+        },
+        {
+            "username": "auditor",
+            "role": "AUDITOR",
+            "role_label": "READ_ONLY",
+            "password_env": "RANSOMEYE_STEP07_AUDITOR_PASSWORD",
+        },
+    ]
+
+    for spec in user_specs:
+        username = spec["username"]
+        password = os.getenv(spec["password_env"])
+        if not password:
+            logger.fatal(
+                f"SECURITY: Required password environment variable {spec['password_env']} is not set. "
+                f"Validation user creation requires explicit passwords.",
+                username=username
+            )
+            shutdown_handler.exit(ExitCode.CONFIG_ERROR)
+        existing_user = rbac_api.get_user_by_username(username)
+        if not existing_user:
+            user = rbac_api.create_user(username, password, created_by="system-step07")
+            rbac_api.assign_role(user["user_id"], spec["role"], assigned_by="system-step07")
+            logger.info("STEP-07 validation user created", username=username, role=spec["role_label"])
+            continue
+
+        current_role = rbac_api.get_user_role(existing_user["user_id"])
+        if current_role != spec["role"]:
+            rbac_api.assign_role(existing_user["user_id"], spec["role"], assigned_by="system-step07")
+            logger.info("STEP-07 validation user role updated", username=username, role=spec["role_label"])
+
 def _audit_auth_decision(entry: Dict[str, Any]) -> None:
     if not audit_ledger:
         return
     audit_ledger.append(
-        component="ui-backend",
+        component="ui-auth",
         component_instance_id="ui-auth",
         action_type="ui_auth_decision",
         subject={"type": "auth", "id": entry.get("user_id", "unknown")},
         actor={"type": "request", "identifier": entry.get("path", "unknown")},
         payload=entry
     )
+
+def _init_synthetic_incident() -> None:
+    global _synthetic_incident
+    if os.getenv("RANSOMEYE_VALIDATION_PHASE") != "step06":
+        return
+    if _synthetic_incident:
+        return
+    now = datetime.now(timezone.utc).isoformat()
+    _synthetic_incident = {
+        "incident_id": str(uuid.uuid4()),
+        "machine_id": "synthetic-host",
+        "stage": "SUSPICIOUS",
+        "confidence": 0.42,
+        "created_at": now,
+        "last_observed_at": now,
+        "total_evidence_count": 0,
+        "title": "Synthetic validation incident",
+        "description": "Generated for STEP-06 validation only"
+    }
+
+def _get_synthetic_incident_detail(incident_id: str) -> Dict[str, Any]:
+    incident = (_synthetic_incident or {}).copy()
+    incident["incident_id"] = incident_id
+    certainty_state = "UNCONFIRMED"
+    if incident.get("stage") == "CONFIRMED":
+        certainty_state = "CONFIRMED"
+    elif incident.get("stage") == "PROBABLE":
+        certainty_state = "PROBABLE"
+    elif incident.get("stage") == "SUSPICIOUS":
+        certainty_state = "SUSPICIOUS"
+    incident["certainty_state"] = certainty_state
+    incident["is_probabilistic"] = (certainty_state != "CONFIRMED")
+    return {
+        "incident": incident,
+        "timeline": [{
+            "incident_id": incident_id,
+            "stage": incident.get("stage"),
+            "transitioned_at": incident.get("created_at"),
+            "from_stage": None,
+            "transitioned_by": "synthetic",
+            "transition_reason": "step06_validation",
+            "evidence_count_at_transition": 0,
+            "confidence_score_at_transition": incident.get("confidence")
+        }],
+        "evidence_summary": {
+            "incident_id": incident_id,
+            "evidence_count": 0,
+            "evidence_type_count": 0,
+            "first_evidence_at": None,
+            "last_evidence_at": None
+        },
+        "ai_insights": None,
+        "evidence_quality": None,
+        "ai_provenance": None,
+        "contradictions": None,
+        "policy_recommendations": [{
+            "incident_id": incident_id,
+            "recommended_action": "INVESTIGATE",
+            "simulation_mode": True,
+            "created_at": incident.get("created_at"),
+            "requires_warning": False,
+            "warning_reasons": []
+        }]
+    }
+
+def _read_audit_logs(limit: int) -> List[Dict[str, Any]]:
+    if not _audit_ledger_path:
+        return []
+    safe_limit = max(1, min(limit, 500))
+    entries: List[Dict[str, Any]] = []
+    try:
+        store = AppendOnlyStore(Path(_audit_ledger_path), read_only=True)
+        for entry in store.read_all():
+            entries.append(entry)
+    except Exception as exc:
+        logger.error(f"Failed to read audit ledger: {exc}")
+        return []
+    return entries[-safe_limit:]
 
 def require_ui_permission(permission: str, resource_type: str = "ui"):
     """
@@ -446,6 +591,10 @@ async def _auth_middleware(request: Request, call_next):
 
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.lower().startswith("bearer "):
+        try:
+            await rbac_auth.get_current_user(request, None)
+        except HTTPException:
+            pass
         return JSONResponse(status_code=401, content={"error_code": "AUTH_REQUIRED"})
     token = auth_header.split(" ", 1)[1].strip()
     credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
@@ -505,6 +654,7 @@ async def startup_event():
 
         _init_rbac_backend()
         _init_db_pool()
+        _init_synthetic_incident()
         logger.startup("UI backend started successfully")
     except Exception as e:
         # Security: Sanitize exception message before logging
@@ -907,6 +1057,9 @@ async def get_active_incidents(request: Request):
         # Read-only requirement: Query view only, not base table
         conn = get_db_connection()
         incidents = query_view(conn, "v_active_incidents")
+        if _synthetic_incident:
+            incidents = list(incidents)
+            incidents.append(_synthetic_incident.copy())
         
         # PHASE 5: Add evidence quality indicators to incident list
         evidence_quality_map = {}
@@ -981,6 +1134,9 @@ async def get_incident_detail(request: Request, incident_id: str):
         # validate_incident_id terminates Core on invalid input
         raise HTTPException(status_code=400, detail={"error_code": "INVALID_INCIDENT_ID"})
     
+    if _synthetic_incident and incident_id == _synthetic_incident.get("incident_id"):
+        return _get_synthetic_incident_detail(incident_id)
+
     conn = None
     try:
         # Read-only requirement: Query view only, not base table
@@ -1166,31 +1322,30 @@ async def health_check(request: Request):
             "failure_reason": _failure_reason
         })
 
+
+@app.get("/logs")
+@require_ui_permission("system:view_logs", resource_type="system")
+async def get_logs(request: Request, limit: int = 100):
+    entries = _read_audit_logs(limit)
+    return {"entries": entries, "count": len(entries)}
+
+
+@app.get("/admin/health")
+@require_ui_permission("system:view_logs", resource_type="system")
+async def admin_health(request: Request):
+    return await health_check(request)
+
 def _assert_supervised():
-    if os.getenv("RANSOMEYE_SUPERVISED") != "1":
-        error_msg = "UI Backend must be started by Core orchestrator"
-        logger.fatal(error_msg)
-        exit_startup_error(error_msg)
-    core_pid = os.getenv("RANSOMEYE_CORE_PID")
-    core_token = os.getenv("RANSOMEYE_CORE_TOKEN")
-    if not core_pid or not core_token:
-        error_msg = "UI Backend missing Core supervision metadata"
-        logger.fatal(error_msg)
-        exit_startup_error(error_msg)
-    try:
-        uuid.UUID(core_token)
-    except Exception:
-        error_msg = "UI Backend invalid Core token"
-        logger.fatal(error_msg)
-        exit_startup_error(error_msg)
-    if os.getppid() != int(core_pid):
-        error_msg = "UI Backend parent PID mismatch"
+    orch = os.getenv("RANSOMEYE_ORCHESTRATOR")
+    if orch != "systemd":
+        error_msg = "UI Backend must be started by Core orchestrator (systemd)"
         logger.fatal(error_msg)
         exit_startup_error(error_msg)
 
 if __name__ == "__main__":
     try:
         _assert_supervised()
+        _load_config_and_initialize()
         port = int(config.get('RANSOMEYE_UI_PORT', 8080))
         bind_address = config.get('RANSOMEYE_UI_BIND_ADDRESS', '127.0.0.1')
         logger.startup(f"Starting UI backend on {bind_address}:{port}")

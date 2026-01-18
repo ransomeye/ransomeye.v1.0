@@ -1,0 +1,100 @@
+RansomEye Phase-2 Master Engineering SpecificationDocument Status: Authoritative Engineering Reference (v2.1)Objective: Close residual weak links, harden correctness guarantees, and extend enterprise-scale assurance without violating v1.0 deterministic principles.1. Phase-2 Architectural RoadmapThe Phase-2 roadmap marks the transition from passive observation to deterministic assurance. We move away from simple host-based detection and into an enterprise-wide "Root of Trust" where the absence of telemetry is as significant as its presence.TrackThemeOperational ImpactKey DeliverableP2-ASensor TrustEliminates the "Blinded Sensor" vulnerability.Negative Evidence Engine & Rust Integrity Probes.P2-BNetwork PhysicsHigh-fidelity detection in encrypted streams.FFT-based Periodicity & Rarity Budgeting.P2-CIdentity LogicDetects lateral movement and insider abuse.Cross-Host Identity Graph & Honey Credentials.P2-DHuman AuthorityCryptographically binds admin actions to identities.Ed25519-based Human Authority Framework (HAF).P2-FAssuranceProvides court-defensible forensic proof.The Global Validator (Offline Replay Engine).2. Track P2-A: Sensor Trust & Anti-Evasion (Rust)2.1 Technical IntentTo prevent an adversary from "freezing" RansomEye agents or probes. We use Rust to ensure that the monitoring logic itself is immune to common memory corruption exploits and operates with nanosecond precision.2.2 Integrity Type DefinitionsHeartbeatVariance (0): Triggered when the delta between heartbeats deviates from the mean by $> N\%$.CaptureGap (1): Triggered when telemetry sequence IDs (monotonic uint64) skip a number, indicating packet loss or suppression.ContractViolation (2): Triggered when event causality is broken (e.g., an ImageLoad event occurs for a PID that never had a ProcessStart event).CriticalSensorBlindness (3): Triggered by a dead-man switch or watchdog timeout.2.3 Heartbeat Variance Logic (The "Anti-Suspension" Engine)Implementation must use std::time::Instant to avoid issues with NTP or system clock manipulation.use std::time::{Duration, Instant};
+
+pub struct VarianceMonitor {
+    last_observation: Option<Instant>,
+    window_samples: Vec<Duration>, // Fixed-size sliding window (O(1) search)
+    max_samples: usize,
+    threshold_ns: u128,
+}
+
+impl VarianceMonitor {
+    /// AI Implementation Note:
+    /// Ensure max_samples is pre-allocated to avoid runtime heap fragmentation.
+    pub fn new(max_samples: usize, threshold_ms: u128) -> Self {
+        Self {
+            last_observation: None,
+            window_samples: Vec::with_capacity(max_samples),
+            max_samples,
+            threshold_ns: threshold_ms * 1_000_000,
+        }
+    }
+
+    pub fn observe(&mut self) -> bool {
+        let now = Instant::now();
+        if let Some(last) = self.last_observation {
+            let interval = now.duration_since(last);
+
+            // Manage window (Circular Buffer logic preferred for performance)
+            if self.window_samples.len() == self.max_samples {
+                self.window_samples.remove(0);
+            }
+            self.window_samples.push(interval);
+            self.last_observation = Some(now);
+
+            self.calculate_variance_compliance()
+        } else {
+            self.last_observation = Some(now);
+            true // Baseline established
+        }
+    }
+
+    fn calculate_variance_compliance(&self) -> bool {
+        if self.window_samples.len() < 2 { return true; }
+
+        let total_ns: u128 = self.window_samples.iter().map(|d| d.as_nanos()).sum();
+        let avg_ns = total_ns / self.window_samples.len() as u128;
+
+        // Deterministic check: Is the latest sample an outlier?
+        let latest_ns = self.window_samples.last().unwrap().as_nanos();
+        let diff = if latest_ns > avg_ns { latest_ns - avg_ns } else { avg_ns - latest_ns };
+
+        diff <= self.threshold_ns
+    }
+}
+3. Track P2-B: DPI Advanced Periodicity Engine3.1 Mathematical BasisMalware C2 (e.g., Cobalt Strike, Sliver) often communicates using a "Beacon" rhythm. Even with "jitter" (random noise), the underlying signal remains periodic. We use Autocorrelation to find the fundamental frequency of the encrypted traffic.3.2 Logic FlowIAT Vectorization: Convert packet timestamps $[t_1, t_2, ... t_n]$ into Inter-Arrival Times $IAT = [t_2-t_1, t_3-t_2, ...]$.Autocorrelation: Compute $R(k) = \sum (IAT_i \times IAT_{i+k})$.Confidence Scoring: If $R(k)$ shows a peak significantly above the noise floor at a consistent lag $k$, a PeriodicityDetected event is emitted.Jitter Threshold: The engine ignores variance up to $15\%$. If variance is $> 15\%$, it is treated as human-generated or legitimate application traffic.4. Track P2-D: Human Authority Framework (HAF)4.1 Cryptographic Non-RepudiationHAF ensures that a "Human" cannot be spoofed by a "Process." Every sensitive action must be signed by a private key held in a secure enclave (YubiKey, TPM).4.2 Signing Protocol ImplementationThe Payload: SHA256(ActionType + TargetID + Nonce + Timestamp).The Signature: Ed25519_Sign(Private_Key, Payload).The Verification: The Core Engine will fail-closed if the signature verification does not return OK against the registered Public Key for the Admin ID.import ed25519
+
+def verify_haf_submission(public_key_hex, signature_hex, payload_bytes):
+    """
+    AI Implementation Note:
+    This must be executed in a TEE (Trusted Execution Environment) if available.
+    """
+    try:
+        verifying_key = ed25519.VerifyingKey(public_key_hex, encoding="hex")
+        verifying_key.verify(signature_hex, payload_bytes, encoding="hex")
+        return True
+    except ed25519.BadSignatureError:
+        # LOG AS: 'CRITICAL: UNAUTHORIZED HUMAN ACTION ATTEMPT'
+        return False
+5. Track P2-A2: Negative Evidence Engine (Python Core)5.1 The "Absence as Evidence" LogicThe engine maintains an ExpectationRegistry. Every "Trigger Event" creates a "Debt of Evidence" that must be paid by an "Expected Event."import time
+from dataclasses import dataclass
+
+@dataclass
+class EvidenceContract:
+    trigger: str        # e.g., 'NETWORK_FLOW_START'
+    requirement: str    # e.g., 'AGENT_PROCESS_IDENTIFIED'
+    ttl: float          # Time to wait (seconds)
+
+class NegativeEvidenceEngine:
+    def __init__(self):
+        self.registry = {} # {CorrelationID: {ExpectedEvent: Expiry}}
+
+    def on_event(self, event):
+        # 1. Check if this event satisfies a debt
+        cid = event.payload.get('correlation_id')
+        if cid in self.registry:
+            if event.type in self.registry[cid]:
+                del self.registry[cid][event.type]
+
+        # 2. Check if this event creates a new debt
+        # (Logic provided by AI based on EvidenceContract list)
+        pass
+
+    def audit_registry(self):
+        """Scans for expired expectations (Negative Evidence detected)"""
+        now = time.time()
+        for cid, debts in list(self.registry.items()):
+            for event_type, expiry in list(debts.items()):
+                if now > expiry:
+                    self._emit_negative_evidence_alert(cid, event_type)
+                    del debts[event_type]
+6. Phase-2 Success KPI & Acceptance MatrixDomainMandatory TargetVerification LogicTamper Resistance$100\%$ DetectionKill the agent; The negative evidence engine must alert within $2 \times$ heartbeat interval.C2 Detection$\ge 95\%$Detect C2 becons in encrypted TLS 1.3 traffic with $10\%$ jitter.Human AuditZero Unsigned OpsAttempt a SQL injection to 'Allow' a hash; The Global Validator must fail the build.Performance$< 0.5\%$ CPURust probes must process $10,000$ events/sec with minimal jitter.Final Directives for AI ToolsStrict Typing: Do not use dynamic or any types.Explicit Memory: In Rust, avoid all unsafe blocks unless interfacing with the kernel.Determinism: Ensure all timestamps are serialized as RFC3339 UTC to maintain replay consistency.

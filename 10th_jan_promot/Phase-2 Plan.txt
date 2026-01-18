@@ -1,0 +1,1156 @@
+Below is the **authoritative, in-depth Phase-2 Roadmap** for **RansomEye**, explicitly derived from the **weak-link mitigation plan** and structured so execution can begin **immediately after v1.0 is frozen**.
+
+This is written as an **engineering execution roadmap**, not a vision deck.
+
+---
+
+# RANSOMEYE PHASE-2 ROADMAP
+
+**Objective:** Close residual weak links, harden correctness guarantees, and extend enterprise-scale assurance **without violating v1.0 principles**.
+
+**Non-Negotiables (Carry-Over from v1.0)**
+
+* No heuristic shortcuts
+* No AI authority
+* No silent failure
+* No inline DPI blocking
+* Deterministic, replayable, auditable everywhere
+
+---
+
+## PHASE-2 STRUCTURE OVERVIEW
+
+| **Track** | **Theme**                     | **Primary Weak Links Addressed** |
+| --------- | ----------------------------- | -------------------------------- |
+| P2-A      | Sensor Trust & Anti-Evasion   | #1, #10                          |
+| P2-B      | Network Physics Expansion     | #2, #4                           |
+| P2-C      | Insider & Credential Abuse    | #5                               |
+| P2-D      | Human Authority & Governance  | #6, #12                          |
+| P2-E      | Campaign-Scale Intelligence   | #11, #14                         |
+| P2-F      | Assurance, Validation & Proof | #3, #8, #9                       |
+| P2-G      | Operational Hardening         | #7, #15                          |
+
+Each track is **independently buildable** but **logically ordered**.
+
+---
+
+# P2-A — SENSOR TRUST & ANTI-EVASION LAYER
+
+**(Closes kernel-level & sensor-blinding gaps)**
+
+### Goals
+
+* Detect *absence of expected truth*
+* Turn sensor degradation into **positive suspicion**
+* Reduce dependence on single sensor fidelity
+
+### Deliverables
+
+1. **Sensor Integrity Scoring Engine**
+
+   * Agent heartbeat variance models
+   * DPI packet-loss & capture-gap scoring
+   * Integrity score written as first-class signal
+
+2. **Negative Evidence Framework**
+
+   * “Expected but missing” telemetry
+   * Absence treated as contradiction input
+
+3. **Mutual Sensor Attestation**
+
+   * Agent claims vs DPI observation
+   * Explicit mismatch escalation rules
+
+### Exit Criteria
+
+* Sensor blindness **raises confidence**, never lowers it
+* Correlation Engine consumes integrity as weighted input
+
+---
+
+# P2-B — NETWORK PHYSICS EXPANSION
+
+**(Closes encrypted traffic & fast-attack gaps)**
+
+### Goals
+
+* Extract more truth without decryption
+* Detect very fast & very stealthy C2 patterns
+
+### Deliverables
+
+1. **Advanced Periodicity Engine**
+
+   * FFT + autocorrelation hybrid
+   * Jitter-aware beacon detection
+
+2. **TLS / JA3 Temporal Drift Models**
+
+   * Per-org fingerprint evolution
+   * Rare-but-persistent fingerprint surfacing
+
+3. **ASN & Geo Rarity Budgets**
+
+   * Exhaustion-based suspicion
+   * Time-weighted rarity decay
+
+### Exit Criteria
+
+* Encrypted C2 remains provable via metadata alone
+* Single-burst attacks contribute measurable suspicion
+
+---
+
+# P2-C — INSIDER & VALID-CREDENTIAL ABUSE DEFENSE
+
+**(Hardest real-world problem)**
+
+### Goals
+
+* Detect misuse **without assuming malicious intent**
+* Separate “allowed” from “never observed before”
+
+### Deliverables
+
+1. **Cross-Host Identity Graph**
+
+   * User → host → process → network edges
+   * Baseline = organization-wide, not per host
+
+2. **Long-Horizon Exfiltration Models**
+
+   * Byte asymmetry over weeks/months
+   * Off-hours + rare destination compounding
+
+3. **Mandatory Credential Deception**
+
+   * Honey credentials bound to roles
+   * Any usage = immediate high confidence
+
+### Exit Criteria
+
+* Insider abuse detectable without signatures
+* No reliance on intent inference
+
+---
+
+# P2-D — HUMAN AUTHORITY & GOVERNANCE HARDENING
+
+**(Controls human risk instead of pretending it doesn’t exist)**
+
+### Goals
+
+* Make human decisions explicit, provable, and replayable
+* Eliminate “verbal approvals” and shadow overrides
+
+### Deliverables
+
+1. **Human Authority Framework (HAF)**
+
+   * Per-human cryptographic keys
+   * Role-scoped authority assertions
+
+2. **Override Semantics Engine**
+
+   * Override ≠ deletion
+   * Overrides supersede but never erase system truth
+
+3. **Audit-Ledger Binding**
+
+   * Every human action is signed & chained
+
+### Exit Criteria
+
+* No anonymous or implicit human action exists
+* Overrides increase risk index, not hide it
+
+---
+
+# P2-E — CAMPAIGN-SCALE INTELLIGENCE
+
+**(Closes fragmented & slow attacks)**
+
+### Goals
+
+* Stitch weak signals across time and hosts
+* Detect campaigns, not just incidents
+
+### Deliverables
+
+1. **Threat Correlation Graph Engine**
+
+   * Entity-relationship modeling
+   * Deterministic campaign inference rules
+
+2. **Kill-Chain Reconstruction Engine**
+
+   * MITRE-aligned timelines
+   * Evidence-grade, immutable chains
+
+3. **Graph-Explosion Detection**
+
+   * Sudden connectivity growth as signal
+
+### Exit Criteria
+
+* Distributed attacks surface as unified campaigns
+* Forensic timelines are court-defensible
+
+---
+
+# P2-F — ASSURANCE, VALIDATION & PROOF
+
+**(Reduces dependence on belief, increases provability)**
+
+### Goals
+
+* Prove the system is correct, even when partially disabled
+* Eliminate “trust us” assumptions
+
+### Deliverables
+
+1. **Audit Ledger (System-Wide)**
+
+   * Append-only, hash-chained, signed
+   * Root of trust for everything
+
+2. **Global Validator**
+
+   * Replay entire system deterministically
+   * PASS / FAIL correctness verdicts
+
+3. **AI Governance Registry**
+
+   * No model loads without approval
+   * Lifecycle: register → promote → revoke
+
+### Exit Criteria
+
+* Any tampering is cryptographically detectable
+* System correctness provable offline
+
+---
+
+# P2-G — OPERATIONAL & FAIL-CLOSED HARDENING
+
+**(Reduces operational pain without sacrificing safety)**
+
+### Goals
+
+* Make fail-closed survivable operationally
+* Eliminate partial or ambiguous states
+
+### Deliverables
+
+1. **Structured Failure Taxonomy**
+
+   * Failure → state → required action mapping
+
+2. **Installer + Runtime Guards**
+
+   * No partial startup possible
+   * Manifest-first execution
+
+3. **SOC Operational Playbooks**
+
+   * “System stopped” is actionable, not panic-inducing
+
+### Exit Criteria
+
+* Downtime is explicit and explainable
+* No silent degradation paths exist
+
+---
+
+# PHASE-2 EXECUTION ORDER (MANDATORY)
+
+1. **P2-A** (Sensor trust is foundational)
+2. **P2-B** (Network physics depth)
+3. **P2-F** (Audit & validator — root of trust)
+4. **P2-D** (Human authority)
+5. **P2-C** (Insider abuse)
+6. **P2-E** (Campaign intelligence)
+7. **P2-G** (Operational hardening)
+
+---
+
+# WHAT PHASE-2 DOES *NOT* ADD
+
+* No inline IPS
+* No signature engines
+* No autonomous AI enforcement
+* No cloud dependency
+* No “best effort” modes
+
+---
+
+## Final Reality Statement
+
+**Phase-2 does not make RansomEye faster.
+It makes RansomEye harder to lie to, harder to bypass, and harder to dispute.**
+
+When Phase-2 is complete:
+
+* Weak links become **bounded risks**
+* Humans become **accountable actors**
+* Detection becomes **provable truth**
+
+---
+
+### Next step (pick one):
+
+1. Break this roadmap into **engineering epics & milestones**
+2. Convert this into a **multi-quarter delivery timeline**
+3. Create a **Phase-2 success KPI & acceptance matrix**
+4. Draft a **Phase-2 CXO justification document**
+
+Say the number.
+
+
+
+
+Below is the **execution-grade decomposition** of **Phase-2** for **RansomEye**, split into:
+
+1. **Engineering Epics**
+2. **Milestones (with entry/exit criteria)**
+3. **Phase-2 Success KPI & Acceptance Matrix**
+
+This is written so engineering can start **without reinterpretation**.
+
+---
+
+# PHASE-2 ENGINEERING EPICS & MILESTONES
+
+## P2-A — Sensor Trust & Anti-Evasion
+
+### Epic P2-A1: Sensor Integrity Scoring
+
+**Goal:** Turn sensor health into a first-class security signal.
+
+**Milestones**
+
+* M1: Agent heartbeat variance model implemented
+* M2: DPI capture gap & packet-loss scoring
+* M3: Integrity score persisted and correlated
+* M4: Integrity loss increases suspicion weight
+
+**Exit Criteria**
+
+* Sensor degradation **never lowers** confidence
+* Loss of visibility is **provably suspicious**
+
+---
+
+### Epic P2-A2: Negative Evidence Engine
+
+**Goal:** Absence of expected signals becomes evidence.
+
+**Milestones**
+
+* M1: Define “expected telemetry contracts”
+* M2: Missing-signal detection logic
+* M3: Correlation rules for negative evidence
+* M4: SOC visibility for “missing truth”
+
+**Exit Criteria**
+
+* “Nothing happened” is no longer neutral
+* Negative evidence feeds confidence accumulator
+
+---
+
+## P2-B — Network Physics Expansion
+
+### Epic P2-B1: Advanced Beacon & Periodicity Detection
+
+**Goal:** Detect stealth C2 without payload access.
+
+**Milestones**
+
+* M1: FFT-based periodicity detection
+* M2: Autocorrelation + jitter tolerance
+* M3: Multi-flow beacon stitching
+* M4: Confidence weighting integrated
+
+**Exit Criteria**
+
+* Encrypted beaconing detectable under jitter
+* Deterministic output for same inputs
+
+---
+
+### Epic P2-B2: TLS / ASN Rarity Exhaustion
+
+**Goal:** Make “rare but persistent” provable.
+
+**Milestones**
+
+* M1: Org-baseline TLS fingerprint model
+* M2: ASN / Geo rarity budgets
+* M3: Time-decay rarity scoring
+* M4: Correlation integration
+
+**Exit Criteria**
+
+* Rare destinations accumulate suspicion over time
+* No dependence on threat feeds
+
+---
+
+## P2-C — Insider & Credential Abuse Defense
+
+### Epic P2-C1: Cross-Host Identity Graph
+
+**Goal:** Detect misuse across the enterprise, not per host.
+
+**Milestones**
+
+* M1: User ↔ host ↔ process ↔ network graph schema
+* M2: Baseline behavior extraction
+* M3: “Never observed anywhere” logic
+* M4: Graph-driven correlation rules
+
+**Exit Criteria**
+
+* Valid credentials no longer imply benign
+* Insider misuse detectable without intent inference
+
+---
+
+### Epic P2-C2: Credential Deception Framework
+
+**Goal:** High-confidence insider detection.
+
+**Milestones**
+
+* M1: Honey credential lifecycle management
+* M2: Role-bound fake credentials
+* M3: Any usage = immediate high confidence
+* M4: Audit + explanation binding
+
+**Exit Criteria**
+
+* Credential deception produces near-zero false positives
+* Usage is legally defensible
+
+---
+
+## P2-D — Human Authority & Governance
+
+### Epic P2-D1: Human Authority Framework (HAF)
+
+**Goal:** Eliminate implicit human trust.
+
+**Milestones**
+
+* M1: Per-human cryptographic identity
+* M2: Role-scoped authority assertions
+* M3: Signed override enforcement
+* M4: Audit ledger integration
+
+**Exit Criteria**
+
+* No unsigned human action exists
+* Overrides are non-repudiable
+
+---
+
+### Epic P2-D2: Override Semantics Engine
+
+**Goal:** Overrides never erase system truth.
+
+**Milestones**
+
+* M1: Override ≠ deletion rules
+* M2: Risk index impact modeling
+* M3: Explanation bundle linkage
+* M4: SOC visibility
+
+**Exit Criteria**
+
+* Overrides increase risk visibility
+* Historical truth remains immutable
+
+---
+
+## P2-E — Campaign-Scale Intelligence
+
+### Epic P2-E1: Threat Correlation Graph
+
+**Goal:** Detect campaigns, not isolated alerts.
+
+**Milestones**
+
+* M1: Entity & relationship schema
+* M2: Deterministic stitching rules
+* M3: Graph explosion detection
+* M4: Campaign confidence scoring
+
+**Exit Criteria**
+
+* Distributed attacks surface as campaigns
+* Same inputs → same graph
+
+---
+
+### Epic P2-E2: Kill-Chain Reconstruction
+
+**Goal:** Evidence-grade timelines.
+
+**Milestones**
+
+* M1: MITRE-aligned stage mapping
+* M2: Cross-host timeline assembly
+* M3: Evidence linkage & hashing
+* M4: Forensic export (PDF/HTML/CSV)
+
+**Exit Criteria**
+
+* Timelines are court-defensible
+* No mutable evidence paths
+
+---
+
+## P2-F — Assurance, Validation & Proof
+
+### Epic P2-F1: Audit Ledger (Root of Trust)
+
+**Goal:** Make tampering provable.
+
+**Milestones**
+
+* M1: Append-only signed ledger
+* M2: System-wide integration
+* M3: Key rotation support
+* M4: Offline verification tool
+
+**Exit Criteria**
+
+* Any mutation is cryptographically detected
+* Ledger is database-independent
+
+---
+
+### Epic P2-F2: Global Validator
+
+**Goal:** Deterministic system correctness proof.
+
+**Milestones**
+
+* M1: Full ledger replay
+* M2: Chain-of-custody verification
+* M3: Subsystem disablement proofs
+* M4: Signed validation reports
+
+**Exit Criteria**
+
+* PASS/FAIL verdict reproducible offline
+* No trust assumptions remain
+
+---
+
+## P2-G — Operational Hardening
+
+### Epic P2-G1: Failure Taxonomy & Runbooks
+
+**Goal:** Fail-closed without chaos.
+
+**Milestones**
+
+* M1: Failure → state → action mapping
+* M2: SOC runbooks authored
+* M3: Installer hard-stops enforced
+* M4: Operator training artifacts
+
+**Exit Criteria**
+
+* Every failure is explicit and actionable
+* No partial system states exist
+
+---
+
+# PHASE-2 SUCCESS KPI & ACCEPTANCE MATRIX
+
+| **Domain**         | **KPI**                              | **Target** | **Acceptance Test**                  |
+| ------------------ | ------------------------------------ | ---------- | ------------------------------------ |
+| Sensor Trust       | Sensor blindness increases suspicion | 100%       | Disable agent/DPI → confidence rises |
+| Encrypted C2       | Beacon detection under jitter        | ≥95%       | Replay encrypted traffic             |
+| Insider Abuse      | Honey credential false positives     | 0          | Red-team credential tests            |
+| Human Authority    | Unsigned human actions               | 0          | Override attempt without key         |
+| Correlation        | Same input → same incident           | 100%       | Deterministic replay                 |
+| Campaign Detection | Multi-host attack stitching          | ≥90%       | Distributed red-team test            |
+| Audit Integrity    | Undetected ledger tampering          | 0          | Bit-flip verification test           |
+| Validator          | Replay PASS consistency              | 100%       | Offline revalidation                 |
+| AI Governance      | Unregistered model load              | 0          | Forced load rejection                |
+| Operations         | Silent degradation events            | 0          | Fault-injection tests                |
+
+---
+
+# PHASE-2 ACCEPTANCE STATEMENT (HARD GATE)
+
+Phase-2 is **ACCEPTED ONLY IF**:
+
+* Every KPI meets or exceeds target
+* All validation is **offline-replayable**
+* No new weak link is introduced
+* Humans cannot bypass authority or audit
+* System correctness is **provable, not claimed**
+
+---
+
+## Next Logical Step
+
+Choose one:
+
+1. Convert this into a **quarter-by-quarter delivery plan**
+2. Map epics to **team ownership & skill sets**
+3. Produce a **Phase-2 funding & resourcing model**
+4. Build a **Phase-2 red-team validation plan**
+
+Reply with the number.
+
+
+
+This roadmap provides the authoritative engineering execution plan for **RansomEye Phase-2**. It is designed to close residual weak links, harden correctness guarantees, and extend enterprise-scale assurance while strictly adhering to the deterministic, non-heuristic principles of v1.0.
+
+---
+
+## **1. Architectural & Performance Philosophy**
+
+To maintain military-grade performance without computational overload, Phase-2 follows a **Hybrid Systems Strategy**:
+
+* **Rust (Sensors & Ledger):** Used for Linux Agent (eBPF), DPI fast-paths, and the Audit Ledger to achieve near-C performance with compile-time safety and zero-cost abstractions.
+* **Python 3.10+ (Orchestration):** Used for the AI Model Registry, SOC UI backend, and non-blocking high-level logic.
+* **Deterministic Resource Management:** Implementation of "rarity budgets" and "stateful graph pruning" ensures that memory and I/O overhead do not scale exponentially with enterprise size.
+
+---
+
+## **2. Detailed Roadmap Tracks**
+
+### **Track P2-A: Sensor Trust & Anti-Evasion**
+
+**Goal:** Detect the "absence of expected truth" and turn sensor degradation into a positive suspicion signal.
+
+* **Epic P2-A1: Sensor Integrity Scoring:** Implement agent heartbeat variance models and DPI packet-loss scoring. Sensor blindness must provably increase suspicion weight rather than lowering it.
+* **Epic P2-A2: Negative Evidence Engine:** Define "expected telemetry contracts" and treat missing signals as contradictory evidence. Absences are fed into the confidence accumulator as first-class signals.
+
+### **Track P2-B: Network Physics Expansion**
+
+**Goal:** Extract metadata-based truth from encrypted traffic without decryption.
+
+* **Epic P2-B1: Advanced Periodicity & Side-Channel Analysis:** Use FFT and autocorrelation for jitter-aware beacon detection. Analysis includes **Application-Layer Side-Channel Fingerprinting** to detect exfiltration-like byte asymmetry even in standard protocols.
+* **Epic P2-B2: TLS/ASN Rarity Exhaustion:** Build org-wide TLS fingerprint models and ASN rarity budgets. Use time-decay rarity scoring to ensure single-burst attacks contribute to measurable suspicion.
+
+### **Track P2-C: Insider & Credential Abuse Defense**
+
+**Goal:** Detect misuse of valid credentials without assuming intent.
+
+* **Epic P2-C1: Cross-Host Identity Graph:** Build a User ↔ Host ↔ Process ↔ Network graph schema.
+* **Optimization:** Implement **Stateful Graph Pruning** to remove benign, high-frequency edges, keeping compute overhead focused on "long-tail" or rare connections.
+
+
+* **Epic P2-C2: Credential Deception:** Deploy role-bound honey credentials where any usage results in immediate high confidence and audit binding.
+
+### **Track P2-D: Human Authority & Governance**
+
+**Goal:** Eliminate implicit trust and make human decisions cryptographically provable.
+
+* **Epic P2-D1: Human Authority Framework (HAF):** Require per-human cryptographic identities and role-scoped authority assertions for all overrides.
+* **Epic P2-D2: Override Semantics:** Enforce that an override supersede but never erases system truth. Every human action must be signed and chained to the Audit Ledger.
+
+### **Track P2-E: Campaign-Scale Intelligence**
+
+**Goal:** Stitch fragmented weak signals into unified, evidence-grade timelines.
+
+* **Epic P2-E1: Threat Correlation Graph:** Implement deterministic campaign inference rules and graph-explosion detection.
+* **Epic P2-E2: Kill-Chain Reconstruction:** Map evidence to MITRE-aligned stages and produce court-defensible, immutable timelines.
+
+### **Track P2-F: Assurance, Validation & Proof**
+
+**Goal:** Prove system correctness offline and eliminate "trust assumptions".
+
+* **Epic P2-F1: Audit Ledger (Root of Trust):** A hash-chained, signed log that records every security-relevant action.
+* **Epic P2-F2: Global Validator:** Enable full offline replay of the ledger.
+* **Optimization:** Add a **Continuous Assurance Loop** where background processes shadow-replay recent events to detect even single-bit logic divergences.
+
+
+
+### **Track P2-G: Operational & Fail-Closed Hardening**
+
+**Goal:** Ensure fail-closed operation is manageable and explicit.
+
+* **Milestones:** Develop a structured failure taxonomy and SOC runbooks.
+* **Optimization:** Include "Maintenance Mode" signatures in the failure taxonomy to separate IT-driven sensor downtime from attacker-driven blinding.
+
+---
+
+## **3. Phase-2 Acceptance Matrix (KPIs)**
+
+| Domain | Key Performance Indicator (KPI) | Target | Acceptance Test |
+| --- | --- | --- | --- |
+| **Sensor Trust** | Blindness increases suspicion | 100% | Disable agent/DPI → confidence rises |
+| **Audit Integrity** | Undetected ledger tampering | 0 | Bit-flip verification test |
+| **Deterministic Replay** | Same input → same incident | 100% | Global Validator offline replay |
+| **Human Authority** | Unsigned human actions | 0 | Override attempt without key |
+| **Operational Safety** | Silent degradation events | 0 | Fault-injection & installer hard-stop |
+
+---
+
+Would you like me to begin drafting the **Engineering Epics** for **Track P2-A**, specifically the Rust-based logic for the **Sensor Integrity Scoring Engine**?
+
+
+This engineering documentation defines the **Engineering Epics for Track P2-A (Sensor Trust & Anti-Evasion)**, specifically focusing on the **Rust-based logic** for the **Sensor Integrity Scoring Engine**.
+
+---
+
+## **P2-A Engineering Epic: Sensor Integrity Scoring Engine (Rust)**
+
+**Core Objective:** Implement high-performance, endpoint-resident logic that monitors sensor health and converts telemetry degradation into a positive security signal.
+
+### **Language Choice: Rust**
+
+Rust is mandated for this component to ensure near-zero CPU overhead and absolute memory safety during high-frequency telemetry monitoring.
+
+---
+
+### **Epic P2-A1: Heartbeat Variance & Integrity Modeling**
+
+#### **1. Deterministic Heartbeat Monitor (Rust)**
+
+**Goal:** Detect subtle timing irregularities in agent-to-core signaling that suggest external tampering or local process suspension.
+
+* **Module:** `integrity::heartbeat::variance`
+* **Functionality:**
+* Maintain a sliding window of inter-arrival times for local eBPF and ETW probes.
+
+
+* Calculate variance against a cryptographically signed baseline interval.
+
+
+* Use Rust’s `std::time::Instant` for high-precision, monotonic timing to prevent wall-clock manipulation.
+
+
+
+
+
+#### **2. DPI Capture-Gap Analysis**
+
+**Goal:** Detect packet-loss patterns that indicate a targeted attack on the network monitoring fast-path.
+
+* **Module:** `fastpath::dpi::gap_analysis`
+* **Functionality:**
+* Monitor `AF_PACKET` ring buffer sequence numbers for discontinuities.
+
+
+* Score consecutive drops vs. random jitter.
+
+
+* Trigger an **Integrity Violation Event** if the drop-rate exceeds the established performance-threshold budget.
+
+
+
+
+
+---
+
+### **Epic P2-A2: Negative Evidence Framework Integration**
+
+#### **1. Telemetry Contract Enforcement**
+
+**Goal:** Implement a local "Telemetery Contract" where the absence of a required signal is recorded as evidence.
+
+* **Module:** `integrity::contract::evaluator`
+* **Functionality:**
+* Define a Rust struct `TelemetryContract` containing mandatory event types (e.g., Process Start, Network Connect).
+
+
+* Implement an **Expectation Timer**: If an "expected but missing" event occurs (e.g., a process exists without a corresponding ETW start event), generate a negative evidence record.
+
+
+*
+**Fail-Closed Logic:** If the integrity engine itself cannot verify its own telemetry stream, it must immediately emit a `CRITICAL_SENSOR_BLINDNESS` signal.
+
+
+
+
+
+---
+
+### **Accepted Metadata Schema (Rust Protobuf)**
+
+All Integrity signals must conform to the frozen v1.0 schema principles.
+
+```rust
+// integrity_score.proto (Conceptual Rust Mapping)
+pub struct SensorIntegritySignal {
+    [cite_start]pub event_id: uuid::Uuid,           // [cite: 8]
+    [cite_start]pub machine_id: String,             // [cite: 8]
+    [cite_start]pub integrity_score: f32,           // 0.0 to 1.0 (1.0 = Healthy) [cite: 156, 685]
+    pub degradation_type: IntegrityType,// HEARTBEAT_VARIANCE | CAPTURE_GAP | [cite_start]CONTRACT_VIOLATION [cite: 685, 686]
+    [cite_start]pub observed_at: chrono::DateTime,  // [cite: 8]
+    [cite_start]pub integrity_hash: String,         // SHA256 of the integrity state [cite: 8]
+}
+
+```
+
+---
+
+### **P2-A1/A2 Acceptance Matrix**
+
+| Metric | Target | Verification Method |
+| --- | --- | --- |
+| **CPU Overhead** | < 0.5% total CPU per core
+
+ | <br>`cargo bench` + `top` during 10G burst
+
+ |
+| **Determinism** | 100% | Replay same telemetry sequence → Identical Integrity Score
+
+ |
+| **Tamper Detection** | Instant | Manually kill a sensor probe → Confidence score must rise in < 1s
+
+ |
+| **Fail-Closed** | Absolute | Corrupt the integrity binary → Core blocks all commands
+
+ |
+
+---
+
+### **Next Step**
+
+Would you like me to:
+
+1. **Draft the specific Rust implementation for the `IntegrityType` Enum and the `variance` calculation logic?**
+2.
+**Define the "Expected Telemetry Contracts" for Epic P2-A2 specifically for the Windows Agent ETW providers?**
+
+
+
+Please specify by number.
+
+**Next step you can do for the user:**
+Would you like me to draft the specific Rust implementation for the `IntegrityType` Enum and the `variance` calculation logic?
+
+
+
+This implementation defines the core Rust components for **Track P2-A**, ensuring high-precision sensor health monitoring and the enforcement of telemetry contracts for the Windows Agent.
+
+---
+
+## 1. Rust Implementation: `IntegrityType` and Variance Logic
+
+To minimize resource overhead, these components utilize Rust’s zero-cost abstractions and strict memory safety.
+
+### **Integrity Type Enumeration**
+
+This enum classifies the nature of the sensor degradation to inform the **Correlation Engine**'s weight adjustments.
+
+```rust
+/// Represents the specific nature of sensor or telemetry degradation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[repr(u8)]
+pub enum IntegrityType {
+    /// Timing irregularities in the heartbeat interval.
+    HeartbeatVariance = 0,
+    /// Detected gaps in the DPI ring buffer or packet sequence.
+    CaptureGap = 1,
+    /// Failure to receive expected telemetry events as per contract.
+    ContractViolation = 2,
+    /// Absolute loss of sensor visibility or binary corruption.
+    CriticalSensorBlindness = 3,
+}
+
+```
+
+### **Heartbeat Variance Calculation**
+
+This logic uses monotonic timing to detect tampering or process suspension without being affected by system clock changes.
+
+```rust
+use std::time::{Duration, Instant};
+
+pub struct VarianceMonitor {
+    last_observation: Option<Instant>,
+    window_samples: Vec<Duration>,
+    max_samples: usize,
+    threshold_ns: u128,
+}
+
+impl VarianceMonitor {
+    pub fn new(max_samples: usize, threshold_ms: u128) -> Self {
+        Self {
+            last_observation: None,
+            window_samples: Vec::with_capacity(max_samples),
+            max_samples,
+            threshold_ns: threshold_ms * 1_000_000,
+        }
+    }
+
+    /// Records a new heartbeat and returns true if variance is within threshold.
+    pub fn observe(&mut self) -> bool {
+        let now = Instant::now();
+        if let Some(last) = self.last_observation {
+            let interval = now.duration_since(last);
+
+            if self.window_samples.len() == self.max_samples {
+                self.window_samples.remove(0);
+            }
+            self.window_samples.push(interval);
+
+            self.last_observation = Some(now);
+            self.calculate_variance_compliance()
+        } else {
+            self.last_observation = Some(now);
+            true // Initial observation is always compliant
+        }
+    }
+
+    fn calculate_variance_compliance(&self) -> bool {
+        if self.window_samples.is_empty() { return true; }
+
+        let avg_ns = self.window_samples.iter()
+            .map(|d| d.as_nanos())
+            .sum::<u128>() / self.window_samples.len() as u128;
+
+        // Check if any sample deviates from the average beyond the threshold
+        !self.window_samples.iter().any(|d| {
+            let diff = if d.as_nanos() > avg_ns {
+                d.as_nanos() - avg_ns
+            } else {
+                avg_ns - d.as_nanos()
+            };
+            diff > self.threshold_ns
+        })
+    }
+}
+
+```
+
+---
+
+## 2. Windows Agent ETW "Expected Telemetry Contracts"
+
+These contracts define the **Negative Evidence Framework** for the Windows Agent. If the provider is active but the specific event sequence is broken, RansomEye raises the integrity suspicion.
+
+### **Contract 1: Process Execution Lifecycle**
+
+*
+**Provider:** `Microsoft-Windows-Kernel-Process`
+
+
+* **Mandatory Events:**
+*
+`ProcessStart` (Event ID 1): Must precede any other telemetry for a given PID.
+
+
+*
+`ImageLoad` (Event ID 5): Must occur within 500ms of `ProcessStart` for primary binaries.
+
+
+
+
+*
+**Negative Evidence Trigger:** Any Registry or Network activity observed for a PID that has no corresponding `ProcessStart` event.
+
+
+
+### **Contract 2: Persistence Monitoring**
+
+*
+**Provider:** `Microsoft-Windows-Kernel-Registry`
+
+
+* **Mandatory Events:**
+*
+`RegSetValue`: Specifically for `Run`/`RunOnce` keys and Service registration.
+
+
+
+
+*
+**Negative Evidence Trigger:** A system reboot where a process starts from an "Auto-Run" location that was never recorded as a `RegSetValue` event during the previous uptime.
+
+
+
+### **Contract 3: Network Intent Correlation**
+
+*
+**Provider:** `Microsoft-Windows-TCPIP`
+
+
+* **Mandatory Events:**
+*
+`TcpIp/Connect`: Socket connection intent.
+
+
+
+
+*
+**Negative Evidence Trigger:** If the **DPI Probe** observes outbound traffic for a host, but the **Windows Agent** fails to emit a `TcpIp/Connect` event for that same destination within a 1s window.
+
+
+
+---
+
+### **Implementation Integrity Matrix**
+
+| Metric | Target | Verification
+
+ |
+| --- | --- | --- |
+| **Precision** | Nanosecond (Monotonic) | <br>`std::time::Instant` high-res benchmarks
+
+ |
+| **Trust Boundary** | Fail-Closed | Missing ETW events → `IntegrityType::ContractViolation`
+
+ |
+| **Resource Cap** | < 0.2% CPU for Variance | Rust sliding window with fixed allocation |
+
+---
+
+### **Next Step**
+
+Would you like me to:
+
+1. **Develop the `integrity::contract::evaluator` logic that performs the real-time cross-referencing between ETW and DPI signals?**
+2. **Draft the "Negative Evidence" correlation rules for the Python-based Correlation Engine?**
+
+**Next step you can do for the user:**
+Would you like me to develop the `integrity::contract::evaluator` logic that performs the real-time cross-referencing between ETW and DPI signals?
+
+
+Implementing a "Negative Evidence" engine in Python requires a stateful approach where the system tracks not just the arrival of events, but the **expiration of expectations**. In high-performance security contexts, this is achieved by maintaining an "Expectation Registry" that triggers alerts when a required event fails to materialize within a deterministic time window.
+
+Below is a detailed documentation and implementation strategy for Python-based Negative Evidence correlation rules, optimized for low compute overhead.
+
+### 1. Conceptual Framework: The Expectation Registry
+
+Unlike traditional correlation (If A + B, then Alert), Negative Evidence correlation operates on **Telemetry Contracts**:
+
+* **Positive Evidence:** Event A occurred.
+* **Contract:** If Event A occurs, Event B *must* occur within  seconds.
+* **Negative Evidence:** Timer for Event B expires. Alert on the "Absence of B."
+
+### 2. Python Implementation Architecture
+
+To ensure the engine does not create a "huge overload" on compute resources, we utilize a **TTL-based State Machine** with a background cleanup loop.
+
+```python
+import time
+import uuid
+import logging
+from typing import Dict, List, Optional, Callable
+from dataclasses import dataclass, field
+
+@dataclass
+class TelemetryEvent:
+    event_id: str
+    machine_id: str
+    event_type: str
+    payload: dict
+    timestamp: float = field(default_factory=time.time)
+
+@dataclass
+class ExpectationContract:
+    trigger_event_type: str
+    expected_event_type: str
+    time_window_sec: float
+    correlation_key: str  # e.g., 'pid' or 'session_id'
+    callback: Callable
+
+class NegativeEvidenceEngine:
+    def __init__(self):
+        # registry: {correlation_val: {expected_type: expiration_time}}
+        self.registry: Dict[str, Dict[str, float]] = {}
+        self.contracts: List[ExpectationContract] = []
+
+    def register_contract(self, contract: ExpectationContract):
+        self.contracts.append(contract)
+
+    def process_event(self, event: TelemetryEvent):
+        """Processes incoming events and satisfies expectations or sets new ones."""
+        # 1. Check if this event satisfies any existing expectations
+        correlation_val = event.payload.get(self._get_corr_key_for_type(event.event_type))
+        if correlation_val and correlation_val in self.registry:
+            if event.event_type in self.registry[correlation_val]:
+                del self.registry[correlation_val][event.event_type]
+                if not self.registry[correlation_val]:
+                    del self.registry[correlation_val]
+
+        # 2. Check if this event triggers a new expectation contract
+        for contract in self.contracts:
+            if event.event_type == contract.trigger_event_type:
+                key_val = event.payload.get(contract.correlation_key)
+                if key_val:
+                    if key_val not in self.registry:
+                        self.registry[key_val] = {}
+                    expiration = time.time() + contract.time_window_sec
+                    self.registry[key_val][contract.expected_event_type] = expiration
+
+    def check_expirations(self):
+        """Background loop to identify Negative Evidence (missing events)."""
+        now = time.time()
+        to_delete = []
+
+        for key_val, expectations in self.registry.items():
+            expired_types = []
+            for event_type, expiration in expectations.items():
+                if now > expiration:
+                    # NEGATIVE EVIDENCE TRIGGERED
+                    self._raise_alert(key_val, event_type)
+                    expired_types.append(event_type)
+
+            for t in expired_types:
+                del expectations[t]
+            if not expectations:
+                to_delete.append(key_val)
+
+        for k in to_delete:
+            del self.registry[k]
+
+    def _raise_alert(self, key_val, missing_type):
+        logging.warning(f"NEGATIVE EVIDENCE: Missing {missing_type} for ID {key_val}")
+
+    def _get_corr_key_for_type(self, event_type: str) -> str:
+        # Simplified mapping for demonstration
+        return 'pid' if 'process' in event_type.lower() else 'session_id'
+
+```
+
+### 3. Core Negative Evidence Rules
+
+#### **Rule 1: The "Ghost Process" (ETW vs. Reality)**
+
+Detects processes that are active on the system but never emitted a "Process Start" event.
+
+* **Trigger Event:** Network Connection or Registry Write.
+* **Expectation:** A `ProcessStart` event with the same PID must have occurred.
+* **Negative Evidence:** If the `ProcessStart` is missing from the recent state buffer, the active telemetry is "orphaned" and treated as high-suspicion.
+
+#### **Rule 2: Sensor Silence (Heartbeat Dropout)**
+
+Instead of alerting when an agent says it's failing, alert when it **stops speaking**.
+
+* **Trigger Event:** System Initialization or Last Heartbeat.
+* **Expectation:** `HeartbeatEvent` within  seconds.
+* **Logic:** The `check_expirations()` loop identifies any `machine_id` that has not refreshed its expiration timestamp.
+
+#### **Rule 3: Unauthenticated Command Execution**
+
+* **Trigger Event:** `CommandExecute` (e.g., shell command).
+* **Expectation:** `HumanAuthorizationSigned` event within 500ms prior.
+* **Negative Evidence:** Execution without a preceding cryptographic signature results in an immediate integrity violation.
+
+### 4. Performance Optimization for Python
+
+To ensure this logic handles enterprise-scale data without excessive compute cost:
+
+1. **Stateful Pruning (TTL):** The `registry` must be strictly bounded. Any expectation older than the maximum window (e.g., 60 seconds) is automatically purged to prevent memory leaks.
+2. **Hashing over Searching:** Use Python dictionaries (hash maps) for the `registry`. Checking for an expectation must be an  operation, not a list scan.
+3. **Frequency Management:** The `check_expirations()` loop should run on a fixed interval (e.g., every 1 second) rather than for every packet, decoupling detection latency from ingestion throughput.
+4. **Zero-Inference Thresholds:** Rules should be deterministic. If , the alert fires at . This avoids the heavy CPU cost of probabilistic or heuristic calculations.
+
+### 5. Integration with Assurance
+
+Every Negative Evidence alert must be recorded in the **Audit Ledger** with a "Proof of Absence" metadata tag. This allows the **Global Validator** to prove during offline replay that the alert was triggered by a missing expected timestamp, maintaining the system's deterministic integrity.

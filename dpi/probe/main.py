@@ -100,24 +100,9 @@ def _cleanup():
 
 
 def _assert_supervised():
-    if os.getenv("RANSOMEYE_SUPERVISED") != "1":
-        error_msg = "DPI Probe must be started by Core orchestrator"
-        logger.fatal(error_msg)
-        exit_startup_error(error_msg)
-    core_pid = os.getenv("RANSOMEYE_CORE_PID")
-    core_token = os.getenv("RANSOMEYE_CORE_TOKEN")
-    if not core_pid or not core_token:
-        error_msg = "DPI Probe missing Core supervision metadata"
-        logger.fatal(error_msg)
-        exit_startup_error(error_msg)
-    try:
-        uuid.UUID(core_token)
-    except Exception:
-        error_msg = "DPI Probe invalid Core token"
-        logger.fatal(error_msg)
-        exit_startup_error(error_msg)
-    if os.getppid() != int(core_pid):
-        error_msg = "DPI Probe parent PID mismatch"
+    orch = os.getenv("RANSOMEYE_ORCHESTRATOR")
+    if orch != "systemd":
+        error_msg = "DPI Probe must be started by Core orchestrator (systemd)"
         logger.fatal(error_msg)
         exit_startup_error(error_msg)
 

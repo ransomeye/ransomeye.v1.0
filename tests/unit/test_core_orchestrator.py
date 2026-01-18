@@ -1,5 +1,6 @@
 import json
 import os
+from datetime import datetime, timezone
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
@@ -115,12 +116,13 @@ def test_component_health_status_checks(tmp_path):
     )
     adapter = ComponentAdapter(spec, _Logger(), env={}, stub_mode=False)
     adapter.process = SimpleNamespace(poll=lambda: None, returncode=None)
-    adapter.started_at = "2024-01-01T00:00:00+00:00"
+    now = datetime.now(timezone.utc)
+    adapter.started_at = now.isoformat()
     status_path.write_text(
         json.dumps(
             {
                 "state": "RUNNING",
-                "last_successful_cycle": "2024-01-01T00:00:01+00:00",
+                "last_successful_cycle": now.isoformat(),
                 "failure_reason": None,
             }
         ),

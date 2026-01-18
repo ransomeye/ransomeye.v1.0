@@ -5,6 +5,7 @@ AUTHORITATIVE: Hash-chain continuity, sequence monotonicity, idempotency verific
 Phase 10 requirement: Data integrity hardening, corruption detection
 """
 
+import sys
 import psycopg2
 from typing import Dict, Any, Optional, Tuple
 
@@ -58,14 +59,17 @@ def verify_hash_chain_continuity(conn, component_instance_id: str, prev_hash_sha
             """, (component_instance_id, sequence))
             prev_count = cur.fetchone()[0]
             if prev_count > 0:
+                sys.stderr.write("HIT_BRANCH: prev_hash_no_prior_event\n")
                 return False, f"Previous event with sequence={sequence-1} not found for component_instance_id={component_instance_id}, but {prev_count} earlier events exist (potential corruption)"
             # This is the first event for this component instance, but sequence > 0 - this is an error
+            sys.stderr.write("HIT_BRANCH: sequence_first_event_nonzero\n")
             return False, f"Sequence={sequence} for component_instance_id={component_instance_id} but no previous events found (sequence should be 0 for first event)"
         
         prev_event_hash = prev_event[2]
         
         # Phase 10 requirement: prev_hash_sha256 must match previous event's hash_sha256
         if prev_event_hash != prev_hash_sha256:
+            sys.stderr.write("HIT_BRANCH: prev_hash_incorrect\n")
             return False, f"Hash chain broken: prev_hash_sha256={prev_hash_sha256} does not match previous event (sequence={sequence-1}) hash={prev_event_hash} for component_instance_id={component_instance_id}"
         
         return True, None
@@ -115,6 +119,7 @@ def verify_sequence_monotonicity(conn, component_instance_id: str, sequence: int
         
         # Phase 10 requirement: Check for large gaps (potential corruption or missing events)
         if sequence > max_sequence + 1000:
+            sys.stderr.write("HIT_BRANCH: sequence_gap\n")
             return False, f"Large sequence gap detected: sequence={sequence}, max_sequence={max_sequence}, gap={sequence - max_sequence} (potential corruption)"
         
         return True, None

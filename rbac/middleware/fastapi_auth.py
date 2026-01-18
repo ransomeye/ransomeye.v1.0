@@ -30,8 +30,8 @@ _rbac_path = os.path.join(_project_root, 'rbac')
 if os.path.exists(_rbac_path) and _rbac_path not in sys.path:
     sys.path.insert(0, _rbac_path)
 
-from api.rbac_api import RBACAPI, RBACAPIError
-from engine.permission_checker import PermissionChecker, PermissionDeniedError
+from rbac.api.rbac_api import RBACAPI, RBACAPIError
+from rbac.engine.permission_checker import PermissionChecker, PermissionDeniedError
 
 # Security scheme (explicit 401 handling)
 security = HTTPBearer(auto_error=False)
@@ -90,25 +90,38 @@ class RBACAuth:
                     self.logger.warning("Auth audit logging failed")
 
     def _decode_token(self, token: str) -> Dict[str, Any]:
+        return jwt.decode(
+            token,
+            self.jwt_signing_key,
+            algorithms=["HS256"],
+            audience=self.jwt_audience,
+            issuer=self.jwt_issuer,
+            options={
+                "require": ["sub", "iat", "exp", "token_type"],
+                "verify_signature": True,
+                "verify_exp": True,
+                "verify_iat": True
+            },
+            leeway=self.leeway_seconds
+        )
+
+    def _extract_subject_unverified(self, token: str) -> Optional[str]:
+        if not _jwt_available:
+            return None
         try:
-            return jwt.decode(
+            payload = jwt.decode(
                 token,
-                self.jwt_signing_key,
-                algorithms=["HS256"],
-                audience=self.jwt_audience,
-                issuer=self.jwt_issuer,
                 options={
-                    "require": ["sub", "iat", "exp", "token_type"],
-                    "verify_signature": True,
-                    "verify_exp": True,
-                    "verify_iat": True
-                },
-                leeway=self.leeway_seconds
+                    "verify_signature": False,
+                    "verify_exp": False,
+                    "verify_iat": False,
+                    "verify_aud": False,
+                    "verify_iss": False
+                }
             )
-        except jwt.ExpiredSignatureError as exc:
-            raise HTTPException(status_code=401, detail="Token expired") from exc
-        except jwt.InvalidTokenError as exc:
-            raise HTTPException(status_code=401, detail="Invalid token") from exc
+            return payload.get("sub")
+        except Exception:
+            return None
     
     async def get_current_user(
         self,
@@ -137,7 +150,41 @@ class RBACAuth:
             raise HTTPException(status_code=401, detail="Missing token")
 
         token = credentials.credentials
-        payload = self._decode_token(token)
+        try:
+            payload = self._decode_token(token)
+        except jwt.ExpiredSignatureError as exc:
+            self._audit_auth({
+                "decision": "DENY",
+                "reason": "token_expired",
+                "path": str(request.url.path),
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            })
+            raise HTTPException(status_code=401, detail="Token expired") from exc
+        except jwt.InvalidSignatureError as exc:
+            subject = self._extract_subject_unverified(token)
+            entry = {
+                "decision": "DENY",
+                "reason": "token_tampered",
+                "error": "invalid_signature",
+                "path": str(request.url.path),
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+            if subject:
+                entry["user_id"] = subject
+            self._audit_auth(entry)
+            raise HTTPException(status_code=401, detail="Invalid token") from exc
+        except jwt.InvalidTokenError as exc:
+            subject = self._extract_subject_unverified(token)
+            entry = {
+                "decision": "DENY",
+                "reason": "invalid_token",
+                "path": str(request.url.path),
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+            if subject:
+                entry["user_id"] = subject
+            self._audit_auth(entry)
+            raise HTTPException(status_code=401, detail="Invalid token") from exc
         token_type = payload.get("token_type")
         if token_type not in ("access", "service"):
             self._audit_auth({

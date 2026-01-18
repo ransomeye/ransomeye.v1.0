@@ -1,0 +1,55 @@
+[Unit]
+Description=RansomEye Secure Bus
+Documentation=https://ransomeye.v1.0/
+Requires=postgresql.service
+After=postgresql.service
+BindsTo=postgresql.service ingest.service
+PartOf=ransomeye.target
+
+[Service]
+Type=notify
+ExecCondition=/usr/bin/systemctl is-active postgresql.service
+User=ransomeye
+Group=ransomeye
+WorkingDirectory=/opt/ransomeye
+EnvironmentFile=-/opt/ransomeye/config/environment
+Environment=RANSOMEYE_ORCHESTRATOR=systemd
+ExecStart=/opt/ransomeye/bin/ransomeye-secure-bus
+Restart=on-failure
+RestartSec=10
+WatchdogSec=30
+StartLimitInterval=300
+StartLimitBurst=3
+LimitNOFILE=65536
+LimitNPROC=4096
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/ransomeye/logs /opt/ransomeye/runtime
+CapabilityBoundingSet=
+AmbientCapabilities=
+CPUQuota=75%
+MemoryMax=4G
+TasksMax=2048
+RestrictRealtime=true
+RestrictNamespaces=true
+LockPersonality=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources @obsolete @debug @mount @swap @reboot @module @raw-io
+SystemCallErrorNumber=EPERM
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=30
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ransomeye-secure-bus
+
+[Install]
+WantedBy=ransomeye.target

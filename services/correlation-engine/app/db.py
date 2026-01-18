@@ -137,8 +137,41 @@ def get_unprocessed_events(conn) -> List[Dict[str, Any]]:
         cur.close()
 
 
-def create_incident(conn, incident_id: str, machine_id: str, event: Dict[str, Any], 
-                   stage: str, confidence_score: float, event_id: str):
+def count_recent_events(conn, machine_id: str, component: str, observed_at: datetime, window_seconds: int) -> int:
+    """
+    Count recent events for a machine/component within a time window.
+
+    Args:
+        conn: Database connection
+        machine_id: Machine identifier
+        component: Component type (e.g., linux_agent, dpi)
+        observed_at: Event observed_at timestamp
+        window_seconds: Lookback window in seconds
+
+    Returns:
+        Count of matching events within window (inclusive of observed_at)
+    """
+    cur = conn.cursor()
+    try:
+        window_start = observed_at - timedelta(seconds=window_seconds)
+        cur.execute("""
+            SELECT COUNT(*)
+            FROM raw_events
+            WHERE machine_id = %s
+              AND component = %s
+              AND validation_status = 'VALID'
+              AND observed_at >= %s
+              AND observed_at <= %s
+        """, (machine_id, component, window_start, observed_at))
+        result = cur.fetchone()
+        return int(result[0]) if result else 0
+    finally:
+        cur.close()
+
+
+def create_incident(conn, incident_id: str, machine_id: str, event: Dict[str, Any],
+                   stage: str, confidence_score: float, event_id: str,
+                   evidence_type: str):
     """
     Create incident with initial stage and evidence link.
     Contract compliance: Write to incidents, incident_stages, evidence tables (Phase 2 schema)
@@ -192,13 +225,19 @@ def create_incident(conn, incident_id: str, machine_id: str, event: Dict[str, An
             
             # Contract compliance: Link triggering event in evidence table
             # PHASE 3: Use deterministic timestamp (observed_at) for created_at
+            if confidence_score >= 50.0:
+                confidence_level = 'HIGH'
+            elif confidence_score >= 25.0:
+                confidence_level = 'MEDIUM'
+            else:
+                confidence_level = 'LOW'
             cur.execute("""
                 INSERT INTO evidence (
                     incident_id, event_id, evidence_type, confidence_level, confidence_score,
                     observed_at, created_at
                 )
-                VALUES (%s, %s, 'CORRELATION_PATTERN', 'LOW', %s, %s, %s)
-            """, (incident_id, event_id, confidence_score, observed_at, observed_at))
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """, (incident_id, event_id, evidence_type, confidence_level, confidence_score, observed_at, observed_at))
             
             return True
         finally:
@@ -320,6 +359,27 @@ def add_evidence_to_incident(conn, incident_id: str, event: Dict[str, Any],
             from state_machine import accumulate_confidence, determine_stage, should_transition_stage
             new_confidence = accumulate_confidence(float(current_confidence), confidence_score)
             new_stage = determine_stage(new_confidence)
+
+            # GA-BLOCKING: CONFIRMED requires cross-domain evidence (DPI + non-DPI)
+            if new_stage == 'CONFIRMED':
+                cur.execute("""
+                    SELECT evidence_type
+                    FROM evidence
+                    WHERE incident_id = %s
+                """, (incident_id,))
+                has_dpi = False
+                has_non_dpi = False
+                for row in cur.fetchall():
+                    if row[0] == 'DPI_FLOW':
+                        has_dpi = True
+                    else:
+                        has_non_dpi = True
+                if evidence_type == 'DPI_FLOW':
+                    has_dpi = True
+                else:
+                    has_non_dpi = True
+                if not (has_dpi and has_non_dpi):
+                    new_stage = 'PROBABLE'
             
             # Update last_observed_at if event is newer
             if isinstance(last_observed, datetime):

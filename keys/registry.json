@@ -1,0 +1,20 @@
+{
+  "version": "1.0",
+  "created_at": "2026-01-18T07:30:26.275505+00:00",
+  "keys": {
+    "ransomeye-release-signing-v1": {
+      "key_id": "ransomeye-release-signing-v1",
+      "key_type": "signing",
+      "public_key_fingerprint": "4ba9f27a9d8d61ef2ad07ee9dbc5d29335a73bd5fcf334cb08b30058fb34f2e1",
+      "status": "active",
+      "generation_date": "2026-01-18T07:30:26.275559+00:00",
+      "generation_log_path": "keys/ceremony-logs/ransomeye-release-signing-v1-generation-20260118-073026.json",
+      "parent_key_id": null,
+      "rotation_date": null,
+      "revocation_date": null,
+      "compromise_date": null,
+      "registered_at": "2026-01-18T07:30:26.367515+00:00"
+    }
+  },
+  "revocation_list": []
+}

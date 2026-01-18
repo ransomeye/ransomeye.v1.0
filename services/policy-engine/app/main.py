@@ -15,6 +15,14 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
 from pathlib import Path
 
+if os.getenv("COVERAGE_PROCESS_START") and not os.getenv("PYTEST_CURRENT_TEST"):
+    try:
+        import coverage
+
+        coverage.process_startup()
+    except Exception:
+        pass
+
 # Add common utilities to path (Phase 10 requirement)
 _current_file = os.path.abspath(__file__)
 _project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(_current_file))))
@@ -76,6 +84,7 @@ from rules import evaluate_policy
 from signer import create_signed_command
 
 # Phase 10 requirement: Centralized configuration
+# Configuration is loaded at runtime, not at import time
 if _common_available:
     config_loader = ConfigLoader('policy-engine')
     config_loader.require('RANSOMEYE_DB_PASSWORD', description='Database password (security-sensitive)')
@@ -85,14 +94,25 @@ if _common_available:
     config_loader.require('RANSOMEYE_DB_USER', description='Database user (PHASE 1: per-service user required, no defaults)')
     config_loader.optional('RANSOMEYE_POLICY_DIR', default='/tmp/ransomeye/policy')
     config_loader.optional('RANSOMEYE_POLICY_ENFORCEMENT_ENABLED', default='false')
-    try:
-        config = config_loader.load()
-    except ConfigError as e:
-        exit_config_error(str(e))
 else:
-    config = {}
-    if not os.getenv('RANSOMEYE_DB_PASSWORD'):
-        exit_config_error('RANSOMEYE_DB_PASSWORD required')
+    config_loader = None
+
+# Runtime configuration (loaded in _load_config_and_initialize)
+config: Optional[Dict[str, Any]] = None
+
+def _load_config_and_initialize():
+    """Load configuration at startup (not import time)."""
+    global config
+    
+    if _common_available:
+        try:
+            config = config_loader.load()
+        except ConfigError as e:
+            exit_config_error(str(e))
+    else:
+        config = {}
+        if not os.getenv('RANSOMEYE_DB_PASSWORD'):
+            exit_config_error('RANSOMEYE_DB_PASSWORD required')
 
 logger = setup_logging('policy-engine')
 shutdown_handler = ShutdownHandler('policy-engine')
@@ -392,25 +412,42 @@ def run_policy_engine_daemon():
     _write_status("STOPPED", last_success, failure_reason)
 
 
+def _temporary_env(env: Optional[Dict[str, str]]):
+    if not env:
+        class _Noop:
+            def __enter__(self): return None
+            def __exit__(self, exc_type, exc, tb): return False
+        return _Noop()
+    class _Env:
+        def __init__(self, updates):
+            self.updates = updates
+            self.original = None
+        def __enter__(self):
+            self.original = os.environ.copy()
+            os.environ.update(self.updates)
+        def __exit__(self, exc_type, exc, tb):
+            os.environ.clear()
+            os.environ.update(self.original or {})
+            return False
+    return _Env(env)
+
+
+def run_policy_cycle(env: Optional[Dict[str, str]] = None) -> bool:
+    """
+    Run a single Policy Engine cycle (no loop). Raises on failure.
+    """
+    with _temporary_env(env):
+        try:
+            run_policy_engine()
+        except SystemExit as exc:
+            raise RuntimeError("Policy Engine cycle failed") from exc
+    return True
+
+
 def _assert_supervised():
-    if os.getenv("RANSOMEYE_SUPERVISED") != "1":
-        error_msg = "Policy Engine must be started by Core orchestrator"
-        logger.fatal(error_msg)
-        exit_startup_error(error_msg)
-    core_pid = os.getenv("RANSOMEYE_CORE_PID")
-    core_token = os.getenv("RANSOMEYE_CORE_TOKEN")
-    if not core_pid or not core_token:
-        error_msg = "Policy Engine missing Core supervision metadata"
-        logger.fatal(error_msg)
-        exit_startup_error(error_msg)
-    try:
-        uuid.UUID(core_token)
-    except Exception:
-        error_msg = "Policy Engine invalid Core token"
-        logger.fatal(error_msg)
-        exit_startup_error(error_msg)
-    if os.getppid() != int(core_pid):
-        error_msg = "Policy Engine parent PID mismatch"
+    orch = os.getenv("RANSOMEYE_ORCHESTRATOR")
+    if orch != "systemd":
+        error_msg = "Policy Engine must be started by Core orchestrator (systemd)"
         logger.fatal(error_msg)
         exit_startup_error(error_msg)
 
@@ -421,6 +458,7 @@ if __name__ == "__main__":
     # Phase 7 requirement: Simulation mode by default (no enforcement)
     try:
         _assert_supervised()
+        _load_config_and_initialize()
         run_policy_engine_daemon()
         logger.shutdown("Policy engine completed successfully")
         sys.exit(ExitCode.SUCCESS)

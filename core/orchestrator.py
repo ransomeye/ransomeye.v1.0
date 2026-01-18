@@ -183,8 +183,6 @@ class ComponentAdapter:
 
     def _resolve_command(self) -> List[str]:
         if self.stub_mode:
-            if self.spec.kind == "batch":
-                return ["python3", "-c", "import time; time.sleep(3600)"]
             return ["python3", "-c", "import time; time.sleep(3600)"]
         return self.spec.start_command
 
@@ -200,10 +198,17 @@ class CoreOrchestrator:
         self.poll_interval = int(os.getenv("RANSOMEYE_SUPERVISOR_POLL_SECONDS", "2"))
         self.startup_timeout = int(os.getenv("RANSOMEYE_STARTUP_TIMEOUT_SECONDS", "30"))
         self.shutdown_timeout = int(os.getenv("RANSOMEYE_SHUTDOWN_TIMEOUT_SECONDS", "10"))
-        self.status_path = Path(os.getenv("RANSOMEYE_CORE_STATUS_PATH", ""))
-        if not self.status_path:
+        status_path_env = os.getenv("RANSOMEYE_CORE_STATUS_PATH", "")
+        if not status_path_env or status_path_env.strip() == "":
             run_dir = os.getenv("RANSOMEYE_RUN_DIR", "/tmp/ransomeye")
             self.status_path = Path(run_dir) / "core_status.json"
+        else:
+            self.status_path = Path(status_path_env)
+            # Fail-fast: validate that path is not a directory
+            if self.status_path.exists() and self.status_path.is_dir():
+                error_msg = f"RANSOMEYE_CORE_STATUS_PATH is a directory, not a file: {self.status_path}"
+                logger.fatal(error_msg)
+                raise ValueError(error_msg)
         self.start_order: List[str] = []
         self.adapters: Dict[str, ComponentAdapter] = {}
         self.state = ComponentState.INIT
@@ -222,6 +227,90 @@ class CoreOrchestrator:
             self.state = ComponentState.STARTING
             self.global_state = "STARTING"
             self._write_status()
+            
+            # Check if systemd is managing components - if so, skip orchestrator startup
+            orchestrator_mode = os.getenv("RANSOMEYE_ORCHESTRATOR", "")
+            if orchestrator_mode == "systemd":
+                # Systemd is managing components - orchestrator should only supervise, not start
+                self.logger.startup("Systemd orchestrator mode: components managed by systemd, orchestrator in supervision-only mode")
+                
+                # Set state to RUNNING immediately (orchestrator is ready to supervise)
+                self.state = ComponentState.RUNNING
+                self.global_state = "RUNNING"
+                self._write_status()
+                
+                # Send READY notification to systemd (required for Type=notify services)
+                # Must be sent AFTER state is set to RUNNING and status is written
+                notify_available = False
+                try:
+                    from systemd.daemon import notify
+                    notify("READY=1")
+                    notify_available = True
+                    self.logger.startup("Sent READY notification to systemd")
+                except ImportError:
+                    # systemd.daemon not available (non-systemd environment) - continue
+                    self.logger.startup("systemd.daemon not available, skipping READY notification")
+                except Exception as e:
+                    self.logger.warning(f"Failed to send READY notification: {e}")
+                    # Continue even if notification fails
+                
+                # Enter supervision loop without starting components
+                # Components are managed by systemd, orchestrator only monitors health
+                # Determine watchdog interval from systemd environment or use safe default
+                watchdog_usec = os.getenv("WATCHDOG_USEC")
+                if watchdog_usec:
+                    try:
+                        # Convert microseconds to seconds, use half the interval for safety
+                        watchdog_interval = max(1.0, (int(watchdog_usec) / 1_000_000) / 2)
+                    except (ValueError, TypeError):
+                        watchdog_interval = 10  # Default to 10 seconds if parsing fails
+                else:
+                    watchdog_interval = 10  # Default to 10 seconds if not set
+                
+                # Send initial watchdog notification immediately after READY
+                # This is critical: systemd starts the watchdog timer after READY=1
+                if notify_available:
+                    try:
+                        from systemd.daemon import notify
+                        notify("WATCHDOG=1")
+                        self.logger.startup(f"Sent initial WATCHDOG notification to systemd (interval: {watchdog_interval:.1f}s)")
+                    except Exception as e:
+                        self.logger.error(f"Failed to send initial WATCHDOG notification: {e}")
+                
+                # Set last_watchdog AFTER initial WATCHDOG is sent
+                # This ensures the next WATCHDOG is sent at the correct interval
+                last_watchdog = time.time()
+                
+                while not self.shutdown_handler.is_shutdown_requested():
+                    self._supervise()
+                    # Send watchdog notification regularly (required for WatchdogSec)
+                    # This must happen BEFORE the watchdog timeout expires
+                    current_time = time.time()
+                    elapsed = current_time - last_watchdog
+                    if elapsed >= watchdog_interval:
+                        if notify_available:
+                            try:
+                                from systemd.daemon import notify
+                                notify("WATCHDOG=1")
+                                # Log successful watchdog for debugging (systemd should receive this)
+                                self.logger.debug(f"Sent WATCHDOG notification to systemd (elapsed: {elapsed:.1f}s)")
+                            except Exception as e:
+                                # Log watchdog failures - they are critical for service survival
+                                self.logger.error(f"Failed to send WATCHDOG notification: {e}")
+                        else:
+                            self.logger.warning("WATCHDOG notification skipped: notify not available")
+                        last_watchdog = current_time
+                    # Sleep for a short interval to avoid busy-waiting, but ensure we wake up
+                    # frequently enough to send watchdog notifications on time
+                    sleep_time = min(self.poll_interval, watchdog_interval / 2)
+                    time.sleep(sleep_time)
+                # Don't shutdown components in systemd mode - systemd manages lifecycle
+                self.state = ComponentState.STOPPED
+                self.global_state = "STOPPED"
+                self._write_status()
+                return 0
+            
+            # Orchestrator mode: start and manage components
             order = self._topological_sort()
             self.logger.startup("Core orchestrator starting components", order=order)
             self._start_components(order)
@@ -250,7 +339,7 @@ class CoreOrchestrator:
         ui_port = int(os.getenv("RANSOMEYE_UI_PORT", "8080"))
         batch_interval = int(os.getenv("RANSOMEYE_BATCH_INTERVAL_SECONDS", "300"))
         project_root = Path(__file__).resolve().parent.parent
-        python = "python3"
+        python = os.getenv("RANSOMEYE_PYTHON_BIN", "python3")
 
         run_dir = Path(os.getenv("RANSOMEYE_RUN_DIR", "/tmp/ransomeye"))
         return [
@@ -315,6 +404,9 @@ class CoreOrchestrator:
         env["RANSOMEYE_CORE_PID"] = str(self.core_pid)
         env["RANSOMEYE_CORE_TOKEN"] = self.core_token
         env["PYTHONPATH"] = str(Path(__file__).resolve().parent.parent)
+        coverage_start = os.getenv("COVERAGE_PROCESS_START")
+        if coverage_start:
+            env["COVERAGE_PROCESS_START"] = coverage_start
         install_root = env.get("RANSOMEYE_INSTALL_ROOT", "/opt/ransomeye")
         env.setdefault("RANSOMEYE_COMPONENT_KEY_DIR", str(Path(install_root) / "config" / "component-keys"))
         env.setdefault("RANSOMEYE_SERVICE_KEY_DIR", str(Path(install_root) / "config" / "keys"))
@@ -369,12 +461,24 @@ class CoreOrchestrator:
                 raise RuntimeError(f"Component failed to start: {name}")
 
     def _supervise(self) -> None:
+        orchestrator_mode = os.getenv("RANSOMEYE_ORCHESTRATOR", "")
         for name, adapter in self.adapters.items():
             dependency_action = self._dependency_action(adapter.spec)
             if dependency_action == "core_fail":
+                # In systemd mode, don't fail Core - systemd manages component lifecycle
+                if orchestrator_mode == "systemd":
+                    self.failure_reason_code = "DEPENDENCY_FAILURE"
+                    self.failure_reason = f"Dependency failure for {name} (systemd-managed)"
+                    self.logger.error(f"Dependency failure for {name} (systemd will handle)")
+                    continue
                 self.failure_reason_code = "DEPENDENCY_FAILURE"
                 raise RuntimeError(f"Dependency failure for {name}")
             if dependency_action == "stop_dependent":
+                # In systemd mode, don't stop components - systemd manages lifecycle
+                if orchestrator_mode == "systemd":
+                    if name == "ui-backend":
+                        self._emit_security_degraded("UI_BACKEND_UNHEALTHY")
+                    continue
                 adapter.stop(self.shutdown_timeout)
                 if name == "ui-backend":
                     self._emit_security_degraded("UI_BACKEND_UNHEALTHY")
@@ -392,10 +496,16 @@ class CoreOrchestrator:
                         self._emit_security_degraded("UI_AUTH_FAILURE")
                     else:
                         self._emit_security_degraded("UI_BACKEND_UNHEALTHY")
-                    adapter.stop(self.shutdown_timeout)
+                    # In systemd mode, don't stop components - systemd manages lifecycle
+                    if orchestrator_mode != "systemd":
+                        adapter.stop(self.shutdown_timeout)
                     continue
                 self.failure_reason_code = "HEALTH_FAILED"
                 self._write_status()
+                # In systemd mode, log but don't fail Core - systemd manages component lifecycle
+                if orchestrator_mode == "systemd":
+                    self.logger.warning(f"Critical component unhealthy: {name} (systemd will handle)")
+                    continue
                 if adapter.spec.critical:
                     raise RuntimeError(f"Critical component unhealthy: {name}")
         if not self._all_critical_running():
@@ -436,6 +546,11 @@ class CoreOrchestrator:
         self._write_status()
 
     def _write_status(self) -> None:
+        # Fail-fast: validate status_path is not a directory
+        if self.status_path.exists() and self.status_path.is_dir():
+            error_msg = f"Status path is a directory, not a file: {self.status_path}"
+            self.logger.fatal(error_msg)
+            raise ValueError(error_msg)
         self.status_path.parent.mkdir(parents=True, exist_ok=True)
         status = {
             "schema_version": "1.0",
@@ -474,6 +589,15 @@ class CoreOrchestrator:
         self.failure_reason = reason
 
     def _all_critical_running(self) -> bool:
+        # In systemd mode, check health instead of state (components started by systemd)
+        orchestrator_mode = os.getenv("RANSOMEYE_ORCHESTRATOR", "")
+        if orchestrator_mode == "systemd":
+            return all(
+                adapter.health() if adapter.spec.health_mode == "http" or adapter.spec.health_mode == "status"
+                else adapter.state == ComponentState.RUNNING
+                for adapter in self.adapters.values()
+                if adapter.spec.critical
+            )
         return all(
             adapter.state == ComponentState.RUNNING
             for adapter in self.adapters.values()

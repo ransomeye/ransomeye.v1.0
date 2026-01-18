@@ -77,6 +77,7 @@ from clustering import cluster_incidents, create_cluster_metadata
 from shap_explainer import explain_batch
 
 # Phase 10 requirement: Centralized configuration
+# Configuration is loaded at runtime, not at import time
 if _common_available:
     config_loader = ConfigLoader('ai-core')
     config_loader.require('RANSOMEYE_DB_PASSWORD', description='Database password (security-sensitive)')
@@ -84,14 +85,25 @@ if _common_available:
     config_loader.optional('RANSOMEYE_DB_PORT', default='5432', validator=validate_port)
     config_loader.optional('RANSOMEYE_DB_NAME', default='ransomeye')
     config_loader.require('RANSOMEYE_DB_USER', description='Database user (PHASE 1: per-service user required, no defaults)')
-    try:
-        config = config_loader.load()
-    except ConfigError as e:
-        exit_config_error(str(e))
 else:
-    config = {}
-    if not os.getenv('RANSOMEYE_DB_PASSWORD'):
-        exit_config_error('RANSOMEYE_DB_PASSWORD required')
+    config_loader = None
+
+# Runtime configuration (loaded in _load_config_and_initialize)
+config: Optional[Dict[str, Any]] = None
+
+def _load_config_and_initialize():
+    """Load configuration at startup (not import time)."""
+    global config
+    
+    if _common_available:
+        try:
+            config = config_loader.load()
+        except ConfigError as e:
+            exit_config_error(str(e))
+    else:
+        config = {}
+        if not os.getenv('RANSOMEYE_DB_PASSWORD'):
+            exit_config_error('RANSOMEYE_DB_PASSWORD required')
 
 logger = setup_logging('ai-core')
 shutdown_handler = ShutdownHandler('ai-core')
@@ -249,7 +261,14 @@ def run_ai_core():
         stored_features = 0
         for incident, feature_vector in zip(incidents, feature_vectors):
             try:
-                store_feature_vector(conn, incident['incident_id'], clustering_model_version, 
+                event_id = incident.get('event_id')
+                if not event_id:
+                    logger.warning(
+                        "Skipping feature vector storage: incident has no evidence event_id",
+                        incident_id=incident.get('incident_id')
+                    )
+                    continue
+                store_feature_vector(write_conn, event_id, clustering_model_version, 
                                    feature_vector.tolist())
                 stored_features += 1
             except Exception as e:
@@ -260,7 +279,7 @@ def run_ai_core():
                 except ImportError:
                     safe_error = str(e)
                 logger.db_error(safe_error, "store_feature_vector", incident_id=incident.get('incident_id'))
-                conn.rollback()
+                write_conn.rollback()
                 raise
         
         # PHASE 3: Unsupervised Clustering (scikit-learn) with model persistence
@@ -341,6 +360,7 @@ def run_ai_core():
                 incident_list = [inc[0] for inc in cluster_incidents_list]
                 incident_indices = [inc[1] for inc in cluster_incidents_list]
                 incident_ids = [inc['incident_id'] for inc in incident_list]
+                event_ids = [inc.get('event_id') for inc in incident_list]
                 cluster_feature_vectors = feature_vectors[incident_indices]
                 
                 # Create cluster metadata
@@ -388,7 +408,7 @@ def run_ai_core():
                     raise
                 
                 # Store cluster memberships
-                for incident_id, feature_vec in zip(incident_ids, cluster_feature_vectors):
+                for incident_id, event_id, feature_vec in zip(incident_ids, event_ids, cluster_feature_vectors):
                     try:
                         # Compute membership score (distance to centroid)
                         if kmeans_model is not None and hasattr(kmeans_model, 'cluster_centers_'):
@@ -400,7 +420,13 @@ def run_ai_core():
                         
                         # PHASE 3: Use deterministic timestamp (from incident observed_at)
                         incident_observed_at = parser.isoparse(incident.get('first_observed_at', incident.get('last_observed_at')))
-                        store_cluster_membership(write_conn, cluster_metadata['cluster_id'], incident_id, 
+                        if not event_id:
+                            logger.warning(
+                                "Skipping cluster membership: incident has no evidence event_id",
+                                incident_id=incident_id
+                            )
+                            continue
+                        store_cluster_membership(write_conn, cluster_metadata['cluster_id'], event_id, 
                                                 membership_score, added_at=incident_observed_at)
                     except MemoryError:
                         error_msg = f"MEMORY ALLOCATION FAILURE: Failed to store cluster membership for incident {incident_id}"
@@ -448,8 +474,16 @@ def run_ai_core():
                 # PHASE 3: Use deterministic timestamp from incident (observed_at)
                 from dateutil import parser
                 observed_at = parser.isoparse(incident.get('first_observed_at', incident.get('last_observed_at')))
-                
-                store_shap_explanation(write_conn, incident['incident_id'], explainability_model_version,
+
+                event_id = incident.get('event_id')
+                if not event_id:
+                    logger.warning(
+                        "Skipping SHAP storage: incident has no evidence event_id",
+                        incident_id=incident.get('incident_id')
+                    )
+                    continue
+
+                store_shap_explanation(write_conn, event_id, explainability_model_version,
                                      shap_explanation, top_n=10, computed_at=observed_at)
                 stored_shap += 1
             except MemoryError:
@@ -508,25 +542,42 @@ def run_ai_core_daemon():
     _write_status("STOPPED", last_success, failure_reason)
 
 
+def _temporary_env(env: Optional[Dict[str, str]]):
+    if not env:
+        class _Noop:
+            def __enter__(self): return None
+            def __exit__(self, exc_type, exc, tb): return False
+        return _Noop()
+    class _Env:
+        def __init__(self, updates):
+            self.updates = updates
+            self.original = None
+        def __enter__(self):
+            self.original = os.environ.copy()
+            os.environ.update(self.updates)
+        def __exit__(self, exc_type, exc, tb):
+            os.environ.clear()
+            os.environ.update(self.original or {})
+            return False
+    return _Env(env)
+
+
+def run_ai_cycle(env: Optional[Dict[str, str]] = None) -> bool:
+    """
+    Run a single AI Core cycle (no loop). Raises on failure.
+    """
+    with _temporary_env(env):
+        try:
+            run_ai_core()
+        except SystemExit as exc:
+            raise RuntimeError("AI Core cycle failed") from exc
+    return True
+
+
 def _assert_supervised():
-    if os.getenv("RANSOMEYE_SUPERVISED") != "1":
-        error_msg = "AI Core must be started by Core orchestrator"
-        logger.fatal(error_msg)
-        exit_startup_error(error_msg)
-    core_pid = os.getenv("RANSOMEYE_CORE_PID")
-    core_token = os.getenv("RANSOMEYE_CORE_TOKEN")
-    if not core_pid or not core_token:
-        error_msg = "AI Core missing Core supervision metadata"
-        logger.fatal(error_msg)
-        exit_startup_error(error_msg)
-    try:
-        uuid.UUID(core_token)
-    except Exception:
-        error_msg = "AI Core invalid Core token"
-        logger.fatal(error_msg)
-        exit_startup_error(error_msg)
-    if os.getppid() != int(core_pid):
-        error_msg = "AI Core parent PID mismatch"
+    orch = os.getenv("RANSOMEYE_ORCHESTRATOR")
+    if orch != "systemd":
+        error_msg = "AI Core must be started by Core orchestrator (systemd)"
         logger.fatal(error_msg)
         exit_startup_error(error_msg)
 
@@ -536,6 +587,7 @@ if __name__ == "__main__":
     # Synchronous batch execution only
     try:
         _assert_supervised()
+        _load_config_and_initialize()
         run_ai_core_daemon()
         logger.shutdown("AI Core completed successfully")
         sys.exit(ExitCode.SUCCESS)

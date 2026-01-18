@@ -147,16 +147,24 @@ def get_unresolved_incidents(conn) -> List[Dict[str, Any]]:
         try:
             cur.execute("""
                 SELECT 
-                    incident_id,
-                    machine_id,
-                    current_stage,
-                    first_observed_at,
-                    last_observed_at,
-                    total_evidence_count,
-                    confidence_score
-                FROM incidents
-                WHERE resolved = FALSE
-                ORDER BY first_observed_at ASC
+                    i.incident_id,
+                    i.machine_id,
+                    i.current_stage,
+                    i.first_observed_at,
+                    i.last_observed_at,
+                    i.total_evidence_count,
+                    i.confidence_score,
+                    e.event_id
+                FROM incidents i
+                LEFT JOIN LATERAL (
+                    SELECT event_id
+                    FROM evidence
+                    WHERE incident_id = i.incident_id
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                ) e ON TRUE
+                WHERE i.resolved = FALSE
+                ORDER BY i.first_observed_at ASC
             """)
             
             columns = [desc[0] for desc in cur.description]
@@ -166,6 +174,8 @@ def get_unresolved_incidents(conn) -> List[Dict[str, Any]]:
                 for key in ['first_observed_at', 'last_observed_at']:
                     if isinstance(incident[key], datetime):
                         incident[key] = incident[key].isoformat()
+                if 'confidence_score' in incident:
+                    incident['confidence_score'] = float(incident['confidence_score'])
                 incidents.append(incident)
             
             return incidents
@@ -213,11 +223,17 @@ def get_model_version(conn, model_type: str, model_version_string: str) -> Optio
             
             cur.execute("""
                 INSERT INTO ai_model_versions (
-                    model_version_id, model_type, model_version_string, deployed_at, description
+                    model_version_id, model_type, model_version_string, deployed_at, created_at, description
                 )
-                VALUES (%s, %s, %s, %s, %s)
-            """, (model_version_id, model_type, model_version_string, deployed_at,
-                  f"PHASE 3 AI Core model: {model_type} version {model_version_string}"))
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """, (
+                model_version_id,
+                model_type,
+                model_version_string,
+                deployed_at,
+                deployed_at,
+                f"PHASE 3 AI Core model: {model_type} version {model_version_string}"
+            ))
             
             return model_version_id
         finally:
@@ -263,13 +279,25 @@ def store_feature_vector(conn, incident_id: str, model_version_id: str,
                 # Already exists, skip (idempotent)
                 return
             
+            # PHASE 3: Deterministic computed_at timestamp (replay-safe)
+            from datetime import datetime, timezone
+            computed_at = datetime(2024, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+
             cur.execute("""
                 INSERT INTO feature_vectors (
                     event_id, model_version_id, feature_vector_hash_sha256,
-                    feature_vector_size, feature_vector_storage_path, computed_at, status
+                    feature_vector_size, feature_vector_storage_path, computed_at, status, created_at
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, 'PROCESSED')
-            """, (incident_id, model_version_id, feature_vector_hash, feature_vector_size, storage_path))
+                VALUES (%s, %s, %s, %s, %s, %s, 'PROCESSED', %s)
+            """, (
+                incident_id,
+                model_version_id,
+                feature_vector_hash,
+                feature_vector_size,
+                storage_path,
+                computed_at,
+                computed_at
+            ))
             
             return True
         finally:
@@ -304,12 +332,12 @@ def store_cluster(conn, cluster_id: str, model_version_id: str, cluster_label: s
             cur.execute("""
                 INSERT INTO clusters (
                     cluster_id, model_version_id, cluster_label, cluster_size,
-                    cluster_created_at, cluster_updated_at, status
+                    cluster_created_at, cluster_updated_at, status, created_at
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, 'ACTIVE')
+                VALUES (%s, %s, %s, %s, %s, %s, 'ACTIVE', %s)
                 ON CONFLICT (cluster_id) DO NOTHING
             """, (cluster_id, model_version_id, cluster_label, cluster_size,
-                  cluster_created_at, cluster_updated_at))
+                  cluster_created_at, cluster_updated_at, cluster_created_at))
             
             # PHASE 3: Update model version with training data hash, model hash, and storage path
             if training_data_hash or model_hash or model_storage_path:
@@ -359,13 +387,24 @@ def store_cluster_membership(conn, cluster_id: str, incident_id: str, membership
     def _do_store():
         cur = conn.cursor()
         try:
+            if membership_score is not None:
+                membership_score_value = float(membership_score)
+            else:
+                membership_score_value = None
+
+            if added_at is None:
+                from datetime import datetime, timezone
+                added_at_value = datetime(2024, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+            else:
+                added_at_value = added_at
+
             cur.execute("""
                 INSERT INTO cluster_memberships (
-                    cluster_id, event_id, membership_score, added_at
+                    cluster_id, event_id, membership_score, added_at, created_at
                 )
-                VALUES (%s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s)
                 ON CONFLICT (cluster_id, event_id) DO NOTHING
-            """, (cluster_id, incident_id, membership_score))
+            """, (cluster_id, incident_id, membership_score_value, added_at_value, added_at_value))
             return True
         finally:
             cur.close()
@@ -418,23 +457,26 @@ def store_shap_explanation(conn, incident_id: str, model_version_id: str,
             if computed_at is None:
                 # Fallback: use deterministic timestamp (should not happen in production)
                 from datetime import datetime, timezone
-                computed_at = datetime(2024, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+                computed_at_value = datetime(2024, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+            else:
+                computed_at_value = computed_at
             
             # PHASE 3: Store full SHAP explanation (for replay support)
             cur.execute("""
                 INSERT INTO shap_explanations (
                     event_id, model_version_id, shap_explanation_hash_sha256,
-                    shap_explanation_size, shap_explanation_full, top_features_contributions, computed_at
+                    shap_explanation_size, shap_explanation_full, top_features_contributions, computed_at, created_at
                 )
-                VALUES (%s, %s, %s, %s, %s::jsonb, %s::jsonb, %s)
+                VALUES (%s, %s, %s, %s, %s::jsonb, %s::jsonb, %s, %s)
                 ON CONFLICT (event_id, model_version_id) DO UPDATE
                 SET shap_explanation_hash_sha256 = EXCLUDED.shap_explanation_hash_sha256,
                     shap_explanation_size = EXCLUDED.shap_explanation_size,
                     shap_explanation_full = EXCLUDED.shap_explanation_full,
                     top_features_contributions = EXCLUDED.top_features_contributions,
-                    computed_at = EXCLUDED.computed_at
+                    computed_at = EXCLUDED.computed_at,
+                    created_at = EXCLUDED.created_at
             """, (incident_id, model_version_id, shap_hash, shap_size, 
-                  shap_explanation_full_json, top_features_json, computed_at))
+                  shap_explanation_full_json, top_features_json, computed_at_value, computed_at_value))
             
             return True
         finally:

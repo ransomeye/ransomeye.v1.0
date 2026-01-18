@@ -1,0 +1,38 @@
+[Unit]
+Description=RansomEye Llm Soc
+Documentation=https://ransomeye.v1.0/
+Requires=ai-core.service
+After=ai-core.service
+BindsTo=ai-core.service
+PartOf=ransomeye.target
+
+[Service]
+Type=notify
+ExecCondition=/usr/bin/systemctl is-active ai-core.service --quiet
+User=ransomeye
+Group=ransomeye
+WorkingDirectory=/opt/ransomeye
+EnvironmentFile=-/opt/ransomeye/config/environment
+Environment=RANSOMEYE_ORCHESTRATOR=systemd
+ExecStart=/opt/ransomeye/bin/ransomeye-llm-soc
+Restart=on-failure
+RestartSec=10
+WatchdogSec=30
+StartLimitInterval=300
+StartLimitBurst=3
+LimitNOFILE=65536
+LimitNPROC=4096
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/ransomeye/logs /opt/ransomeye/runtime
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=30
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ransomeye-llm-soc
+
+[Install]
+WantedBy=ransomeye.target

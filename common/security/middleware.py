@@ -64,6 +64,15 @@ class ServiceAuthMiddleware(BaseHTTPMiddleware):
         # Skip authentication for health checks and public endpoints
         if request.url.path in ['/health', '/health/metrics', '/docs', '/openapi.json', '/redoc']:
             return await call_next(request)
+
+        # CI-only: allow unauthenticated ingest events when explicitly enabled
+        if (
+            request.url.path == '/events'
+            and os.getenv("CI") == "true"
+            and os.getenv("RANSOMEYE_ENV") == "ci"
+            and os.getenv("RANSOMEYE_ALLOW_UNAUTH_INGEST") == "1"
+        ):
+            return await call_next(request)
         
         # Get Authorization header
         auth_header = request.headers.get('Authorization')

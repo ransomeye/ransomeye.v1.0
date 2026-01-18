@@ -1,11 +1,12 @@
 [Unit]
 Description=RansomEye v1.0 Core Runtime
 Documentation=https://ransomeye.v1.0/
-After=network.target postgresql.service
-Wants=postgresql.service
+Requires=postgresql.service
+After=postgresql.service
+BindsTo=postgresql.service
 
 [Service]
-Type=simple
+Type=notify
 User=ransomeye
 Group=ransomeye
 WorkingDirectory=@INSTALL_ROOT@
@@ -19,6 +20,9 @@ ExecStart=@INSTALL_ROOT@/bin/ransomeye-core
 # Restart on failure
 Restart=on-failure
 RestartSec=10
+WatchdogSec=30
+StartLimitIntervalSec=300
+StartLimitBurst=3
 
 # Resource limits (prevent runaway processes)
 LimitNOFILE=65536

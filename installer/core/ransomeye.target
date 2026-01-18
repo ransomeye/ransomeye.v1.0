@@ -1,0 +1,9 @@
+[Unit]
+Description=RansomEye Core Platform
+Requires=secure-bus.service ingest.service core-runtime.service \
+         correlation-engine.service policy-engine.service \
+         ai-core.service llm-soc.service ui.service
+After=postgresql.service
+
+[Install]
+WantedBy=multi-user.target

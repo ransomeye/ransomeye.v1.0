@@ -4,8 +4,11 @@ import socket
 import subprocess
 import tempfile
 import time
+import uuid
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import jwt
 import psycopg2
 import requests
 
@@ -60,6 +63,48 @@ def _apply_migrations() -> None:
         },
         logger=type("Logger", (), {"info": lambda *a, **k: None})(),
     )
+
+
+def _make_ui_health_token(user_id: str, signing_key: str) -> str:
+    now = datetime.now(timezone.utc)
+    exp = now + timedelta(minutes=10)
+    payload = {
+        "sub": user_id,
+        "token_type": "access",
+        "role": "SUPER_ADMIN",
+        "iat": int(now.timestamp()),
+        "exp": int(exp.timestamp()),
+        "iss": "ransomeye-ui",
+        "aud": "ransomeye-ui",
+    }
+    return jwt.encode(payload, signing_key, algorithm="HS256")
+
+
+def _wait_for_ai_metadata_event(conn, incident_id: str, timeout: int = 30) -> str:
+    start = time.time()
+    while time.time() - start < timeout:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT e.event_id
+                FROM evidence e
+                WHERE e.incident_id = %s
+                  AND (
+                      EXISTS (SELECT 1 FROM feature_vectors fv WHERE fv.event_id = e.event_id)
+                      OR EXISTS (SELECT 1 FROM shap_explanations se WHERE se.event_id = e.event_id)
+                      OR EXISTS (SELECT 1 FROM cluster_memberships cm WHERE cm.event_id = e.event_id)
+                      OR EXISTS (SELECT 1 FROM novelty_scores ns WHERE ns.event_id = e.event_id)
+                  )
+                ORDER BY e.created_at DESC
+                LIMIT 1
+                """,
+                (incident_id,),
+            )
+            row = cur.fetchone()
+            if row:
+                return row[0]
+        time.sleep(1)
+    raise AssertionError("AI metadata not found for incident evidence within timeout")
     runner.upgrade()
 
 
@@ -74,14 +119,23 @@ def _init_rbac_users() -> dict:
         }
     )
     rbac.initialize_role_permissions()
-    admin = rbac.create_user("e2e_admin", "e2e_admin_pass", created_by="system")
+    admin = rbac.get_user_by_username("e2e_admin")
+    if not admin:
+        admin = rbac.create_user("e2e_admin", "e2e_admin_pass", created_by="system")
     rbac.assign_role(admin["user_id"], "SUPER_ADMIN", assigned_by="system")
-    return {"admin": {"username": "e2e_admin", "password": "e2e_admin_pass"}}
+    return {
+        "admin": {
+            "username": "e2e_admin",
+            "password": "e2e_admin_pass",
+            "user_id": admin["user_id"],
+        }
+    }
 
 
 def _start_core(env: dict) -> subprocess.Popen:
     core_main = PROJECT_ROOT / "core" / "main.py"
-    return subprocess.Popen([os.environ.get("PYTHON", "python3"), str(core_main)], env=env)
+    python_bin = env.get("PYTHON") or os.environ.get("PYTHON", "python3")
+    return subprocess.Popen([python_bin, str(core_main)], env=env)
 
 
 def _wait_for_incident(timeout: int = 30) -> str:
@@ -124,6 +178,19 @@ def _wait_for_ui(base_url: str, timeout: int = 20) -> None:
     raise AssertionError("UI backend did not become ready")
 
 
+def _wait_for_ingest(base_url: str, timeout: int = 20) -> None:
+    start = time.time()
+    while time.time() - start < timeout:
+        try:
+            response = requests.get(f"{base_url}/health", timeout=2)
+            if response.status_code == 200:
+                return
+        except Exception:
+            pass
+        time.sleep(0.5)
+    raise AssertionError("Ingest did not become ready")
+
+
 def test_pipeline_e2e_linux_agent_to_ui():
     _apply_migrations()
     users = _init_rbac_users()
@@ -131,29 +198,51 @@ def test_pipeline_e2e_linux_agent_to_ui():
     service_key_dir = temp_dir / "service-keys"
     component_key_dir = temp_dir / "component-keys"
     policy_dir = temp_dir / "policy"
+    policy_engine_key_dir = temp_dir / "policy-engine-keys"
+    audit_key_dir = temp_dir / "audit-keys"
+    model_storage_dir = temp_dir / "models"
     _generate_service_keys(service_key_dir)
+    policy_engine_key_dir.mkdir(parents=True, exist_ok=True)
+    audit_key_dir.mkdir(parents=True, exist_ok=True)
+    model_storage_dir.mkdir(parents=True, exist_ok=True)
 
     ui_port = _free_port()
     ingest_port = _free_port()
+    python_bin = str(PROJECT_ROOT / ".venv" / "bin" / "python")
+    coverage_config = str(PROJECT_ROOT / ".coveragerc")
 
     env = os.environ.copy()
     env.update(
         {
             "CI": "true",
             "RANSOMEYE_ENV": "ci",
+            "RANSOMEYE_ALLOW_WEAK_TEST_CREDENTIALS": "1",
+            "PYTHON": python_bin,
+            "RANSOMEYE_PYTHON_BIN": python_bin,
+            "PYTHONPATH": str(PROJECT_ROOT),
+            "COVERAGE_PROCESS_START": coverage_config,
+            "RANSOMEYE_ALLOW_UNAUTH_INGEST": "1",
+            "RANSOMEYE_CORE_STATUS_PATH": str(temp_dir / "core_status.json"),
             "RANSOMEYE_RUN_DIR": str(temp_dir),
             "RANSOMEYE_LOG_DIR": str(temp_dir / "logs"),
             "RANSOMEYE_POLICY_DIR": str(policy_dir),
+            "RANSOMEYE_POLICY_ENGINE_KEY_DIR": str(policy_engine_key_dir),
             "RANSOMEYE_SCHEMA_MIGRATIONS_DIR": str(PROJECT_ROOT / "schemas" / "migrations"),
             "RANSOMEYE_EVENT_ENVELOPE_SCHEMA_PATH": str(PROJECT_ROOT / "contracts" / "event-envelope.schema.json"),
             "RANSOMEYE_COMMAND_SIGNING_KEY": "core-signing-key-1234567890-abcdef",
             "RANSOMEYE_UI_JWT_SIGNING_KEY": "ui-signing-key-1234567890-abcdef",
+            "RANSOMEYE_UI_HEALTH_TOKEN": _make_ui_health_token(
+                users["admin"]["user_id"], "ui-signing-key-1234567890-abcdef"
+            ),
             "RANSOMEYE_AUDIT_LEDGER_PATH": str(temp_dir / "audit_ledger.jsonl"),
-            "RANSOMEYE_AUDIT_LEDGER_KEY_DIR": str(temp_dir / "audit-keys"),
+            "RANSOMEYE_AUDIT_LEDGER_KEY_DIR": str(audit_key_dir),
+            "RANSOMEYE_MODEL_STORAGE_DIR": str(model_storage_dir),
             "RANSOMEYE_UI_PORT": str(ui_port),
             "RANSOMEYE_INGEST_PORT": str(ingest_port),
+            "RANSOMEYE_INGEST_URL": f"http://127.0.0.1:{ingest_port}/events",
             "RANSOMEYE_SERVICE_KEY_DIR": str(service_key_dir),
             "RANSOMEYE_COMPONENT_KEY_DIR": str(component_key_dir),
+            "RANSOMEYE_COMPONENT_INSTANCE_ID": f"e2e-dpi-{uuid.uuid4()}",
             "RANSOMEYE_DPI_CAPTURE_BACKEND": "replay",
             "RANSOMEYE_DPI_REPLAY_PATH": str(PROJECT_ROOT / "validation" / "harness" / "fixtures" / "dpi_frames.jsonl"),
             "RANSOMEYE_DPI_INTERFACE": "lo",
@@ -164,6 +253,7 @@ def test_pipeline_e2e_linux_agent_to_ui():
     proc = _start_core(env)
     try:
         ingest_url = f"http://127.0.0.1:{ingest_port}/events"
+        _wait_for_ingest(f"http://127.0.0.1:{ingest_port}")
         os.environ["RANSOMEYE_INGEST_URL"] = ingest_url
         os.environ["RANSOMEYE_SERVICE_KEY_DIR"] = str(service_key_dir)
         os.environ["RANSOMEYE_COMPONENT_KEY_DIR"] = str(component_key_dir)
@@ -178,16 +268,7 @@ def test_pipeline_e2e_linux_agent_to_ui():
             password=os.getenv("RANSOMEYE_DB_PASSWORD"),
         )
         try:
-            cur = conn.cursor()
-            cur.execute(
-                "SELECT event_id FROM evidence WHERE incident_id = %s ORDER BY created_at DESC LIMIT 1",
-                (incident_id,),
-            )
-            row = cur.fetchone()
-            assert row is not None
-            event_id = row[0]
-            cur.close()
-
+            event_id = _wait_for_ai_metadata_event(conn, incident_id, timeout=40)
             ai_metadata = verify_ai_metadata_exists(conn, event_id, check_content=False)
             assert any(ai_metadata.values()) is True
         finally:
@@ -226,4 +307,8 @@ def test_pipeline_e2e_linux_agent_to_ui():
         assert payload.get("policy_recommendations") is not None
     finally:
         proc.send_signal(signal.SIGTERM)
-        proc.wait(timeout=20)
+        try:
+            proc.wait(timeout=20)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait(timeout=10)

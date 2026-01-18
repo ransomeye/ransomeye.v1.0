@@ -475,6 +475,63 @@ class RBACAPI:
             if conn:
                 conn.close()
 
+    def get_user_by_username(self, username: str) -> Optional[Dict[str, Any]]:
+        """
+        Fetch user by username.
+
+        Args:
+            username: Username to look up
+
+        Returns:
+            User dictionary if found, None otherwise
+        """
+        conn = None
+        try:
+            if _common_available:
+                conn = create_readonly_connection(
+                    host=self.db_conn_params['host'],
+                    port=int(self.db_conn_params.get('port', 5432)),
+                    database=self.db_conn_params['database'],
+                    user=self.db_conn_params['user'],
+                    password=self.db_conn_params['password'],
+                    isolation_level=IsolationLevel.READ_COMMITTED,
+                    logger=_logger
+                )
+            else:
+                import psycopg2
+                conn = psycopg2.connect(
+                    host=self.db_conn_params['host'],
+                    port=int(self.db_conn_params.get('port', 5432)),
+                    database=self.db_conn_params['database'],
+                    user=self.db_conn_params['user'],
+                    password=self.db_conn_params['password']
+                )
+
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT user_id, username, email, full_name, is_active
+                FROM rbac_users
+                WHERE username = %s
+            """, (username,))
+            row = cur.fetchone()
+            cur.close()
+
+            if not row:
+                return None
+
+            return {
+                'user_id': row[0],
+                'username': row[1],
+                'email': row[2],
+                'full_name': row[3],
+                'is_active': row[4]
+            }
+        except Exception as e:
+            raise RBACAPIError(f"Failed to fetch user by username: {e}") from e
+        finally:
+            if conn:
+                conn.close()
+
     def get_user_by_id(self, user_id: str) -> Optional[Dict[str, Any]]:
         """
         Fetch user by ID.

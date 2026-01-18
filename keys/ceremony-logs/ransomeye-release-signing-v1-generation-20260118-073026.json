@@ -1,0 +1,13 @@
+{
+  "ceremony_type": "key_generation",
+  "key_id": "ransomeye-release-signing-v1",
+  "key_type": "signing",
+  "public_key_fingerprint": "4ba9f27a9d8d61ef2ad07ee9dbc5d29335a73bd5fcf334cb08b30058fb34f2e1",
+  "generation_date": "2026-01-18T07:30:26.275559+00:00",
+  "participants": [
+    "Participant1",
+    "Participant2"
+  ],
+  "witness": null,
+  "logged_at": "2026-01-18T07:30:26.367810+00:00"
+}
