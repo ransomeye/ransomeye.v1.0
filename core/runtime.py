@@ -1076,7 +1076,7 @@ def _validate_runtime_dependencies():
         "ai-core": ["numpy", "sklearn"],
         "correlation-engine": [],
         "policy-engine": ["cryptography"],
-        "ui-backend": ["fastapi", "uvicorn", "jwt", "bcrypt"],
+        "ui-backend": ["fastapi", "uvicorn", "jwt", "bcrypt", "fastapi_cors"],
     }
     
     missing = []
