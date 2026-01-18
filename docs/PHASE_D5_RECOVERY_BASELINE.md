@@ -157,6 +157,18 @@
 
 **BACKUP DOES NOT GUARANTEE**: System users/groups (can be recreated), PostgreSQL installation (prerequisite)
 
+#### Orchestration Model Requirements (v1.0.1):
+
+**Authoritative Model**: Unified Single-Service Core (Orchestrator Mode)
+
+- **Backup MUST contain**: `ransomeye-core.service` only (no individual component services)
+- **Backup MUST NOT contain**: `RANSOMEYE_ORCHESTRATOR=systemd` in environment file (or must be validated against existing services)
+- **Restore MUST ensure**: Only `ransomeye-core.service` exists after restore (no individual component services)
+- **Restore MUST abort if**: `RANSOMEYE_ORCHESTRATOR=systemd` is set but individual component services are missing
+- **Runtime MUST enforce**: Core refuses to start if orchestration mode mismatch detected
+
+**Unsupported Model**: systemd-Managed Multi-Service Core (incompatible with installer design for v1.0)
+
 #### What Restore Alone Guarantees:
 
 1. **Files Restored**: All backed-up files are copied to their original locations
