@@ -78,6 +78,15 @@ struct EventEnvelope {
     // Required field: Integrity object (event-envelope.schema.json)
     #[serde(rename = "integrity")]
     integrity: EventIntegrity,
+
+    // Telemetry signature fields (A.2.2 requirement)
+    #[serde(rename = "signature")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    signature: Option<String>,
+
+    #[serde(rename = "signing_key_id")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    signing_key_id: Option<String>,
 }
 
 /// Identity metadata matching event-envelope.schema.json exactly
