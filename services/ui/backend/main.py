@@ -1336,9 +1336,10 @@ async def admin_health(request: Request):
     return await health_check(request)
 
 def _assert_supervised():
+    # D.6.3: Accept both "core" (Core-managed) and "systemd" (systemd-managed) orchestrators
     orch = os.getenv("RANSOMEYE_ORCHESTRATOR")
-    if orch != "systemd":
-        error_msg = "UI Backend must be started by Core orchestrator (systemd)"
+    if orch not in ("core", "systemd"):
+        error_msg = f"UI Backend must be started by Core orchestrator (core) or systemd (systemd), got: {orch}"
         logger.fatal(error_msg)
         exit_startup_error(error_msg)
 
