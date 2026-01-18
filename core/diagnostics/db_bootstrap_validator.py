@@ -209,7 +209,6 @@ def validate_db_bootstrap(
 
     # Validate credentials using pattern matching (no hardcoded credential strings)
     # This prevents credential scanners from flagging this file
-    import re
     
     # Pattern-based weak username detection
     weak_username_patterns = [
