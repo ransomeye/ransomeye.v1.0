@@ -1061,12 +1061,50 @@ def _invariant_check_unauthorized_write(component: str, operation: str):
         logger.fatal(error_msg)
         exit_fatal(error_msg, ExitCode.RUNTIME_ERROR)
 
+def _validate_runtime_dependencies():
+    """
+    D.7.3: Hard pre-flight check - Core refuses to start if any runtime-critical dependency is missing.
+    Error clearly states the missing dependency.
+    No partial component startup occurs.
+    """
+    logger.startup("Validating runtime dependencies")
+    
+    # D.7.1: Authoritative list of runtime-critical dependencies
+    required_packages = {
+        "core": ["psycopg2", "pydantic", "pydantic_settings", "dateutil"],
+        "ingest": ["fastapi", "uvicorn", "jsonschema", "nacl", "jwt"],
+        "ai-core": ["numpy", "sklearn"],
+        "correlation-engine": [],
+        "policy-engine": ["cryptography"],
+        "ui-backend": ["fastapi", "uvicorn", "jwt", "bcrypt"],
+    }
+    
+    missing = []
+    for component, packages in required_packages.items():
+        for pkg in packages:
+            # Map package name to import name (e.g., "psycopg2-binary" -> "psycopg2")
+            import_name = pkg.replace("-", "_")
+            try:
+                __import__(import_name)
+            except ImportError as e:
+                missing.append(f"{component}:{pkg}")
+    
+    if missing:
+        error_msg = f"RUNTIME DEPENDENCY MISSING: {', '.join(missing)}"
+        sys.stderr.write("HIT_BRANCH: runtime_dependency_missing\n")
+        sys.stderr.flush()
+        logger.fatal(error_msg)
+        exit_startup_error(error_msg)
+
 def _core_startup_validation():
     """
     Phase 10.1 requirement: Core startup validation.
     Validate all required checks before starting components.
     """
     logger.startup("Core startup validation beginning")
+    
+    # D.7.3: Validate runtime dependencies BEFORE other checks
+    _validate_runtime_dependencies()
     
     # Phase 10.1 requirement: Validate config file access if provided
     _validate_config_access()
