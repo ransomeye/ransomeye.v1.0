@@ -430,6 +430,19 @@ fn construct_event_envelope() -> Result<EventEnvelope> {
         .context("Failed to compute hash_sha256")?;
     envelope.integrity.hash_sha256 = final_hash;
 
+    // A.2.2 requirement: Sign envelope for telemetry authentication
+    // Load telemetry key paths
+    let install_root = env::var("RANSOMEYE_INSTALL_ROOT")
+        .unwrap_or_else(|_| "/opt/ransomeye-agent".to_string());
+    let telemetry_key_path = format!("{}/config/keys/telemetry.key", install_root);
+    let telemetry_key_id_path = format!("{}/config/keys/telemetry.key_id", install_root);
+    
+    let (signature, signing_key_id) = sign_envelope(&envelope, &telemetry_key_path, &telemetry_key_id_path)
+        .context("Failed to sign envelope")?;
+    
+    envelope.signature = Some(signature);
+    envelope.signing_key_id = Some(signing_key_id);
+
     Ok(envelope)
 }
 
