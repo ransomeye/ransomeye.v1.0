@@ -112,6 +112,17 @@ struct EventIntegrity {
     prev_hash_sha256: Option<String>,
 }
 
+/// JWT Claims for service authentication
+#[derive(Debug, Serialize, Deserialize)]
+struct JwtClaims {
+    iss: String,  // Issuer (source service)
+    aud: String,  // Audience (target service)
+    sub: String,  // Subject (source service)
+    iat: i64,     // Issued at
+    exp: i64,     // Expiration
+    key_id: String, // Key identifier
+}
+
 /// Read environment variable with contract compliance (hardened)
 /// Phase 10 requirement: Fail-fast on missing required variables, clear error messages
 /// Contract compliance: Missing required variables MUST cause failure (fail-closed)
@@ -122,6 +133,78 @@ fn read_env_var(name: &str, description: &str) -> Result<String> {
         eprintln!("  Action: Agent cannot start without this variable (fail-closed)");
         format!("Missing required environment variable: {} ({})", name, description)
     })
+}
+
+/// Load Ed25519 private key from PEM file
+fn load_private_key(key_path: &str) -> Result<Vec<u8>> {
+    let pem_data = fs::read_to_string(key_path)
+        .with_context(|| format!("Failed to read private key from {}", key_path))?;
+    
+    // Parse PEM format and extract key bytes
+    // PEM format has header/footer lines, extract base64 content
+    let lines: Vec<&str> = pem_data.lines().collect();
+    let key_lines: Vec<&str> = lines
+        .iter()
+        .filter(|line| !line.starts_with("-----"))
+        .copied()
+        .collect();
+    let key_b64 = key_lines.join("");
+    
+    let key_der = base64::decode(&key_b64)
+        .context("Failed to decode base64 key data")?;
+    
+    Ok(key_der)
+}
+
+/// Generate JWT authentication token for service-to-service auth
+fn generate_auth_token(key_path: &str, issuer: &str, audience: &str) -> Result<String> {
+    // Load private key
+    let key_der = load_private_key(key_path)?;
+    
+    // For PKCS8 format, skip the header to get raw key material
+    // PKCS8 has ASN.1 wrapping, raw Ed25519 key is last 32 bytes
+    let key_bytes = if key_der.len() > 32 {
+        &key_der[key_der.len() - 32..]
+    } else {
+        &key_der
+    };
+    
+    // Create Ed25519 signing key
+    let signing_key_bytes: [u8; 32] = key_bytes.try_into()
+        .context("Invalid Ed25519 key length")?;
+    let signing_key = SigningKey::from_bytes(&signing_key_bytes);
+    
+    // Compute key_id (SHA256 of public key)
+    let public_key = signing_key.verifying_key();
+    let public_key_bytes = public_key.to_bytes();
+    let mut hasher = Sha256::new();
+    hasher.update(&public_key_bytes);
+    let key_id = format!("{:x}", hasher.finalize());
+    
+    // Create JWT claims
+    let now = Utc::now().timestamp();
+    let claims = JwtClaims {
+        iss: issuer.to_string(),
+        aud: audience.to_string(),
+        sub: issuer.to_string(),
+        iat: now,
+        exp: now + 300, // 5 minutes
+        key_id,
+    };
+    
+    // Create JWT header
+    let mut header = Header::new(Algorithm::EdDSA);
+    
+    // Encode and sign JWT
+    // Convert signing key to PEM format for jsonwebtoken
+    let private_key_pem = fs::read_to_string(key_path)?;
+    let encoding_key = EncodingKey::from_ed_pem(private_key_pem.as_bytes())
+        .context("Failed to create encoding key from PEM")?;
+    
+    let token = encode(&header, &claims, &encoding_key)
+        .context("Failed to encode JWT")?;
+    
+    Ok(token)
 }
 
 /// Get machine ID from system hostname
