@@ -14,6 +14,7 @@ use std::process;
 use uuid::Uuid;
 use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
 use ed25519_dalek::SigningKey;
+use base64::{Engine as _, engine::general_purpose};
 
 /// Exit codes for Linux Agent (Phase 10 requirement: Clear exit codes)
 #[repr(i32)]
