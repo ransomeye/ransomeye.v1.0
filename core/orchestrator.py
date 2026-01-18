@@ -413,6 +413,10 @@ class CoreOrchestrator:
         adapters = {}
         for spec in self.specs:
             env_with_status = env.copy()
+            # D.6.3: When Core orchestrator starts components, set RANSOMEYE_ORCHESTRATOR=core
+            # This allows components to know they are being managed by Core (not systemd)
+            if os.getenv("RANSOMEYE_ORCHESTRATOR") != "systemd":
+                env_with_status["RANSOMEYE_ORCHESTRATOR"] = "core"
             if spec.status_path:
                 env_with_status["RANSOMEYE_COMPONENT_STATUS_PATH"] = str(spec.status_path)
                 env_with_status["RANSOMEYE_COMPONENT_CYCLE_SECONDS"] = str(spec.cycle_timeout_seconds)
