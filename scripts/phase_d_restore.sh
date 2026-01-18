@@ -204,13 +204,24 @@ if [[ ! -d /opt/ransomeye ]]; then
     RESTORE_OK=false
 fi
 
-if [[ ! -f /etc/systemd/system/ransomeye-core.target ]]; then
-    echo "  ❌ Systemd units missing"
+# Check for required systemd service unit (installer creates ransomeye-core.service)
+if [[ ! -f /etc/systemd/system/ransomeye-core.service ]]; then
+    echo "  ❌ Required systemd service missing: ransomeye-core.service"
+    RESTORE_OK=false
+fi
+
+# Verify environment file exists (contains secrets, cannot be regenerated)
+if [[ ! -f /opt/ransomeye/config/environment ]]; then
+    echo "  ❌ Environment configuration missing: /opt/ransomeye/config/environment"
+    echo "     This file contains required secrets and cannot be regenerated"
     RESTORE_OK=false
 fi
 
 if [[ "$RESTORE_OK" == "true" ]]; then
     echo "  ✅ Restore integrity verified"
+    echo "     - /opt/ransomeye directory present"
+    echo "     - ransomeye-core.service present"
+    echo "     - Environment configuration present"
 else
     echo "  ❌ Restore integrity check failed"
     exit 1
@@ -220,7 +231,8 @@ echo
 echo "=== RESTORE COMPLETE ==="
 echo
 echo "Next steps:"
-echo "  1. sudo systemctl daemon-reload"
-echo "  2. sudo systemctl start ransomeye-core.target"
-echo "  3. Verify services are active"
+echo "  1. Ensure system user exists: sudo useradd --system --no-create-home --shell /bin/false ransomeye"
+echo "  2. sudo systemctl daemon-reload"
+echo "  3. sudo systemctl start ransomeye-core"
+echo "  4. Verify service status: sudo systemctl status ransomeye-core"
 echo
