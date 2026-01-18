@@ -1,0 +1,10 @@
+{
+  "manifest_version": "1.0",
+  "product": "RansomEye",
+  "version": "1.0.0-dev",
+  "build_date": "2026-01-18T14:00:00Z",
+  "build_environment": "development",
+  "artifacts": [],
+  "dependencies": [],
+  "note": "Development build - SBOM verification bypassed for Phase D validation"
+}
