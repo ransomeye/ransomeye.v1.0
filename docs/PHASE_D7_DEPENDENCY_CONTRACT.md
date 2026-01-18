@@ -266,6 +266,28 @@ A system is **NOT RECOVERABLE** if:
 
 - [x] D.7.1 — Enumerate runtime dependencies
 - [x] D.7.2 — Define dependency contract
-- [ ] D.7.3 — Enforce pre-start validation (implementation needed)
+- [x] D.7.3 — Enforce pre-start validation (implemented in `core/runtime.py:_validate_runtime_dependencies()`)
 - [x] D.7.4 — Decide packaging strategy (Option B chosen)
 - [x] D.7.5 — Update backup & restore contract
+
+## Summary
+
+**PHASE D.7 COMPLETE**
+
+**Dependency envelope**: DEFINED
+- All runtime-critical dependencies enumerated
+- Exact versions specified in requirements.txt files
+- Component dependency mapping documented
+
+**Packaging strategy**: **Option B** — Python Virtual Environment Bundled in `/opt/ransomeye/venv`
+- Offline-first (pre-built during release)
+- Restorable (part of backup)
+- Deterministic (exact versions pinned)
+- Enterprise-grade (isolated, portable)
+
+**Pre-start validation**: **ENFORCED**
+- `_validate_runtime_dependencies()` called before Core startup
+- Core refuses to start if any dependency is missing
+- Error clearly states missing dependencies
+
+**Ready to re-run PHASE D.4** (once virtual environment is installed/restored)
