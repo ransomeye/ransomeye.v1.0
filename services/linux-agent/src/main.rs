@@ -421,6 +421,8 @@ fn construct_event_envelope() -> Result<EventEnvelope> {
             hash_sha256: String::new(), // Empty placeholder for hash computation
             prev_hash_sha256: None, // Contract compliance: sequence=0 means prev_hash_sha256=NULL (first event)
         },
+        signature: None, // Will be set after signing
+        signing_key_id: None, // Will be set after signing
     };
 
     // Phase 10 requirement: Compute hash_sha256 correctly (hash of envelope with hash_sha256 empty)
