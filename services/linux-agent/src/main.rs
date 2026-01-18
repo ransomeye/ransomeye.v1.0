@@ -177,7 +177,7 @@ fn sign_envelope(envelope: &EventEnvelope, telemetry_key_path: &str, telemetry_k
     }
     
     let key_bytes_array: [u8; 32] = key_bytes.try_into()
-        .context("Failed to convert key bytes to array")?;
+        .map_err(|_| anyhow::anyhow!("Failed to convert key bytes to 32-byte array"))?;
     let signing_key = SigningKey::from_bytes(&key_bytes_array);
     
     // Load key_id
