@@ -453,8 +453,30 @@ fn main() {
         }
     };
 
+    // Phase A.2.1 requirement: Generate JWT authentication token
+    let key_path = env::var("RANSOMEYE_SERVICE_KEY_DIR")
+        .map(|dir| format!("{}/linux-agent.key", dir))
+        .unwrap_or_else(|_| {
+            let install_root = env::var("RANSOMEYE_INSTALL_ROOT")
+                .unwrap_or_else(|_| "/opt/ransomeye".to_string());
+            format!("{}/config/keys/linux-agent.key", install_root)
+        });
+    
+    eprintln!("INFO: Loading service key from: {}", key_path);
+    let auth_token = match generate_auth_token(&key_path, "linux-agent", "ingest") {
+        Ok(token) => token,
+        Err(e) => {
+            eprintln!("FATAL: Failed to generate authentication token: {}", e);
+            eprintln!("  Error chain: {:?}", e);
+            eprintln!("  Key path: {}", key_path);
+            eprintln!("  Action: Agent cannot authenticate without service key (fail-closed)");
+            process::exit(ExitCode::ConfigError as i32);
+        }
+    };
+    eprintln!("INFO: Generated JWT authentication token");
+
     // Phase 10 requirement: Transmit event with proper error handling
-    match transmit_event(&client, &envelope, &ingest_url) {
+    match transmit_event(&client, &envelope, &ingest_url, &auth_token) {
         Ok(()) => {
             eprintln!("INFO: Event transmitted successfully: {}", envelope.event_id);
             eprintln!("SHUTDOWN: Linux Agent completed successfully");
