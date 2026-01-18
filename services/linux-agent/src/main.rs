@@ -166,6 +166,53 @@ fn load_private_key(key_path: &str) -> Result<Vec<u8>> {
     Ok(key_der)
 }
 
+/// Sign event envelope for telemetry authentication
+fn sign_envelope(envelope: &EventEnvelope, telemetry_key_path: &str, telemetry_key_id_path: &str) -> Result<(String, String)> {
+    // Load telemetry signing key (32-byte NaCl Ed25519 private key)
+    let key_bytes = fs::read(telemetry_key_path)
+        .with_context(|| format!("Failed to read telemetry signing key from {}", telemetry_key_path))?;
+    
+    if key_bytes.len() != 32 {
+        anyhow::bail!("Invalid telemetry key length: expected 32 bytes, got {}", key_bytes.len());
+    }
+    
+    let key_bytes_array: [u8; 32] = key_bytes.try_into()
+        .context("Failed to convert key bytes to array")?;
+    let signing_key = SigningKey::from_bytes(&key_bytes_array);
+    
+    // Load key_id
+    let key_id = fs::read_to_string(telemetry_key_id_path)
+        .with_context(|| format!("Failed to read key_id from {}", telemetry_key_id_path))?
+        .trim()
+        .to_string();
+    
+    // Create envelope copy without signature fields for hashing
+    let mut envelope_for_signing = envelope.clone();
+    envelope_for_signing.signature = None;
+    envelope_for_signing.signing_key_id = None;
+    envelope_for_signing.integrity.hash_sha256 = String::new();
+    
+    // Serialize to canonical JSON (sorted keys)
+    let mut json_value = serde_json::to_value(&envelope_for_signing)
+        .context("Failed to serialize envelope for signing")?;
+    sort_json_value(&mut json_value);
+    
+    let json = serde_json::to_string(&json_value)
+        .context("Failed to serialize sorted JSON for signing")?;
+    
+    // Compute SHA256 hash of JSON
+    let mut hasher = Sha256::new();
+    hasher.update(json.as_bytes());
+    let envelope_hash = format!("{:x}", hasher.finalize());
+    
+    // Sign the hash (not the full JSON, just the hash)
+    let signature = signing_key.sign(envelope_hash.as_bytes());
+    let signature_bytes = signature.to_bytes();
+    let signature_b64 = general_purpose::STANDARD.encode(&signature_bytes);
+    
+    Ok((signature_b64, key_id))
+}
+
 /// Generate JWT authentication token for service-to-service auth
 fn generate_auth_token(key_path: &str, issuer: &str, audience: &str) -> Result<String> {
     // Load private key
