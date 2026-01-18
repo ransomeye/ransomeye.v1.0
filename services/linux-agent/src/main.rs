@@ -151,7 +151,7 @@ fn load_private_key(key_path: &str) -> Result<Vec<u8>> {
         .collect();
     let key_b64 = key_lines.join("");
     
-    let key_der = base64::decode(&key_b64)
+    let key_der = general_purpose::STANDARD.decode(&key_b64)
         .context("Failed to decode base64 key data")?;
     
     Ok(key_der)
