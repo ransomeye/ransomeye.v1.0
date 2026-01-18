@@ -9,8 +9,11 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::clone::Clone;
 use std::env;
+use std::fs;
 use std::process;
 use uuid::Uuid;
+use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
+use ed25519_dalek::SigningKey;
 
 /// Exit codes for Linux Agent (Phase 10 requirement: Clear exit codes)
 #[repr(i32)]
