@@ -25,6 +25,6 @@ hostname = "0.4"
 # JWT authentication
 jsonwebtoken = "9.2"
 # Ed25519 key loading and signing
-ed25519-dalek = { version = "2.1", features = ["pem"] }
+ed25519-dalek = { version = "2.1", features = ["pem", "rand_core"] }
 # Base64 decoding for PEM keys
 base64 = "0.21"
